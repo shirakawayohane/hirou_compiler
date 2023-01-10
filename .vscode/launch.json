@@ -1,0 +1,45 @@
+{
+  // IntelliSense を使用して利用可能な属性を学べます。
+  // 既存の属性の説明をホバーして表示します。
+  // 詳細情報は次を確認してください: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'dummy_c_rust'",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=dummy_c_rust",
+          "--package=dummy_c_rust"
+        ],
+        "filter": {
+          "name": "dummy_c_rust",
+          "kind": "bin"
+        }
+      },
+      "args": ["sample.dc"],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'dummy_c_rust'",
+      "cargo": {
+        "args": [
+          "test",
+          "--no-run",
+          "--bin=dummy_c_rust",
+          "--package=dummy_c_rust"
+        ],
+        "filter": {
+          "name": "dummy_c_rust",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}
