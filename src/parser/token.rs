@@ -57,6 +57,11 @@ pub(super) fn fn_token(input: Span) -> ParseResult<Span> {
 }
 
 #[inline(always)]
+pub(super) fn let_token(input: Span) -> ParseResult<Span> {
+    tag("let")(input)
+}
+
+#[inline(always)]
 pub(super) fn i32(input: Span) -> ParseResult<Span> {
     tag("i32")(input)
 }

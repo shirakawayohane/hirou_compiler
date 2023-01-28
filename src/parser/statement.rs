@@ -1,9 +1,10 @@
 use nom::{
     branch::{alt, permutation},
     bytes::complete::tag,
-    character::complete::{char, multispace0, multispace1},
+    character::complete::{char, multispace0, multispace1, space0, space1},
     combinator::{map, opt},
     error::context,
+    sequence::preceded,
 };
 
 use crate::ast::Statement;
@@ -31,15 +32,16 @@ fn parse_asignment(input: Span) -> ParseResult<Located<Statement>> {
 fn parse_variable_decl(input: Span) -> ParseResult<Located<Statement>> {
     located(map(
         permutation((
-            parse_type,
-            multispace0,
-            parse_identifier,
-            multispace0,
-            char('='),
-            multispace0,
-            parse_expression,
+            let_token,
+            preceded(space1, parse_identifier),
+            map(
+                permutation((space0, colon, space0, parse_type)),
+                |(_, _, _, ty)| ty,
+            ),
+            preceded(skip0, char('=')),
+            preceded(skip0, parse_expression),
         )),
-        |(ty, _, name, _, _, _, loc_expr)| Statement::VariableDecl {
+        |(_, name, ty, _, loc_expr)| Statement::VariableDecl {
             ty,
             name,
             value: loc_expr.value,
