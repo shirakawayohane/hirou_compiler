@@ -5,7 +5,7 @@ int test(int j){
 
 int main(){
   int i = 10;
-  int v = test(i)
+  int v = test(i);
   printi32(v);
   return 0;
 }

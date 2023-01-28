@@ -50,12 +50,14 @@ pub struct FunctionDecl {
 }
 
 #[derive(Debug)]
-pub struct Function {
-    pub decl: FunctionDecl,
-    pub body: Vec<Statement>,
+pub enum TopLevel {
+    Function {
+        decl: FunctionDecl,
+        body: Vec<Statement>,
+    },
 }
 
 #[derive(Debug)]
 pub struct Module {
-    pub functions: Vec<Function>,
+    pub toplevels: Vec<TopLevel>,
 }

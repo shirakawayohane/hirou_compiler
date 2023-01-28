@@ -1,4 +1,4 @@
-use crate::ast::{BinaryOp, Expression, Function, Module, Statement};
+use crate::ast::{BinaryOp, Expression, FunctionDecl, Module, Statement, TopLevel};
 use inkwell::builder::Builder as LLVMBuilder;
 use inkwell::context::Context as LLVMContext;
 use inkwell::module::Module as LLVMModule;
@@ -260,19 +260,15 @@ impl LLVMCodegenerator<'_> {
         };
         Ok(())
     }
-    fn gen_function(&self, func: Function) -> Result<(), CompileError> {
-        dbg!(&func);
+    fn gen_function(&self, decl: FunctionDecl, body: Vec<Statement>) -> Result<(), CompileError> {
         // TODO: int以外の型にも対応する
-        let params = func
-            .decl
+        let params = decl
             .params
             .iter()
             .map(|_| self.llvm_context.i32_type().into())
             .collect::<Vec<_>>();
         let fn_type = self.llvm_context.i32_type().fn_type(&params, true);
-        let function = self
-            .llvm_module
-            .add_function(&func.decl.name, fn_type, None);
+        let function = self.llvm_module.add_function(&decl.name, fn_type, None);
         let entry_basic_block = self.llvm_context.append_basic_block(function, "entry");
         self.llvm_builder.position_at_end(entry_basic_block);
 
@@ -280,7 +276,7 @@ impl LLVMCodegenerator<'_> {
         self.context.borrow_mut().push_scope();
         // Set parameters in function body
         for (i, parameter) in function.get_param_iter().enumerate() {
-            let parameter_name = &func.decl.params[i];
+            let parameter_name = &decl.params[i];
             parameter.set_name(parameter_name.as_str());
             let alloca = self
                 .llvm_builder
@@ -291,7 +287,7 @@ impl LLVMCodegenerator<'_> {
                 .set_variable(parameter_name.clone(), alloca);
         }
 
-        for statement in func.body {
+        for statement in body {
             self.gen_statement(statement)?;
         }
 
@@ -336,8 +332,10 @@ impl LLVMCodegenerator<'_> {
     }
     pub fn gen_module(&self, module: Module) -> Result<(), CompileError> {
         self.gen_intrinsic_functions();
-        for func in module.functions {
-            self.gen_function(func)?;
+        for top in module.toplevels {
+            match top {
+                TopLevel::Function { decl, body } => self.gen_function(decl, body)?,
+            }
         }
         Ok(())
     }
