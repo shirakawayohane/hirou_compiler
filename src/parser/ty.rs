@@ -1,15 +1,8 @@
-use nom::{
-    branch::{alt, permutation},
-    bytes::complete::tag,
-    character::complete::{char, multispace0, multispace1},
-    combinator::{map, opt},
-    error::context,
-    sequence::preceded,
-};
+use nom::{branch::alt, combinator::map, error::context, sequence::preceded};
 
-use crate::ast::{Statement, Type};
+use crate::ast::Type;
 
-use super::{expression::parse_expression, token::*, util::*, Located, ParseResult, Span};
+use super::{token::*, ParseResult, Span};
 
 fn i32_type(input: Span) -> ParseResult<Type> {
     map(i32, |_| Type::I32)(input)

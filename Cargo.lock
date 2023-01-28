@@ -85,18 +85,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dummy_c_rust"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "inkwell",
- "nom",
- "nom_locate",
- "thiserror",
-]
-
-[[package]]
 name = "either"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -136,6 +124,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee512640fe35acbfb4bb779db6f0d80704c2cacfa2e39b601ef3e3f47d1ae4c7"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "hirou_compiler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "inkwell",
+ "nom",
+ "nom_locate",
+ "thiserror",
 ]
 
 [[package]]
