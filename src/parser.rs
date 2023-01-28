@@ -4,7 +4,6 @@ use nom::{
     character::complete::digit1,
     character::complete::{char, line_ending},
     combinator::{eof, map, not, opt},
-    error::ParseError,
     multi::{many0, separated_list0},
     sequence::delimited,
     IResult, Parser,
@@ -15,26 +14,28 @@ use crate::ast::{BinaryOp, Expression, Function, FunctionDecl, Module, Statement
 
 pub type Span<'a> = LocatedSpan<&'a str>;
 
+#[derive(Debug)]
 pub struct Position {
     line: u32,
     col: usize,
 }
 
+#[derive(Debug)]
 pub struct Range<'a> {
     pub from: Position,
     pub to: Position,
     pub fragment: &'a str,
 }
 
+#[derive(Debug)]
 pub struct Located<'a, T> {
     range: Range<'a>,
     value: T,
 }
 
-fn located<'a, O, E>(
+fn located<'a, O>(
     mut parser: impl Parser<Span<'a>, O, SyntaxError<Span<'a>>>,
-) -> impl FnMut(Span<'a>) -> ParseResult<Located<O>>
-where E: ParseError<Span<'a>> {
+) -> impl FnMut(Span<'a>) -> ParseResult<Located<O>> {
     move |input: Span<'a>| {
         let (s, _) = skip0(input)?;
         let (s, from) = position(s)?;
@@ -119,14 +120,11 @@ fn multispace1(s: Span) -> ParseResult<()> {
     map(nom::character::complete::multispace1, |_| ())(s)
 }
 
-fn parse_number_literal(input: Span) -> ParseResult<Expression> {
-    let (s, num) = digit1(input)?;
-    Ok((
-        s,
-        Expression::IntValue {
-            value: num.parse::<i32>().unwrap(),
-        },
-    ))
+fn parse_number_literal(input: Span) -> ParseResult<Located<Expression>> {
+    located(map(digit1, |str: Span| {
+        let n = str.parse::<i32>().unwrap();
+        Expression::IntValue { value: n }
+    }))(input)
 }
 
 fn skip0(input: Span) -> ParseResult<()> {
@@ -177,36 +175,44 @@ fn parse_symbol_name(input: Span) -> ParseResult<String> {
     )(s)
 }
 
-fn parse_variable_ref(input: Span) -> ParseResult<Expression> {
-    let (s, _) = skip0(input)?;
-    map(parse_symbol_name, |name| Expression::VariableRef { name })(s)
+fn parse_variable_ref(input: Span) -> ParseResult<Located<Expression>> {
+    located(map(parse_symbol_name, |name| Expression::VariableRef {
+        name,
+    }))(input)
 }
 
-fn parse_asignment(input: Span) -> ParseResult<Statement> {
-    let (s, _) = skip0(input)?;
-    let (s, name) = parse_symbol_name(s)?;
-    let (s, _) = multispace0(s)?;
-    let (s, _) = equals(s)?;
-    let (s, _) = multispace0(s)?;
-    let (s, expression) = parse_expression(s)?;
-    Ok((s, Statement::Asignment { name, expression }))
+fn parse_asignment(input: Span) -> ParseResult<Located<Statement>> {
+    located(map(
+        permutation((
+            parse_symbol_name,
+            multispace0,
+            equals,
+            multispace0,
+            parse_expression,
+        )),
+        |(name, _, _, _, expression)| Statement::Asignment {
+            name,
+            expression: expression.value,
+        },
+    ))(input)
 }
 
-fn parse_variable_decl(input: Span) -> ParseResult<Statement> {
-    let (s, _) = skip0(input)?;
-    let (s, _from) = position(s)?;
-
-    let (s, (_, _, name, _, _, _, expr)) = permutation((
-        tag("int"),
-        multispace0,
-        parse_symbol_name,
-        multispace0,
-        char('='),
-        multispace0,
-        parse_expression,
-    ))(s)?;
-
-    Ok((s, Statement::VariableDecl { name, value: expr }))
+fn parse_variable_decl(input: Span) -> ParseResult<Located<Statement>> {
+    located(map(
+        permutation((
+            tag("int"),
+            multispace0,
+            parse_symbol_name,
+            multispace0,
+            char('='),
+            multispace0,
+            parse_expression,
+        )),
+        |(_, _, name, _, _, _, loc_expr)| Statement::VariableDecl {
+            name,
+            value: loc_expr.value,
+        },
+    ))(input)
 }
 
 fn fold_binexp(first: Expression, rest: &[(BinaryOp, Expression)]) -> Box<Expression> {
@@ -247,88 +253,83 @@ fn parse_multiplicative_expression(input: Span) -> ParseResult<Expression> {
                     '/' => BinaryOp::Div,
                     _ => unreachable!(),
                 },
-                expression,
+                expression.value,
             )
         },
     ))(s)?;
-    let exp = fold_binexp(lhs, &rhss);
+    let exp = fold_binexp(lhs.value, &rhss);
     Ok((s, *exp))
 }
 
-fn parse_additive_expression(input: Span) -> ParseResult<Expression> {
-    let (s, _) = skip0(input)?;
-    let (s, lhs) = parse_multiplicative_expression(s)?;
-    let (s, rhss) = many0(map(
-        permutation((
-            alt((char('+'), char('-'))),
-            multispace0,
-            parse_postfix_expression,
-        )),
-        |(op, _, expression)| {
-            (
-                match op {
-                    '+' => BinaryOp::Add,
-                    '-' => BinaryOp::Sub,
-                    _ => unreachable!(),
-                },
-                expression,
-            )
-        },
-    ))(s)?;
-    let exp = fold_binexp(lhs, &rhss);
-    Ok((s, *exp))
+fn parse_additive_expression(input: Span) -> ParseResult<Located<Expression>> {
+    fn parse_additive_expression_impl(input: Span) -> ParseResult<Expression> {
+        let (s, _) = skip0(input)?;
+        let (s, lhs) = parse_multiplicative_expression(s)?;
+        let (s, rhss) = many0(map(
+            permutation((
+                alt((char('+'), char('-'))),
+                multispace0,
+                parse_postfix_expression,
+            )),
+            |(op, _, expression)| {
+                (
+                    match op {
+                        '+' => BinaryOp::Add,
+                        '-' => BinaryOp::Sub,
+                        _ => unreachable!(),
+                    },
+                    expression.value,
+                )
+            },
+        ))(s)?;
+        let exp = fold_binexp(lhs, &rhss);
+        Ok((s, *exp))
+    }
+    located(parse_additive_expression_impl)(input)
 }
 
-fn parse_primary_expression(input: Span) -> ParseResult<Expression> {
+fn parse_primary_expression(input: Span) -> ParseResult<Located<Expression>> {
     let (s, _) = skip0(input)?;
     alt((
         parse_number_literal,
-        delimited(char('('), parse_expression, char(')')),
+        delimited(lparen, parse_expression, rparen),
         parse_variable_ref,
     ))(s)
 }
 
-fn parse_function_call(input: Span) -> ParseResult<(String, Vec<Expression>)> {
-    fn parse_argument_list(input: Span) -> ParseResult<Vec<Expression>> {
-        let (s, _) = skip0(input)?;
-        let mut ret = Vec::new();
-        let (s, first) = parse_expression(s)?;
-        ret.push(first);
-        let (s, rest) = many0(permutation((char(','), multispace0, parse_expression)))(s)?;
+fn parse_function_call_expression(input: Span) -> ParseResult<Located<Expression>> {
+    fn parse_function_call(input: Span) -> ParseResult<(String, Vec<Expression>)> {
+        fn parse_argument_list(input: Span) -> ParseResult<Vec<Expression>> {
+            let (s, _) = skip0(input)?;
+            let mut ret = Vec::new();
+            let (s, first) = parse_expression(s)?;
+            ret.push(first.value);
+            let (s, rest) = many0(permutation((char(','), multispace0, parse_expression)))(s)?;
 
-        for arg in rest {
-            ret.push(arg.2);
+            for arg in rest {
+                ret.push(arg.2.value);
+            }
+
+            Ok((s, ret))
         }
+        let (s, _) = skip0(input)?;
+        let (s, _from) = position(s)?;
+        let (s, function_name) = parse_symbol_name(s)?;
+        let (s, args) = delimited(lparen, parse_argument_list, rparen)(s)?;
 
-        Ok((s, ret))
+        Ok((s, (function_name, args)))
     }
-    let (s, _) = skip0(input)?;
-    let (s, _from) = position(s)?;
-    let (s, function_name) = parse_symbol_name(s)?;
-    let (s, args) = delimited(char('('), parse_argument_list, char(')'))(s)?;
 
-    Ok((s, (function_name, args)))
+    located(map(parse_function_call, |(name, args)| {
+        Expression::CallExpr { name, args }
+    }))(input)
 }
 
-fn parse_function_call_expression(input: Span) -> ParseResult<Expression> {
-    let (s, _) = skip0(input)?;
-    let (s, (function_name, args)) = parse_function_call(s)?;
-    Ok((
-        s,
-        Expression::CallExpr {
-            name: function_name.to_string(),
-            args: args,
-        },
-    ))
+fn parse_postfix_expression(input: Span) -> ParseResult<Located<Expression>> {
+    alt((parse_primary_expression, parse_function_call_expression))(input)
 }
 
-fn parse_postfix_expression(input: Span) -> ParseResult<Expression> {
-    let (s, _) = skip0(input)?;
-    let (s, _) = position(s)?;
-    alt((parse_primary_expression, parse_function_call_expression))(s)
-}
-
-fn parse_expression(input: Span) -> ParseResult<Expression> {
+fn parse_expression(input: Span) -> ParseResult<Located<Expression>> {
     alt((parse_function_call_expression, parse_additive_expression))(input)
 }
 
@@ -364,43 +365,48 @@ fn parse_function_decl(input: Span) -> ParseResult<FunctionDecl> {
     Ok((s, FunctionDecl { name, params }))
 }
 
-fn parse_discarded_expression_statement(input: Span) -> ParseResult<Statement> {
-    dbg!(input);
-    let (s, _) = skip0(input)?;
-    let (s, expression) = parse_expression(s)?;
-
-    dbg!(&expression);
-    Ok((s, Statement::DiscardedExpression { expression }))
+fn parse_discarded_expression_statement(input: Span) -> ParseResult<Located<Statement>> {
+    located(map(parse_expression, |expr| {
+        Statement::DiscardedExpression {
+            expression: expr.value,
+        }
+    }))(input)
 }
 
-fn parse_return_statement(input: Span) -> ParseResult<Statement> {
-    let (s, _) = skip0(input)?;
-    let (s, _) = tag("return")(s)?;
-    let (s, _) = multispace1(s)?;
-    let (s, expression) = opt(parse_expression)(s)?;
-    Ok((s, Statement::Return { expression }))
+fn parse_return_statement(input: Span) -> ParseResult<Located<Statement>> {
+    located(map(
+        permutation((tag("return"), multispace1, opt(parse_expression))),
+        |(_, _, opt_expr)| Statement::Return {
+            expression: opt_expr.map(|x| x.value),
+        },
+    ))(input)
 }
 
-fn parse_statement(input: Span) -> ParseResult<Statement> {
-    let (s, _) = skip0(input)?;
-
-    let (s, statement) = alt((
-        parse_return_statement,
-        parse_asignment,
-        parse_variable_decl,
-        parse_discarded_expression_statement,
-    ))(s)?;
-
-    let (s, _) = multispace0(s)?;
-    let (s, _) = semi(s)?;
-    Ok((s, statement))
+fn parse_statement(input: Span) -> ParseResult<Located<Statement>> {
+    map(
+        permutation((
+            alt((
+                parse_return_statement,
+                parse_asignment,
+                parse_variable_decl,
+                parse_discarded_expression_statement,
+            )),
+            multispace0,
+            semi,
+        )),
+        |(loc_stmt, _, _)| loc_stmt,
+    )(input)
 }
 
 pub fn parse_block(input: Span) -> ParseResult<Vec<Statement>> {
     let (s, _) = skip0(input)?;
     delimited(
         lbracket,
-        many0(delimited(skip0, parse_statement, skip0)),
+        many0(delimited(
+            skip0,
+            map(parse_statement, |loc_stmt| loc_stmt.value),
+            skip0,
+        )),
         rbracket,
     )(s)
 }

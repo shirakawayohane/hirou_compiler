@@ -2,6 +2,7 @@ use std::fs::read_to_string;
 mod ast;
 mod codegen;
 mod parser;
+mod location;
 use clap::{command, Parser};
 use inkwell::context::Context as LLVMContext;
 
