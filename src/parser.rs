@@ -4,15 +4,63 @@ use nom::{
     character::complete::digit1,
     character::complete::{char, line_ending},
     combinator::{eof, map, not, opt},
+    error::ParseError,
     multi::{many0, separated_list0},
     sequence::delimited,
-    IResult,
+    IResult, Parser,
 };
 use nom_locate::{position, LocatedSpan};
 
 use crate::ast::{BinaryOp, Expression, Function, FunctionDecl, Module, Statement};
 
 pub type Span<'a> = LocatedSpan<&'a str>;
+
+pub struct Position {
+    line: u32,
+    col: usize,
+}
+
+pub struct Range<'a> {
+    pub from: Position,
+    pub to: Position,
+    pub fragment: &'a str,
+}
+
+pub struct Located<'a, T> {
+    range: Range<'a>,
+    value: T,
+}
+
+fn located<'a, O, E>(
+    mut parser: impl Parser<Span<'a>, O, SyntaxError<Span<'a>>>,
+) -> impl FnMut(Span<'a>) -> ParseResult<Located<O>>
+where E: ParseError<Span<'a>> {
+    move |input: Span<'a>| {
+        let (s, _) = skip0(input)?;
+        let (s, from) = position(s)?;
+        let input_at_start = s;
+        let (s, output) = parser.parse(s)?;
+        let (s, to) = position(s)?;
+        let range = Range {
+            from: Position {
+                line: from.location_line(),
+                col: from.get_column(),
+            },
+            to: Position {
+                line: to.location_line(),
+                col: to.get_column(),
+            },
+            fragment: &input_at_start[0..(to.location_offset() - from.location_offset())],
+        };
+        Ok((
+            s,
+            Located {
+                range,
+                value: output,
+            },
+        ))
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub enum SyntaxErrorKind {
