@@ -53,7 +53,7 @@ pub(super) fn anpersand(input: Span) -> ParseResult<char> {
 
 #[inline(always)]
 pub(super) fn fn_token(input: Span) -> ParseResult<Span> {
-    tag("u8")(input)
+    tag("fn")(input)
 }
 
 #[inline(always)]

@@ -4,7 +4,7 @@ use super::{statement::parse_statement, token::*, util::*, *};
 
 use nom::{
     branch::permutation,
-    character::complete::multispace0,
+    character::complete::{multispace0, space0},
     combinator::map,
     error::context,
     multi::{many0, separated_list0},
@@ -12,12 +12,11 @@ use nom::{
 };
 
 fn parse_function_decl(input: Span) -> ParseResult<Located<FunctionDecl>> {
-    dbg!(input);
-    let result = context(
+    context(
         "function_decl",
         located(map(
             permutation((
-                parse_type,
+                fn_token,
                 delimited(multispace0, parse_identifier, multispace0),
                 delimited(
                     token::lparen,
@@ -43,16 +42,18 @@ fn parse_function_decl(input: Span) -> ParseResult<Located<FunctionDecl>> {
                     ),
                     token::rparen,
                 ),
+                map(
+                    permutation((space0, colon, space0, parse_type)),
+                    |(_, _, _, ty)| ty,
+                ),
             )),
-            |(ty, name, params)| FunctionDecl {
+            |(_, name, params, ty)| FunctionDecl {
                 name,
                 params,
                 return_type: ty,
             },
         )),
-    )(input);
-    dbg!(&result);
-    result
+    )(input)
 }
 
 pub fn parse_block(input: Span) -> ParseResult<Vec<Statement>> {
