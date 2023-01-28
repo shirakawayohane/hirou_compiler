@@ -15,7 +15,7 @@ use super::{token::*, util::*, *};
 fn parse_number_literal(input: Span) -> ParseResult<Located<Expression>> {
     located(map(digit1, |str: Span| {
         let n = str.parse::<i32>().unwrap();
-        Expression::IntValue { value: n }
+        Expression::I32Literal { value: n }
     }))(input)
 }
 

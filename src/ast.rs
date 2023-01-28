@@ -11,7 +11,7 @@ pub enum Expression {
     VariableRef {
         name: String,
     },
-    IntValue {
+    I32Literal {
         value: i32,
     },
     BinaryExpr {
