@@ -4,6 +4,7 @@ use nom::{
     character::complete::{alpha1, alphanumeric1, digit1},
     character::complete::{char, line_ending},
     combinator::{eof, map, not, opt, recognize},
+    error::{context, VerboseError},
     multi::{many0, many0_count, many_till, separated_list0},
     sequence::{delimited, pair},
     IResult, Parser,
@@ -33,8 +34,10 @@ pub struct Located<'a, T> {
     value: T,
 }
 
+type ParseResult<'a, T> = IResult<Span<'a>, T, VerboseError<Span<'a>>>;
+
 fn located<'a, O>(
-    mut parser: impl Parser<Span<'a>, O, SyntaxError<'a>>,
+    mut parser: impl Parser<Span<'a>, O, VerboseError<Span<'a>>>,
 ) -> impl FnMut(Span<'a>) -> ParseResult<Located<O>> {
     move |input: Span<'a>| {
         let (s, _) = skip0(input)?;
@@ -63,50 +66,12 @@ fn located<'a, O>(
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum SyntaxErrorKind {
-    // InvalidSymbol,
-    // ExpectChar { char: char },
-    // Failed,
-    UnMapped,
-}
-
-#[derive(Debug, Clone)]
-pub struct SyntaxError<'a> {
-    kind: SyntaxErrorKind,
-    range: Option<Range<'a>>,
-    leaf_kinds: Vec<nom::error::ErrorKind>,
-}
-
-impl<'a, I> nom::error::ParseError<I> for SyntaxError<'a> {
-    fn from_error_kind(input: I, kind: nom::error::ErrorKind) -> Self {
-        Self {
-            kind: SyntaxErrorKind::UnMapped,
-            range: None,
-            leaf_kinds: vec![kind],
-        }
-    }
-
-    fn append(input: I, kind: nom::error::ErrorKind, other: Self) -> Self {
-        // TODO: cloneする必要ある？
-        let mut kinds = other.leaf_kinds.clone();
-        kinds.push(kind);
-        Self {
-            kind: other.kind,
-            leaf_kinds: kinds,
-            range: other.range,
-        }
-    }
-}
-
-type ParseResult<'a, T> = IResult<Span<'a>, T, SyntaxError<'a>>;
-
 fn comment(s: Span) -> ParseResult<()> {
     map(
         permutation((
             tag("//"),
             take_till(|c: char| c == '\r' || c == '\n'),
-            alt((line_ending::<Span, SyntaxError>, eof)),
+            alt((line_ending::<Span, VerboseError<Span>>, eof)),
         )),
         |(_, _, _)| (),
     )(s)
@@ -174,7 +139,6 @@ fn parse_identifier(input: Span) -> ParseResult<String> {
         |s: Span| s.to_string(),
     )(s)
 }
-
 
 fn parse_variable_ref(input: Span) -> ParseResult<Located<Expression>> {
     located(map(parse_identifier, |name| Expression::VariableRef {
@@ -317,7 +281,10 @@ fn parse_postfix_expression(input: Span) -> ParseResult<Located<Expression>> {
 }
 
 fn parse_expression(input: Span) -> ParseResult<Located<Expression>> {
-    alt((parse_function_call_expression, parse_additive_expression))(input)
+    context(
+        "expression",
+        alt((parse_function_call_expression, parse_additive_expression)),
+    )(input)
 }
 
 fn parse_function_decl(input: Span) -> ParseResult<FunctionDecl> {
@@ -370,23 +337,25 @@ fn parse_return_statement(input: Span) -> ParseResult<Located<Statement>> {
 }
 
 fn parse_statement(input: Span) -> ParseResult<Located<Statement>> {
-    map(
-        permutation((
-            alt((
-                parse_return_statement,
-                parse_asignment,
-                parse_variable_decl,
-                parse_discarded_expression_statement,
+    context(
+        "statement",
+        map(
+            permutation((
+                alt((
+                    parse_return_statement,
+                    parse_asignment,
+                    parse_variable_decl,
+                    parse_discarded_expression_statement,
+                )),
+                multispace0,
+                semi,
             )),
-            multispace0,
-            semi,
-        )),
-        |(loc_stmt, _, _)| loc_stmt,
+            |(loc_stmt, _, _)| loc_stmt,
+        ),
     )(input)
 }
 
 pub fn parse_block(input: Span) -> ParseResult<Vec<Statement>> {
-    let (s, _) = skip0(input)?;
     delimited(
         lbracket,
         many0(delimited(
@@ -395,26 +364,28 @@ pub fn parse_block(input: Span) -> ParseResult<Vec<Statement>> {
             skip0,
         )),
         rbracket,
-    )(s)
+    )(input)
 }
 
 pub fn parse_function(input: Span) -> ParseResult<Function> {
-    let (s, (decl, statements)) = permutation((parse_function_decl, parse_block))(input)?;
-    Ok((
-        s,
-        Function {
-            decl,
-            body: statements,
-        },
-    ))
+    context(
+        "function",
+        map(
+            permutation((parse_function_decl, skip0, parse_block)),
+            |(decl, _, body)| Function { decl, body },
+        ),
+    )(input)
 }
 
 pub fn parse_module(input: Span) -> ParseResult<Module> {
-    map(
-        many_till(
-            delimited(skip0, parse_function, skip0),
-            eof::<Span, SyntaxError>,
+    context(
+        "module",
+        map(
+            many_till(
+                delimited(skip0, parse_function, skip0),
+                eof::<Span, VerboseError<Span>>,
+            ),
+            |(functions, _)| Module { functions },
         ),
-        |(functions, _)| Module { functions },
     )(input)
 }

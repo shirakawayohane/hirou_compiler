@@ -1,10 +1,14 @@
 use std::fs::read_to_string;
 mod ast;
 mod codegen;
-mod parser;
 mod location;
+mod parser;
 use clap::{command, Parser};
 use inkwell::context::Context as LLVMContext;
+use nom::{
+    error::{convert_error, VerboseError},
+    Finish,
+};
 
 #[derive(clap::Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -18,10 +22,20 @@ struct Args {
 fn main() {
     let args = Args::parse();
     let input = read_to_string(args.target).unwrap();
-    let module = match parser::parse_module(input.as_str().into()) {
+    let input = input.as_str().into();
+    let module = match parser::parse_module(input).finish() {
         Ok((_, module)) => module,
         Err(err) => {
-            dbg!(err);
+            // using workaround to convert Span -> &str
+            // ref: https://github.com/fflorent/nom_locate/issues/36#issuecomment-1013469728
+            let errors = err
+                .errors
+                .into_iter()
+                .map(|(input, error)| (*input.fragment(), error))
+                .collect();
+
+            let error_message = convert_error(*input, VerboseError { errors });
+            println!("{}", error_message);
             return;
         }
     };
