@@ -15,21 +15,39 @@ impl LLVMCodegenerator<'_> {
                     .llvm_builder
                     .build_alloca(self.llvm_context.i32_type(), &name);
 
-                // Contextに登録
-                self.context
-                    .borrow_mut()
-                    .set_variable(name, variable_pointer);
+                let evaluated_value = self.eval_expression(value, Some(Type::I32))?;
 
-                match self.eval_expression(value, Some(Type::I32))? {
-                    Value::IntValue(v) => {
-                        self.llvm_builder.build_store(variable_pointer, v);
-                    }
+                match evaluated_value {
+                    Value::I32Value(v) => self.llvm_builder.build_store(variable_pointer, v),
                     _ => panic!(),
                 };
 
+                // Contextに登録
+                self.context
+                    .borrow_mut()
+                    .set_variable(name, Type::U64, variable_pointer);
+
                 Ok(())
             }
-            Type::U64 => todo!(),
+            Type::U64 => {
+                let variable_pointer = self
+                    .llvm_builder
+                    .build_alloca(self.llvm_context.i64_type(), &name);
+
+                let evaluated_value = self.eval_expression(value, Some(Type::U64))?;
+
+                match evaluated_value {
+                    Value::U64Value(v) => self.llvm_builder.build_store(variable_pointer, v),
+                    _ => panic!(),
+                };
+
+                // Contextに登録
+                self.context
+                    .borrow_mut()
+                    .set_variable(name, Type::U64, variable_pointer);
+
+                Ok(())
+            }
             Type::U8 => todo!(),
             Type::Ptr(_) => todo!(),
         }
@@ -38,7 +56,8 @@ impl LLVMCodegenerator<'_> {
         if let Some(exp) = opt_expr {
             let value = self.eval_expression(exp, None)?;
             self.llvm_builder.build_return(match &value {
-                Value::IntValue(v) => Some(v),
+                Value::I32Value(v) => Some(v),
+                Value::U64Value(v) => Some(v),
                 Value::Void => None,
             });
         } else {
@@ -47,12 +66,21 @@ impl LLVMCodegenerator<'_> {
         Ok(())
     }
     fn gen_asignment(&self, name: String, expression: Expression) -> Result<(), CompileError> {
-        if let Some(pointer) = self.context.borrow().find_variable(&name) {
+        if let Some((ty, ptr)) = self.context.borrow().find_variable(&name) {
             let value = self.eval_expression(expression, None)?;
             self.llvm_builder.build_store(
-                pointer,
+                *ptr,
                 match value {
-                    Value::IntValue(v) => v,
+                    Value::I32Value(v) => {
+                        if *ty != Type::I32 {
+                            return Err(CompileError::AsignValueDoesNotMatch {
+                                expected: Box::new(Type::I32),
+                                actual: Box::new(ty.clone()),
+                            });
+                        }
+                        v
+                    }
+                    Value::U64Value(v) => v,
                     Value::Void => return Ok(()),
                 },
             );

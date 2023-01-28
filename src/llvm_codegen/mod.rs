@@ -5,7 +5,7 @@ mod statement;
 mod toplevel;
 mod value;
 
-use crate::ast::{Module, TopLevel};
+use crate::ast::{Module, TopLevel, Type};
 use inkwell::builder::Builder as LLVMBuilder;
 use inkwell::context::Context as LLVMContext;
 use inkwell::module::Module as LLVMModule;
@@ -17,6 +17,7 @@ use std::rc::Rc;
 use thiserror::Error;
 
 use self::context::Context;
+use self::value::Value;
 
 #[derive(Debug, Error)]
 pub enum CompileError {
@@ -30,6 +31,11 @@ pub enum CompileError {
     InvalidOperand,
     #[error("Invalid operand.")]
     InvalidArgument,
+    #[error("Asign value does not match")]
+    AsignValueDoesNotMatch {
+        expected: Box<Type>,
+        actual: Box<Type>,
+    },
 }
 
 pub struct LLVMCodegenerator<'a> {
@@ -53,10 +59,16 @@ impl<'a> LLVMCodegenerator<'a> {
 }
 
 impl<'a> LLVMCodegenerator<'a> {
-    fn get_variable(&self, name: &str) -> Result<PointerValue, CompileError> {
+    fn get_variable(&self, name: &str) -> Result<Value, CompileError> {
         for scope in self.context.borrow().scopes.iter().rev() {
-            if let Some(v) = scope.get(name) {
-                return Ok(*v);
+            if let Some((ty, pointer)) = scope.get(name) {
+                let value = self.llvm_builder.build_load(*pointer, name);
+                return Ok(match ty {
+                    crate::ast::Type::I32 => Value::I32Value(value.into_int_value()),
+                    crate::ast::Type::U64 => Value::U64Value(value.into_int_value()),
+                    crate::ast::Type::U8 => todo!(),
+                    crate::ast::Type::Ptr(_) => todo!(),
+                });
             }
         }
         Err(CompileError::VariableNotFound {

@@ -5,6 +5,7 @@ use inkwell::AddressSpace;
 const PRINTF_FUNCTION: &str = "printf";
 const MALLOC_FUNCTION: &str = "malloc";
 const PRINTI32_FUNCTION: &str = "print-i32";
+const PRINTU64_FUNCTION: &str = "print-u64";
 
 impl LLVMCodegenerator<'_> {
     fn gen_printf(&self) {
@@ -46,6 +47,34 @@ impl LLVMCodegenerator<'_> {
         );
         self.llvm_builder.build_return(None);
     }
+    fn gen_print_u64(&self) {
+        // gen printi32 function
+        let i64_type = self.llvm_context.i64_type();
+        let void_type = self.llvm_context.void_type();
+        let print_u64_type = void_type.fn_type(&[i64_type.into()], false);
+        let print_u64_function =
+            self.llvm_module
+                .add_function(PRINTU64_FUNCTION, print_u64_type, None);
+        let entry_basic_block = self
+            .llvm_context
+            .append_basic_block(print_u64_function, "entry");
+        self.llvm_builder.position_at_end(entry_basic_block);
+
+        let digit_format_string_ptr = self
+            .llvm_builder
+            .build_global_string_ptr("%zu\n", "digit_format_string");
+        let argument = print_u64_function.get_first_param().unwrap();
+        let printf_function = self.llvm_module.get_function(PRINTF_FUNCTION).unwrap();
+        self.llvm_builder.build_call(
+            printf_function,
+            &[
+                digit_format_string_ptr.as_pointer_value().into(),
+                argument.into(),
+            ],
+            "call",
+        );
+        self.llvm_builder.build_return(None);
+    }
     fn gen_malloc(&self) {
         let i64_type = self.llvm_context.i64_type();
         let i8_ptr_type = self
@@ -59,5 +88,6 @@ impl LLVMCodegenerator<'_> {
     pub(super) fn gen_intrinsic_functions(&self) {
         self.gen_printf();
         self.gen_print_i32();
+        self.gen_print_u64();
     }
 }

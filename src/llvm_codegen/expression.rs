@@ -5,34 +5,42 @@ use crate::ast::*;
 use inkwell::values::{BasicMetadataValueEnum, BasicValueEnum};
 
 impl LLVMCodegenerator<'_> {
-    fn eval_i32_literal(
+    fn eval_i32(&self, value_str: &str) -> Result<Value, CompileError> {
+        if let Ok(n) = value_str.parse::<i32>() {
+            let int_value = self.llvm_context.i32_type().const_int(n as u64, true);
+            Ok(Value::I32Value(int_value))
+        } else {
+            todo!()
+        }
+    }
+    fn eval_integer_literal(
         &self,
-        value: i32,
-        _annotation: Option<Type>,
+        value_str: &str,
+        annotation: Option<Type>,
     ) -> Result<Value, CompileError> {
-        let literal = self.llvm_context.i32_type().const_int(value as u64, true);
-        Ok(Value::IntValue(literal))
+        if let Some(annotation) = annotation {
+            match annotation {
+                Type::I32 => self.eval_i32(value_str),
+                Type::U64 => {
+                    if let Ok(n) = value_str.parse::<u64>() {
+                        let int_value = self.llvm_context.i64_type().const_int(n as u64, false);
+                        Ok(Value::U64Value(int_value))
+                    } else {
+                        todo!()
+                    }
+                }
+                _ => unreachable!(),
+            }
+        } else {
+            self.eval_i32(value_str)
+        }
     }
     fn eval_variable_ref(
         &self,
         name: &str,
         _annotation: Option<Type>,
     ) -> Result<Value, CompileError> {
-        if let Ok(ptr) = self.get_variable(&name) {
-            let value: BasicValueEnum<'_> = self.llvm_builder.build_load(ptr, &name);
-            Ok(match value {
-                BasicValueEnum::ArrayValue(_) => todo!(),
-                BasicValueEnum::IntValue(v) => Value::IntValue(v),
-                BasicValueEnum::FloatValue(_) => todo!(),
-                BasicValueEnum::PointerValue(_) => todo!(),
-                BasicValueEnum::StructValue(_) => todo!(),
-                BasicValueEnum::VectorValue(_) => todo!(),
-            })
-        } else {
-            Err(CompileError::VariableNotFound {
-                name: name.to_string(),
-            })
-        }
+        self.get_variable(&name)
     }
     fn eval_binary_expr(
         &self,
@@ -41,61 +49,147 @@ impl LLVMCodegenerator<'_> {
         rhs: Expression,
         _annotation: Option<Type>,
     ) -> Result<Value, CompileError> {
+        pub fn get_cast_type_with_other_operand_of_bin_op(ty: &Type, other: &Type) -> Option<Type> {
+            match ty {
+                Type::I32 => match other {
+                    Type::I32 => None,
+                    Type::U64 => Some(Type::U64),
+                    Type::U8 => None,
+                    Type::Ptr(_) => None,
+                },
+                Type::U64 => match other {
+                    Type::I32 => None,
+                    Type::U64 => None,
+                    Type::U8 => None,
+                    Type::Ptr(_) => None,
+                },
+                Type::U8 => match other {
+                    Type::I32 => Some(Type::I32),
+                    Type::U64 => Some(Type::U64),
+                    Type::U8 => None,
+                    Type::Ptr(_) => None,
+                },
+                Type::Ptr(_) => None,
+            }
+        }
         let lhs_value = self.eval_expression(lhs, None)?;
         let rhs_value = self.eval_expression(rhs, None)?;
-        match op {
-            BinaryOp::Add => match lhs_value {
-                Value::IntValue(lhs_int_value) => match rhs_value {
-                    Value::IntValue(rhs_int_value) => {
-                        Ok(Value::IntValue(self.llvm_builder.build_int_add(
-                            lhs_int_value,
-                            rhs_int_value,
-                            "add_int_int",
-                        )))
-                    }
-                    Value::Void => return Err(CompileError::InvalidOperand),
+        let lhs_type_opt = lhs_value.get_primitive_type();
+        let rhs_type_opt = rhs_value.get_primitive_type();
+        if lhs_type_opt.is_none() || rhs_type_opt.is_none() {
+            return Err(CompileError::InvalidOperand);
+        }
+        let lhs_type = lhs_type_opt.unwrap();
+        let rhs_type = rhs_type_opt.unwrap();
+        if lhs_type.is_integer_type() && rhs_type.is_integer_type() {
+            let i64_type = self.llvm_context.i64_type();
+            let i32_type = self.llvm_context.i32_type();
+            let lhs_cast_type = get_cast_type_with_other_operand_of_bin_op(&lhs_type, &rhs_type);
+            let rhs_cast_type = get_cast_type_with_other_operand_of_bin_op(&rhs_type, &lhs_type);
+            let lhs_integer_value = match &lhs_cast_type {
+                Some(ty) => match ty {
+                    Type::I32 => self.llvm_builder.build_int_cast_sign_flag(
+                        lhs_value.unwrap_int_value(),
+                        i32_type,
+                        true,
+                        "(i32)",
+                    ),
+                    Type::U64 => self.llvm_builder.build_int_cast_sign_flag(
+                        lhs_value.unwrap_int_value(),
+                        i64_type,
+                        false,
+                        "(u64)",
+                    ),
+                    Type::U8 => unreachable!(),
+                    Type::Ptr(_) => unreachable!(),
                 },
-                Value::Void => return Err(CompileError::InvalidOperand),
-            },
-            BinaryOp::Sub => match lhs_value {
-                Value::IntValue(lhs_int_value) => match rhs_value {
-                    Value::IntValue(rhs_int_value) => {
-                        Ok(Value::IntValue(self.llvm_builder.build_int_sub(
-                            lhs_int_value,
-                            rhs_int_value,
-                            "sub_int_int",
-                        )))
-                    }
-                    Value::Void => return Err(CompileError::InvalidOperand),
+                None => lhs_value.unwrap_int_value(),
+            };
+            let rhs_integer_value = match &rhs_cast_type {
+                Some(ty) => match ty {
+                    Type::I32 => self.llvm_builder.build_int_cast_sign_flag(
+                        rhs_value.unwrap_int_value(),
+                        i32_type,
+                        true,
+                        "(i32)",
+                    ),
+                    Type::U64 => self.llvm_builder.build_int_cast_sign_flag(
+                        rhs_value.unwrap_int_value(),
+                        i64_type,
+                        false,
+                        "(u64)",
+                    ),
+                    Type::U8 => unreachable!(),
+                    Type::Ptr(_) => unreachable!(),
                 },
-                Value::Void => return Err(CompileError::InvalidOperand),
-            },
-            BinaryOp::Mul => match lhs_value {
-                Value::IntValue(lhs_int_value) => match rhs_value {
-                    Value::IntValue(rhs_int_value) => {
-                        Ok(Value::IntValue(self.llvm_builder.build_int_mul(
-                            lhs_int_value,
-                            rhs_int_value,
-                            "mul_int_int",
-                        )))
-                    }
-                    Value::Void => return Err(CompileError::InvalidOperand),
-                },
-                Value::Void => return Err(CompileError::InvalidOperand),
-            },
-            BinaryOp::Div => match lhs_value {
-                Value::IntValue(lhs_int_value) => match rhs_value {
-                    Value::IntValue(rhs_int_value) => {
-                        Ok(Value::IntValue(self.llvm_builder.build_int_signed_div(
-                            lhs_int_value,
-                            rhs_int_value,
-                            "div_int_int",
-                        )))
-                    }
-                    Value::Void => return Err(CompileError::InvalidOperand),
-                },
-                Value::Void => return Err(CompileError::InvalidOperand),
-            },
+                None => rhs_value.unwrap_int_value(),
+            };
+            let result_type = lhs_cast_type.unwrap_or(rhs_cast_type.unwrap_or(lhs_type));
+            match op {
+                BinaryOp::Add => {
+                    let result = self.llvm_builder.build_int_add(
+                        lhs_integer_value,
+                        rhs_integer_value,
+                        "int+int",
+                    );
+                    Ok(match result_type {
+                        Type::I32 => Value::I32Value(result),
+                        Type::U64 => Value::U64Value(result),
+                        Type::U8 => unreachable!(),
+                        Type::Ptr(_) => unreachable!(),
+                    })
+                }
+                BinaryOp::Sub => {
+                    let result = self.llvm_builder.build_int_sub(
+                        lhs_integer_value,
+                        rhs_integer_value,
+                        "int+int",
+                    );
+                    Ok(match result_type {
+                        Type::I32 => Value::I32Value(result),
+                        Type::U64 => Value::U64Value(result),
+                        Type::U8 => unreachable!(),
+                        Type::Ptr(_) => unreachable!(),
+                    })
+                }
+                BinaryOp::Mul => {
+                    let result = self.llvm_builder.build_int_mul(
+                        lhs_integer_value,
+                        rhs_integer_value,
+                        "int+int",
+                    );
+                    Ok(match result_type {
+                        Type::I32 => Value::I32Value(result),
+                        Type::U64 => Value::U64Value(result),
+                        Type::U8 => unreachable!(),
+                        Type::Ptr(_) => unreachable!(),
+                    })
+                }
+                BinaryOp::Div => {
+                    let result = match result_type {
+                        Type::I32 => self.llvm_builder.build_int_signed_div(
+                            lhs_integer_value,
+                            rhs_integer_value,
+                            "int+int",
+                        ),
+                        Type::U64 => self.llvm_builder.build_int_unsigned_div(
+                            lhs_integer_value,
+                            rhs_integer_value,
+                            "int+int",
+                        ),
+                        Type::U8 => unreachable!(),
+                        Type::Ptr(_) => unreachable!(),
+                    };
+                    Ok(match result_type {
+                        Type::I32 => Value::I32Value(result),
+                        Type::U64 => Value::U64Value(result),
+                        Type::U8 => unreachable!(),
+                        Type::Ptr(_) => unreachable!(),
+                    })
+                }
+            }
+        } else {
+            todo!("impl float arithmetic");
         }
     }
     fn eval_call_expr(
@@ -109,7 +203,8 @@ impl LLVMCodegenerator<'_> {
             for arg_expr in args {
                 let evaluated_arg = self.eval_expression(arg_expr, None)?;
                 evaluated_args.push(match evaluated_arg {
-                    Value::IntValue(v) => BasicMetadataValueEnum::IntValue(v),
+                    Value::I32Value(v) => BasicMetadataValueEnum::IntValue(v),
+                    Value::U64Value(v) => BasicMetadataValueEnum::IntValue(v),
                     Value::Void => return Err(CompileError::InvalidArgument),
                 });
             }
@@ -122,7 +217,7 @@ impl LLVMCodegenerator<'_> {
                 {
                     Some(returned_value) => match returned_value {
                         BasicValueEnum::ArrayValue(_) => todo!(),
-                        BasicValueEnum::IntValue(int_value) => Value::IntValue(int_value),
+                        BasicValueEnum::IntValue(int_value) => Value::I32Value(int_value),
                         BasicValueEnum::FloatValue(_) => todo!(),
                         BasicValueEnum::PointerValue(_) => todo!(),
                         BasicValueEnum::StructValue(_) => todo!(),
@@ -150,7 +245,7 @@ impl LLVMCodegenerator<'_> {
     ) -> Result<Value, CompileError> {
         match expr {
             Expression::VariableRef { name } => self.eval_variable_ref(&name, annotation),
-            Expression::NumberLiteral { value } => self.eval_i32_literal(value, annotation),
+            Expression::NumberLiteral { value } => self.eval_integer_literal(&value, annotation),
             Expression::BinaryExpr { op, lhs, rhs } => {
                 self.eval_binary_expr(op, *lhs, *rhs, annotation)
             }

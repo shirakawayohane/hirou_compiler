@@ -13,9 +13,8 @@ use crate::ast::Expression;
 use super::{token::*, util::*, *};
 
 fn parse_number_literal(input: Span) -> ParseResult<Located<Expression>> {
-    located(map(digit1, |str: Span| {
-        let n = str.parse::<i32>().unwrap();
-        Expression::NumberLiteral { value: n }
+    located(map(digit1, |str: Span| Expression::NumberLiteral {
+        value: str.to_string(),
     }))(input)
 }
 

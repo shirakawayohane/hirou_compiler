@@ -1,12 +1,6 @@
-fn test(j: i32): i32 {
-  // comment
-  let i: i32 = j * 10;
-  return i;
-}
-
 fn main(): i32 {
   let i: i32 = 10;
-  let v: i32 = test(i);
-  print-i32(v);
+  let c: u64 = 10000;
+  print-u64(i + c);
   return 0;
 }
