@@ -1,11 +1,11 @@
 use nom::{
     branch::{alt, permutation},
     bytes::complete::{tag, take_till, take_till1},
-    character::complete::digit1,
+    character::complete::{alpha1, alphanumeric1, digit1},
     character::complete::{char, line_ending},
-    combinator::{eof, map, not, opt},
-    multi::{many0, separated_list0},
-    sequence::delimited,
+    combinator::{eof, map, not, opt, recognize},
+    multi::{many0, many0_count, many_till, separated_list0},
+    sequence::{delimited, pair},
     IResult, Parser,
 };
 use nom_locate::{position, LocatedSpan};
@@ -94,7 +94,7 @@ impl<'a, I> nom::error::ParseError<I> for SyntaxError<'a> {
         Self {
             kind: other.kind,
             leaf_kinds: kinds,
-            range: other.range
+            range: other.range,
         }
     }
 }
@@ -167,7 +167,7 @@ fn equals(input: Span) -> ParseResult<char> {
     char('=')(input)
 }
 
-fn parse_symbol_name(input: Span) -> ParseResult<String> {
+fn parse_identifier(input: Span) -> ParseResult<String> {
     let (s, _) = not(digit1)(input)?;
     map(
         take_till1(|x: char| !x.is_alphabetic() && !x.is_digit(10) && !['-', '_'].contains(&x)),
@@ -175,8 +175,9 @@ fn parse_symbol_name(input: Span) -> ParseResult<String> {
     )(s)
 }
 
+
 fn parse_variable_ref(input: Span) -> ParseResult<Located<Expression>> {
-    located(map(parse_symbol_name, |name| Expression::VariableRef {
+    located(map(parse_identifier, |name| Expression::VariableRef {
         name,
     }))(input)
 }
@@ -184,7 +185,7 @@ fn parse_variable_ref(input: Span) -> ParseResult<Located<Expression>> {
 fn parse_asignment(input: Span) -> ParseResult<Located<Statement>> {
     located(map(
         permutation((
-            parse_symbol_name,
+            parse_identifier,
             multispace0,
             equals,
             multispace0,
@@ -202,7 +203,7 @@ fn parse_variable_decl(input: Span) -> ParseResult<Located<Statement>> {
         permutation((
             tag("int"),
             multispace0,
-            parse_symbol_name,
+            parse_identifier,
             multispace0,
             char('='),
             multispace0,
@@ -298,31 +299,17 @@ fn parse_primary_expression(input: Span) -> ParseResult<Located<Expression>> {
 }
 
 fn parse_function_call_expression(input: Span) -> ParseResult<Located<Expression>> {
-    fn parse_function_call(input: Span) -> ParseResult<(String, Vec<Expression>)> {
-        fn parse_argument_list(input: Span) -> ParseResult<Vec<Expression>> {
-            let (s, _) = skip0(input)?;
-            let mut ret = Vec::new();
-            let (s, first) = parse_expression(s)?;
-            ret.push(first.value);
-            let (s, rest) = many0(permutation((char(','), multispace0, parse_expression)))(s)?;
-
-            for arg in rest {
-                ret.push(arg.2.value);
-            }
-
-            Ok((s, ret))
-        }
-        let (s, _) = skip0(input)?;
-        let (s, _from) = position(s)?;
-        let (s, function_name) = parse_symbol_name(s)?;
-        let (s, args) = delimited(lparen, parse_argument_list, rparen)(s)?;
-
-        Ok((s, (function_name, args)))
-    }
-
-    located(map(parse_function_call, |(name, args)| {
-        Expression::CallExpr { name, args }
-    }))(input)
+    located(map(
+        pair(
+            parse_identifier,
+            delimited(
+                lparen,
+                separated_list0(comma, map(parse_expression, |loc_expr| loc_expr.value)),
+                rparen,
+            ),
+        ),
+        |(name, args)| Expression::CallExpr { name, args },
+    ))(input)
 }
 
 fn parse_postfix_expression(input: Span) -> ParseResult<Located<Expression>> {
@@ -338,7 +325,7 @@ fn parse_function_decl(input: Span) -> ParseResult<FunctionDecl> {
         fn parse_argument(input: Span) -> ParseResult<String> {
             let (s, _) = skip0(input)?;
             let (s, (_typename, _, name)) =
-                permutation((tag("int"), multispace1, parse_symbol_name))(s)?;
+                permutation((tag("int"), multispace1, parse_identifier))(s)?;
             Ok((s, name))
         }
 
@@ -358,7 +345,7 @@ fn parse_function_decl(input: Span) -> ParseResult<FunctionDecl> {
     let (s, _) = skip0(input)?;
     let (s, (_, name, params)) = permutation((
         tag("int"),
-        delimited(multispace0, parse_symbol_name, multispace0),
+        delimited(multispace0, parse_identifier, multispace0),
         parse_argument_list,
     ))(s)?;
 
@@ -424,10 +411,10 @@ pub fn parse_function(input: Span) -> ParseResult<Function> {
 
 pub fn parse_module(input: Span) -> ParseResult<Module> {
     map(
-        permutation((
-            delimited(skip0, many0(parse_function), skip0),
+        many_till(
+            delimited(skip0, parse_function, skip0),
             eof::<Span, SyntaxError>,
-        )),
+        ),
         |(functions, _)| Module { functions },
     )(input)
 }
