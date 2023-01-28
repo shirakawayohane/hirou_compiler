@@ -14,13 +14,13 @@ use crate::ast::{BinaryOp, Expression, Function, FunctionDecl, Module, Statement
 
 pub type Span<'a> = LocatedSpan<&'a str>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Position {
     line: u32,
     col: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Range<'a> {
     pub from: Position,
     pub to: Position,
@@ -34,7 +34,7 @@ pub struct Located<'a, T> {
 }
 
 fn located<'a, O>(
-    mut parser: impl Parser<Span<'a>, O, SyntaxError<Span<'a>>>,
+    mut parser: impl Parser<Span<'a>, O, SyntaxError<'a>>,
 ) -> impl FnMut(Span<'a>) -> ParseResult<Located<O>> {
     move |input: Span<'a>| {
         let (s, _) = skip0(input)?;
@@ -72,17 +72,17 @@ pub enum SyntaxErrorKind {
 }
 
 #[derive(Debug, Clone)]
-pub struct SyntaxError<I> {
-    loc: I,
+pub struct SyntaxError<'a> {
     kind: SyntaxErrorKind,
+    range: Option<Range<'a>>,
     leaf_kinds: Vec<nom::error::ErrorKind>,
 }
 
-impl<'a, I> nom::error::ParseError<I> for SyntaxError<I> {
+impl<'a, I> nom::error::ParseError<I> for SyntaxError<'a> {
     fn from_error_kind(input: I, kind: nom::error::ErrorKind) -> Self {
         Self {
-            loc: input,
             kind: SyntaxErrorKind::UnMapped,
+            range: None,
             leaf_kinds: vec![kind],
         }
     }
@@ -92,21 +92,21 @@ impl<'a, I> nom::error::ParseError<I> for SyntaxError<I> {
         let mut kinds = other.leaf_kinds.clone();
         kinds.push(kind);
         Self {
-            loc: input,
             kind: other.kind,
             leaf_kinds: kinds,
+            range: other.range
         }
     }
 }
 
-type ParseResult<'a, T> = IResult<Span<'a>, T, SyntaxError<Span<'a>>>;
+type ParseResult<'a, T> = IResult<Span<'a>, T, SyntaxError<'a>>;
 
 fn comment(s: Span) -> ParseResult<()> {
     map(
         permutation((
             tag("//"),
             take_till(|c: char| c == '\r' || c == '\n'),
-            alt((line_ending::<Span, SyntaxError<Span>>, eof)),
+            alt((line_ending::<Span, SyntaxError>, eof)),
         )),
         |(_, _, _)| (),
     )(s)
@@ -426,7 +426,7 @@ pub fn parse_module(input: Span) -> ParseResult<Module> {
     map(
         permutation((
             delimited(skip0, many0(parse_function), skip0),
-            eof::<Span, SyntaxError<Span>>,
+            eof::<Span, SyntaxError>,
         )),
         |(functions, _)| Module { functions },
     )(input)
