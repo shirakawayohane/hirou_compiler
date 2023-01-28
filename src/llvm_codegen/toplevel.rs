@@ -30,7 +30,7 @@ impl LLVMCodegenerator<'_> {
                     self.llvm_builder.build_store(alloca, parameter);
                     self.context.borrow_mut().set_variable(name.clone(), alloca);
                 }
-                Type::I64 => todo!(),
+                Type::U64 => todo!(),
                 Type::U8 => todo!(),
                 Type::Ptr(_) => todo!(),
             }

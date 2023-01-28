@@ -20,23 +20,23 @@ impl LLVMCodegenerator<'_> {
                     .borrow_mut()
                     .set_variable(name, variable_pointer);
 
-                match self.eval_expression(value)? {
+                match self.eval_expression(value, Some(Type::I32))? {
                     Value::IntValue(v) => {
                         self.llvm_builder.build_store(variable_pointer, v);
                     }
-                    Value::Void => {}
+                    _ => panic!(),
                 };
 
                 Ok(())
             }
-            Type::I64 => todo!(),
+            Type::U64 => todo!(),
             Type::U8 => todo!(),
             Type::Ptr(_) => todo!(),
         }
     }
     fn gen_return(&self, opt_expr: Option<Expression>) -> Result<(), CompileError> {
         if let Some(exp) = opt_expr {
-            let value = self.eval_expression(exp)?;
+            let value = self.eval_expression(exp, None)?;
             self.llvm_builder.build_return(match &value {
                 Value::IntValue(v) => Some(v),
                 Value::Void => None,
@@ -48,7 +48,7 @@ impl LLVMCodegenerator<'_> {
     }
     fn gen_asignment(&self, name: String, expression: Expression) -> Result<(), CompileError> {
         if let Some(pointer) = self.context.borrow().find_variable(&name) {
-            let value = self.eval_expression(expression)?;
+            let value = self.eval_expression(expression, None)?;
             self.llvm_builder.build_store(
                 pointer,
                 match value {
@@ -62,7 +62,7 @@ impl LLVMCodegenerator<'_> {
         Ok(())
     }
     fn gen_discarded_expression(&self, expression: Expression) -> Result<(), CompileError> {
-        self.eval_expression(expression)?;
+        self.eval_expression(expression, None)?;
         Ok(())
     }
     pub(super) fn gen_statement(&self, statement: Statement) -> Result<(), CompileError> {
@@ -73,7 +73,7 @@ impl LLVMCodegenerator<'_> {
             Statement::DiscardedExpression { expression } => {
                 self.gen_discarded_expression(expression)
             }
-        };
+        }?;
         Ok(())
     }
 }

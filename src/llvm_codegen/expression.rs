@@ -5,7 +5,19 @@ use crate::ast::*;
 use inkwell::values::{BasicMetadataValueEnum, BasicValueEnum};
 
 impl LLVMCodegenerator<'_> {
-    fn eval_variable_ref(&self, name: &str) -> Result<Value, CompileError> {
+    fn eval_i32_literal(
+        &self,
+        value: i32,
+        _annotation: Option<Type>,
+    ) -> Result<Value, CompileError> {
+        let literal = self.llvm_context.i32_type().const_int(value as u64, true);
+        Ok(Value::IntValue(literal))
+    }
+    fn eval_variable_ref(
+        &self,
+        name: &str,
+        _annotation: Option<Type>,
+    ) -> Result<Value, CompileError> {
         if let Ok(ptr) = self.get_variable(&name) {
             let value: BasicValueEnum<'_> = self.llvm_builder.build_load(ptr, &name);
             Ok(match value {
@@ -22,18 +34,15 @@ impl LLVMCodegenerator<'_> {
             })
         }
     }
-    fn eval_i32_literal(&self, value: i32) -> Result<Value, CompileError> {
-        let literal = self.llvm_context.i32_type().const_int(value as u64, true);
-        Ok(Value::IntValue(literal))
-    }
     fn eval_binary_expr(
         &self,
         op: BinaryOp,
         lhs: Expression,
         rhs: Expression,
+        _annotation: Option<Type>,
     ) -> Result<Value, CompileError> {
-        let lhs_value = self.eval_expression(lhs)?;
-        let rhs_value = self.eval_expression(rhs)?;
+        let lhs_value = self.eval_expression(lhs, None)?;
+        let rhs_value = self.eval_expression(rhs, None)?;
         match op {
             BinaryOp::Add => match lhs_value {
                 Value::IntValue(lhs_int_value) => match rhs_value {
@@ -89,11 +98,16 @@ impl LLVMCodegenerator<'_> {
             },
         }
     }
-    fn eval_call_expr(&self, name: &str, args: Vec<Expression>) -> Result<Value, CompileError> {
+    fn eval_call_expr(
+        &self,
+        name: &str,
+        args: Vec<Expression>,
+        _annotation: Option<Type>,
+    ) -> Result<Value, CompileError> {
         if let Some(func) = self.llvm_module.get_function(&name) {
             let mut evaluated_args: Vec<BasicMetadataValueEnum> = Vec::new();
             for arg_expr in args {
-                let evaluated_arg = self.eval_expression(arg_expr)?;
+                let evaluated_arg = self.eval_expression(arg_expr, None)?;
                 evaluated_args.push(match evaluated_arg {
                     Value::IntValue(v) => BasicMetadataValueEnum::IntValue(v),
                     Value::Void => return Err(CompileError::InvalidArgument),
@@ -129,12 +143,18 @@ impl LLVMCodegenerator<'_> {
             }
         }
     }
-    pub(super) fn eval_expression(&self, expr: Expression) -> Result<Value, CompileError> {
+    pub(super) fn eval_expression(
+        &self,
+        expr: Expression,
+        annotation: Option<Type>,
+    ) -> Result<Value, CompileError> {
         match expr {
-            Expression::VariableRef { name } => self.eval_variable_ref(&name),
-            Expression::I32Literal { value } => self.eval_i32_literal(value),
-            Expression::BinaryExpr { op, lhs, rhs } => self.eval_binary_expr(op, *lhs, *rhs),
-            Expression::CallExpr { name, args } => self.eval_call_expr(&name, args),
+            Expression::VariableRef { name } => self.eval_variable_ref(&name, annotation),
+            Expression::NumberLiteral { value } => self.eval_i32_literal(value, annotation),
+            Expression::BinaryExpr { op, lhs, rhs } => {
+                self.eval_binary_expr(op, *lhs, *rhs, annotation)
+            }
+            Expression::CallExpr { name, args } => self.eval_call_expr(&name, args, annotation),
         }
     }
 }

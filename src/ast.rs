@@ -11,8 +11,8 @@ pub enum Expression {
     VariableRef {
         name: String,
     },
-    I32Literal {
-        value: i32,
+    NumberLiteral {
+        value: String,
     },
     BinaryExpr {
         op: BinaryOp,
@@ -28,7 +28,7 @@ pub enum Expression {
 #[derive(Debug)]
 pub enum Type {
     I32,
-    I64,
+    U64,
     U8,
     Ptr(Box<Type>),
 }

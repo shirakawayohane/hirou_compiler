@@ -67,6 +67,11 @@ pub(super) fn i32(input: Span) -> ParseResult<Span> {
 }
 
 #[inline(always)]
+pub(super) fn u64(input: Span) -> ParseResult<Span> {
+    tag("u64")(input)
+}
+
+#[inline(always)]
 pub(super) fn u8(input: Span) -> ParseResult<Span> {
     tag("u8")(input)
 }
