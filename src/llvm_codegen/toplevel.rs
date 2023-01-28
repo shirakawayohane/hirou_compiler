@@ -22,15 +22,18 @@ impl LLVMCodegenerator<'_> {
         self.context.borrow_mut().push_scope();
         // Set parameters in function body
         for (i, parameter) in function.get_param_iter().enumerate() {
-            let parameter_name = &decl.params[i];
-            parameter.set_name(parameter_name.as_str());
-            let alloca = self
-                .llvm_builder
-                .build_alloca(parameter.get_type(), &parameter_name);
-            self.llvm_builder.build_store(alloca, parameter);
-            self.context
-                .borrow_mut()
-                .set_variable(parameter_name.clone(), alloca);
+            let (ty, name) = &decl.params[i];
+            parameter.set_name(name.as_str());
+            match ty {
+                Type::I32 => {
+                    let alloca = self.llvm_builder.build_alloca(parameter.get_type(), &name);
+                    self.llvm_builder.build_store(alloca, parameter);
+                    self.context.borrow_mut().set_variable(name.clone(), alloca);
+                }
+                Type::I64 => todo!(),
+                Type::U8 => todo!(),
+                Type::Ptr(_) => todo!(),
+            }
         }
 
         for statement in body {

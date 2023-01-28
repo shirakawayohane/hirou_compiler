@@ -2,6 +2,7 @@ mod expression;
 mod statement;
 mod token;
 mod toplevel;
+mod ty;
 mod util;
 
 use nom::{

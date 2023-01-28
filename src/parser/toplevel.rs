@@ -1,45 +1,58 @@
+use crate::parser::ty::parse_type;
+
 use super::{statement::parse_statement, token::*, util::*, *};
 
 use nom::{
     branch::permutation,
-    bytes::complete::tag,
-    character::complete::{multispace0, multispace1},
+    character::complete::multispace0,
     combinator::map,
     error::context,
     multi::{many0, separated_list0},
     sequence::delimited,
 };
 
-fn parse_function_decl(input: Span) -> ParseResult<FunctionDecl> {
-    fn parse_argument_list(input: Span) -> ParseResult<Vec<String>> {
-        fn parse_argument(input: Span) -> ParseResult<String> {
-            let (s, _) = skip0(input)?;
-            let (s, (_typename, _, name)) =
-                permutation((tag("int"), multispace1, parse_identifier))(s)?;
-            Ok((s, name))
-        }
-
-        let (s, _) = skip0(input)?;
-        let (s, params) = delimited(
-            token::lparen,
-            delimited(
-                multispace0,
-                separated_list0(comma, parse_argument),
-                multispace0,
-            ),
-            token::rparen,
-        )(s)?;
-
-        Ok((s, params))
-    }
-    let (s, _) = skip0(input)?;
-    let (s, (_, name, params)) = permutation((
-        tag("int"),
-        delimited(multispace0, parse_identifier, multispace0),
-        parse_argument_list,
-    ))(s)?;
-
-    Ok((s, FunctionDecl { name, params }))
+fn parse_function_decl(input: Span) -> ParseResult<Located<FunctionDecl>> {
+    dbg!(input);
+    let result = context(
+        "function_decl",
+        located(map(
+            permutation((
+                parse_type,
+                delimited(multispace0, parse_identifier, multispace0),
+                delimited(
+                    token::lparen,
+                    delimited(
+                        multispace0,
+                        context(
+                            "parameters",
+                            separated_list0(
+                                comma,
+                                map(
+                                    permutation((
+                                        parse_identifier,
+                                        skip0,
+                                        colon,
+                                        skip0,
+                                        parse_type,
+                                    )),
+                                    |(name, _, _, _, ty)| (ty, name),
+                                ),
+                            ),
+                        ),
+                        multispace0,
+                    ),
+                    token::rparen,
+                ),
+            )),
+            |(ty, name, params)| FunctionDecl {
+                name,
+                params,
+                return_type: ty,
+            },
+        )),
+    )(input);
+    dbg!(&result);
+    result
 }
 
 pub fn parse_block(input: Span) -> ParseResult<Vec<Statement>> {
@@ -62,7 +75,10 @@ fn parse_function(input: Span) -> ParseResult<TopLevel> {
         "function",
         map(
             permutation((parse_function_decl, skip0, parse_block)),
-            |(decl, _, body)| TopLevel::Function { decl, body },
+            |(decl, _, body)| TopLevel::Function {
+                decl: decl.value,
+                body,
+            },
         ),
     )(input)
 }

@@ -8,7 +8,9 @@ use nom::{
 
 use crate::ast::Statement;
 
-use super::{expression::parse_expression, token::*, util::*, Located, ParseResult, Span};
+use super::{
+    expression::parse_expression, token::*, ty::parse_type, util::*, Located, ParseResult, Span,
+};
 
 fn parse_asignment(input: Span) -> ParseResult<Located<Statement>> {
     located(map(
@@ -29,7 +31,7 @@ fn parse_asignment(input: Span) -> ParseResult<Located<Statement>> {
 fn parse_variable_decl(input: Span) -> ParseResult<Located<Statement>> {
     located(map(
         permutation((
-            tag("int"),
+            parse_type,
             multispace0,
             parse_identifier,
             multispace0,
@@ -37,7 +39,8 @@ fn parse_variable_decl(input: Span) -> ParseResult<Located<Statement>> {
             multispace0,
             parse_expression,
         )),
-        |(_, _, name, _, _, _, loc_expr)| Statement::VariableDecl {
+        |(ty, _, name, _, _, _, loc_expr)| Statement::VariableDecl {
+            ty,
             name,
             value: loc_expr.value,
         },
@@ -73,7 +76,7 @@ pub(super) fn parse_statement(input: Span) -> ParseResult<Located<Statement>> {
                     parse_discarded_expression_statement,
                 )),
                 multispace0,
-                semi,
+                semicolon,
             )),
             |(loc_stmt, _, _)| loc_stmt,
         ),

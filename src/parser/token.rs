@@ -1,7 +1,7 @@
 use super::*;
 
 use nom::{
-    bytes::complete::take_till1,
+    bytes::complete::{tag, take_till1},
     character::complete::{char, digit1},
     combinator::not,
 };
@@ -32,13 +32,38 @@ pub(super) fn comma(input: Span) -> ParseResult<char> {
 }
 
 #[inline(always)]
-pub(super) fn semi(input: Span) -> ParseResult<char> {
+pub(super) fn semicolon(input: Span) -> ParseResult<char> {
     char(';')(input)
+}
+
+#[inline(always)]
+pub(super) fn colon(input: Span) -> ParseResult<char> {
+    char(':')(input)
 }
 
 #[inline(always)]
 pub(super) fn equals(input: Span) -> ParseResult<char> {
     char('=')(input)
+}
+
+#[inline(always)]
+pub(super) fn anpersand(input: Span) -> ParseResult<char> {
+    char('&')(input)
+}
+
+#[inline(always)]
+pub(super) fn fn_token(input: Span) -> ParseResult<Span> {
+    tag("u8")(input)
+}
+
+#[inline(always)]
+pub(super) fn i32(input: Span) -> ParseResult<Span> {
+    tag("i32")(input)
+}
+
+#[inline(always)]
+pub(super) fn u8(input: Span) -> ParseResult<Span> {
+    tag("u8")(input)
 }
 
 #[inline(always)]

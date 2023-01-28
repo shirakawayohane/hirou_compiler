@@ -3,6 +3,7 @@ use super::*;
 use inkwell::AddressSpace;
 
 const PRINTF_FUNCTION: &str = "printf";
+const MALLOC_FUNCTION: &str = "malloc";
 const PRINTI32_FUNCTION: &str = "print-i32";
 
 impl LLVMCodegenerator<'_> {
@@ -44,6 +45,16 @@ impl LLVMCodegenerator<'_> {
             "call",
         );
         self.llvm_builder.build_return(None);
+    }
+    fn gen_malloc(&self) {
+        let i64_type = self.llvm_context.i64_type();
+        let i8_ptr_type = self
+            .llvm_context
+            .i8_type()
+            .ptr_type(AddressSpace::default());
+        let malloc_fn_type = i8_ptr_type.fn_type(&[i64_type.into()], false);
+        self.llvm_module
+            .add_function(MALLOC_FUNCTION, malloc_fn_type, None);
     }
     pub(super) fn gen_intrinsic_functions(&self) {
         self.gen_printf();

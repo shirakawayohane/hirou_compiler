@@ -1,11 +1,11 @@
-int test(int j){
-  int i = j * 10;
+i32 test(j: i32){
+  i32 i = j * 10;
   return i;
 }
 
-int main(){
-  int i = 10;
-  int v = test(i);
+i32 main(){
+  i32 i = 10;
+  i32 v = test(i);
   print-i32(v);
   return 0;
 }

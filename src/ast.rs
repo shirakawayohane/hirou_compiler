@@ -26,12 +26,21 @@ pub enum Expression {
 }
 
 #[derive(Debug)]
+pub enum Type {
+    I32,
+    I64,
+    U8,
+    Ptr(Box<Type>),
+}
+
+#[derive(Debug)]
 pub enum Statement {
     Asignment {
         name: String,
         expression: Expression,
     },
     VariableDecl {
+        ty: Type,
         name: String,
         value: Expression,
     },
@@ -46,7 +55,8 @@ pub enum Statement {
 #[derive(Debug)]
 pub struct FunctionDecl {
     pub name: String,
-    pub params: Vec<String>,
+    pub params: Vec<(Type, String)>,
+    pub return_type: Type,
 }
 
 #[derive(Debug)]
