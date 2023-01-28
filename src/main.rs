@@ -1,6 +1,6 @@
 use std::fs::read_to_string;
 mod ast;
-mod codegen;
+mod llvm_codegen;
 mod location;
 mod parser;
 use clap::{command, Parser};
@@ -39,25 +39,27 @@ fn main() {
             return;
         }
     };
-    let llvm_context = LLVMContext::create();
-    let llvm_codegenerator = codegen::LLVMCodegenerator::new(&llvm_context);
-    if let Err(compile_error) = llvm_codegenerator.gen_module(module) {
-        dbg!(compile_error);
-    }
-    if let Some(output) = args.output {
-        llvm_codegenerator
-            .llvm_module
-            .print_to_file(output)
-            .unwrap();
-    }
-    let execution_engine = llvm_codegenerator
-        .llvm_module
-        .create_jit_execution_engine(inkwell::OptimizationLevel::None)
-        .unwrap();
-    unsafe {
-        execution_engine
-            .get_function::<unsafe extern "C" fn()>("main")
-            .unwrap()
-            .call();
+    let llvm_context: LLVMContext = LLVMContext::create();
+    let llvm_codegenerator = llvm_codegen::LLVMCodegenerator::new(&llvm_context);
+
+    let result = llvm_codegenerator.gen_module(module);
+    match result {
+        Ok(module) => {
+            if let Some(output) = args.output {
+                module.print_to_file(output).unwrap();
+            }
+            let execution_engine = &module
+                .create_jit_execution_engine(inkwell::OptimizationLevel::None)
+                .unwrap();
+            unsafe {
+                execution_engine
+                    .get_function::<unsafe extern "C" fn()>("main")
+                    .unwrap()
+                    .call();
+            }
+        }
+        Err(err) => {
+            dbg!(err);
+        }
     }
 }
