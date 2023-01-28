@@ -1,4 +1,13 @@
-# Hirou Compiler
-LLVM入門用
+```
+ ________
+< 疲労! >
+ --------
+        \   ^__^
+         \  (><)\_______
+            (__)\       )\/\
+                ||----w |
+                ||     ||
+```
 
-C言語のサブセットのLLVMフロントを作ろうとしていたけど、もう色々と代わってきたので、完全自作言語を作ることにする。
+# Hirou Compiler
+I would have made a C LLVM front for learning, but it no longer looks like C at all. So, I have no choice but to try to make my own language.
