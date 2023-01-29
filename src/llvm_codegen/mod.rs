@@ -9,6 +9,7 @@ use crate::ast::{Module, TopLevel, Type};
 use inkwell::builder::Builder as LLVMBuilder;
 use inkwell::context::Context as LLVMContext;
 use inkwell::module::Module as LLVMModule;
+use inkwell::types::IntType;
 use inkwell::values::PointerValue;
 
 use std::cell::RefCell;
@@ -43,17 +44,26 @@ pub struct LLVMCodegenerator<'a> {
     llvm_module: LLVMModule<'a>,
     llvm_builder: LLVMBuilder<'a>,
     llvm_context: &'a LLVMContext,
+    i8_type: IntType<'a>,
+    i32_type: IntType<'a>,
+    i64_type: IntType<'a>,
 }
 
 impl<'a> LLVMCodegenerator<'a> {
     pub fn new(llvm_context: &'a LLVMContext) -> LLVMCodegenerator<'a> {
         let llvm_module = llvm_context.create_module("main");
         let llvm_builder = llvm_context.create_builder();
+        let i8_type = llvm_context.i8_type();
+        let i32_type = llvm_context.i32_type();
+        let i64_type = llvm_context.i64_type();
         Self {
             context: Rc::new(RefCell::new(Context::new())),
             llvm_module,
             llvm_builder,
             llvm_context,
+            i8_type,
+            i32_type,
+            i64_type,
         }
     }
 }
@@ -66,7 +76,7 @@ impl<'a> LLVMCodegenerator<'a> {
                 return Ok(match ty {
                     crate::ast::Type::I32 => Value::I32Value(value.into_int_value()),
                     crate::ast::Type::U64 => Value::U64Value(value.into_int_value()),
-                    crate::ast::Type::U8 => todo!(),
+                    crate::ast::Type::U8 => Value::U8Value(value.into_int_value()),
                     crate::ast::Type::Ptr(_) => todo!(),
                 });
             }

@@ -1,6 +1,6 @@
 fn main(): i32 {
   let i: i32 = 10;
-  let c: u64 = 10000;
-  print-u64(i + c);
+  let c: u8 = 12;
+  print-i32(i + c);
   return 0;
 }

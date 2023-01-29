@@ -51,7 +51,7 @@ impl Type {
         match self {
             Type::I32 => true,
             Type::U64 => true,
-            Type::U8 => false,
+            Type::U8 => true,
             Type::Ptr(_) => false,
         }
     }

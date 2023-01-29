@@ -16,17 +16,25 @@ impl LLVMCodegenerator<'_> {
     fn eval_integer_literal(
         &self,
         value_str: &str,
-        annotation: Option<Type>,
+        annotation: Option<&Type>,
     ) -> Result<Value, CompileError> {
         if let Some(annotation) = annotation {
             match annotation {
                 Type::I32 => self.eval_i32(value_str),
                 Type::U64 => {
                     if let Ok(n) = value_str.parse::<u64>() {
-                        let int_value = self.llvm_context.i64_type().const_int(n, false);
+                        let int_value = self.i64_type.const_int(n, false);
                         Ok(Value::U64Value(int_value))
                     } else {
-                        todo!()
+                        unreachable!()
+                    }
+                }
+                Type::U8 => {
+                    if let Ok(n) = value_str.parse::<u8>() {
+                        let int_value = self.i8_type.const_int(n as u64, false);
+                        Ok(Value::U8Value(int_value))
+                    } else {
+                        unreachable!()
                     }
                 }
                 _ => unreachable!(),
@@ -38,7 +46,7 @@ impl LLVMCodegenerator<'_> {
     fn eval_variable_ref(
         &self,
         name: &str,
-        _annotation: Option<Type>,
+        _annotation: Option<&Type>,
     ) -> Result<Value, CompileError> {
         self.get_variable(&name)
     }
@@ -47,7 +55,7 @@ impl LLVMCodegenerator<'_> {
         op: BinaryOp,
         lhs: Expression,
         rhs: Expression,
-        _annotation: Option<Type>,
+        _annotation: Option<&Type>,
     ) -> Result<Value, CompileError> {
         pub fn get_cast_type_with_other_operand_of_bin_op(ty: &Type, other: &Type) -> Option<Type> {
             match ty {
@@ -84,6 +92,7 @@ impl LLVMCodegenerator<'_> {
         if lhs_type.is_integer_type() && rhs_type.is_integer_type() {
             let i64_type = self.llvm_context.i64_type();
             let i32_type = self.llvm_context.i32_type();
+            let i8_type = self.llvm_context.i8_type();
             let lhs_cast_type = get_cast_type_with_other_operand_of_bin_op(&lhs_type, &rhs_type);
             let rhs_cast_type = get_cast_type_with_other_operand_of_bin_op(&rhs_type, &lhs_type);
             let lhs_integer_value = match &lhs_cast_type {
@@ -100,7 +109,12 @@ impl LLVMCodegenerator<'_> {
                         false,
                         "(u64)",
                     ),
-                    Type::U8 => unreachable!(),
+                    Type::U8 => self.llvm_builder.build_int_cast_sign_flag(
+                        lhs_value.unwrap_int_value(),
+                        i8_type,
+                        false,
+                        "(u8)",
+                    ),
                     Type::Ptr(_) => unreachable!(),
                 },
                 None => lhs_value.unwrap_int_value(),
@@ -119,7 +133,12 @@ impl LLVMCodegenerator<'_> {
                         false,
                         "(u64)",
                     ),
-                    Type::U8 => unreachable!(),
+                    Type::U8 => self.llvm_builder.build_int_cast_sign_flag(
+                        rhs_value.unwrap_int_value(),
+                        i8_type,
+                        false,
+                        "(u8)",
+                    ),
                     Type::Ptr(_) => unreachable!(),
                 },
                 None => rhs_value.unwrap_int_value(),
@@ -196,13 +215,14 @@ impl LLVMCodegenerator<'_> {
         &self,
         name: &str,
         args: Vec<Expression>,
-        _annotation: Option<Type>,
+        _annotation: Option<&Type>,
     ) -> Result<Value, CompileError> {
         if let Some(func) = self.llvm_module.get_function(&name) {
             let mut evaluated_args: Vec<BasicMetadataValueEnum> = Vec::new();
             for arg_expr in args {
                 let evaluated_arg = self.eval_expression(arg_expr, None)?;
                 evaluated_args.push(match evaluated_arg {
+                    Value::U8Value(v) => BasicMetadataValueEnum::IntValue(v),
                     Value::I32Value(v) => BasicMetadataValueEnum::IntValue(v),
                     Value::U64Value(v) => BasicMetadataValueEnum::IntValue(v),
                     Value::Void => return Err(CompileError::InvalidArgument),
@@ -241,7 +261,7 @@ impl LLVMCodegenerator<'_> {
     pub(super) fn eval_expression(
         &self,
         expr: Expression,
-        annotation: Option<Type>,
+        annotation: Option<&Type>,
     ) -> Result<Value, CompileError> {
         match expr {
             Expression::VariableRef { name } => self.eval_variable_ref(&name, annotation),

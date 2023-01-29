@@ -13,7 +13,7 @@ fn u64_type(input: Span) -> ParseResult<Type> {
 }
 
 fn u8_type(input: Span) -> ParseResult<Type> {
-    map(u8, |_| Type::I32)(input)
+    map(u8, |_| Type::U8)(input)
 }
 
 fn ptr_type(input: Span) -> ParseResult<Type> {
