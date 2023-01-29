@@ -40,26 +40,32 @@ fn main() {
         }
     };
     let llvm_context: LLVMContext = LLVMContext::create();
-    let llvm_codegenerator = llvm_codegen::LLVMCodegenerator::new(&llvm_context);
 
-    let result = llvm_codegenerator.gen_module(module);
-    match result {
-        Ok(module) => {
-            if let Some(output) = args.output {
-                module.print_to_file(output).unwrap();
-            }
-            let execution_engine = &module
-                .create_jit_execution_engine(inkwell::OptimizationLevel::None)
-                .unwrap();
-            unsafe {
-                execution_engine
-                    .get_function::<unsafe extern "C" fn()>("main")
-                    .unwrap()
-                    .call();
-            }
-        }
-        Err(err) => {
-            dbg!(err);
-        }
+    let llvm_codegenerator = llvm_codegen::LLVMCodegenerator::new(&llvm_context);
+    let temp = llvm_codegenerator;
+    temp.gen_module(module);
+    {
+        // llvm_codegenerator.gen_module(module);
+        // let module = llvm_codegenerator.get_module();
     }
+    // let module = llvm_codegenerator.get_module();
+    // match result {
+    //     Ok(_) => {
+    //         if let Some(output) = args.output {
+    //             module.print_to_file(output).unwrap();
+    //         }
+    //         let execution_engine = &module
+    //             .create_jit_execution_engine(inkwell::OptimizationLevel::None)
+    //             .unwrap();
+    //         unsafe {
+    //             execution_engine
+    //                 .get_function::<unsafe extern "C" fn()>("main")
+    //                 .unwrap()
+    //                 .call();
+    //         }
+    //     }
+    //     Err(err) => {
+    //         dbg!(err);
+    //     }
+    // }
 }

@@ -1,6 +1,5 @@
+
 fn main(): i32 {
-  let i: i32 = 10;
-  let c: u8 = 12;
-  print-i32(i + c);
+  let buf: *u8 = __malloc(2);
   return 0;
 }

@@ -25,27 +25,16 @@ impl LLVMCodegenerator<'_> {
             let (ty, name) = &decl.params[i];
             parameter.set_name(name.as_str());
             match ty {
-                Type::I32 => {
+                Type::I32 | Type::U8 | Type::U32 | Type::U64 | Type::USize => {
                     let allocated_pointer =
                         self.llvm_builder.build_alloca(parameter.get_type(), &name);
                     self.llvm_builder.build_store(allocated_pointer, parameter);
                     self.context.borrow_mut().set_variable(
                         name.clone(),
-                        Type::I32,
+                        ty.clone(),
                         allocated_pointer,
                     );
                 }
-                Type::U64 => {
-                    let allocated_pointer =
-                        self.llvm_builder.build_alloca(parameter.get_type(), &name);
-                    self.llvm_builder.build_store(allocated_pointer, parameter);
-                    self.context.borrow_mut().set_variable(
-                        name.clone(),
-                        Type::U64,
-                        allocated_pointer,
-                    );
-                }
-                Type::U8 => todo!(),
                 Type::Ptr(_) => todo!(),
             }
         }

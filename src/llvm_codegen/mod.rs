@@ -10,7 +10,6 @@ use inkwell::builder::Builder as LLVMBuilder;
 use inkwell::context::Context as LLVMContext;
 use inkwell::module::Module as LLVMModule;
 use inkwell::types::IntType;
-use inkwell::values::PointerValue;
 
 use std::cell::RefCell;
 
@@ -39,6 +38,12 @@ pub enum CompileError {
     },
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum PointerSize {
+    SixteenFour,
+    ThirtyTwo,
+}
+
 pub struct LLVMCodegenerator<'a> {
     context: Rc<RefCell<Context<'a>>>,
     llvm_module: LLVMModule<'a>,
@@ -47,6 +52,7 @@ pub struct LLVMCodegenerator<'a> {
     i8_type: IntType<'a>,
     i32_type: IntType<'a>,
     i64_type: IntType<'a>,
+    pointer_size: PointerSize,
 }
 
 impl<'a> LLVMCodegenerator<'a> {
@@ -64,6 +70,7 @@ impl<'a> LLVMCodegenerator<'a> {
             i8_type,
             i32_type,
             i64_type,
+            pointer_size: PointerSize::SixteenFour,
         }
     }
 }
@@ -73,11 +80,13 @@ impl<'a> LLVMCodegenerator<'a> {
         for scope in self.context.borrow().scopes.iter().rev() {
             if let Some((ty, pointer)) = scope.get(name) {
                 let value = self.llvm_builder.build_load(*pointer, name);
-                return Ok(match ty {
-                    crate::ast::Type::I32 => Value::I32Value(value.into_int_value()),
-                    crate::ast::Type::U64 => Value::U64Value(value.into_int_value()),
-                    crate::ast::Type::U8 => Value::U8Value(value.into_int_value()),
-                    crate::ast::Type::Ptr(_) => todo!(),
+                return Ok(match *ty {
+                    Type::I32 => Value::I32Value(value.into_int_value()),
+                    Type::U8 => Value::U8Value(value.into_int_value()),
+                    Type::U32 => Value::U32Value(value.into_int_value()),
+                    Type::U64 => Value::U64Value(value.into_int_value()),
+                    Type::USize => Value::USizeValue(value.into_int_value()),
+                    Type::Ptr(_) => todo!(),
                 });
             }
         }
@@ -86,13 +95,16 @@ impl<'a> LLVMCodegenerator<'a> {
         })
     }
 
-    pub fn gen_module(self, module: Module) -> Result<LLVMModule<'a>, CompileError> {
+    pub fn gen_module(&self, module: Module) -> Result<(), CompileError> {
         self.gen_intrinsic_functions();
         for top in module.toplevels {
             match top {
                 TopLevel::Function { decl, body } => self.gen_function(decl, body)?,
             }
         }
-        Ok(self.llvm_module)
+        Ok(())
+    }
+    pub fn get_module(&'a self) -> &LLVMModule<'a> {
+        &self.llvm_module
     }
 }

@@ -47,8 +47,8 @@ pub(super) fn equals(input: Span) -> ParseResult<char> {
 }
 
 #[inline(always)]
-pub(super) fn anpersand(input: Span) -> ParseResult<char> {
-    char('&')(input)
+pub(super) fn asterisk(input: Span) -> ParseResult<char> {
+    char('*')(input)
 }
 
 #[inline(always)]
@@ -67,8 +67,8 @@ pub(super) fn i32(input: Span) -> ParseResult<Span> {
 }
 
 #[inline(always)]
-pub(super) fn u64(input: Span) -> ParseResult<Span> {
-    tag("u64")(input)
+pub(super) fn usize(input: Span) -> ParseResult<Span> {
+    tag("usize")(input)
 }
 
 #[inline(always)]

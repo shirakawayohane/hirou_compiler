@@ -1,5 +1,3 @@
-use core::panic;
-
 #[derive(Debug, Clone, Copy)]
 pub enum BinaryOp {
     Add,
@@ -30,7 +28,9 @@ pub enum Expression {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Type {
     I32,
+    U32,
     U64,
+    USize,
     U8,
     Ptr(Box<Type>),
 }
@@ -39,6 +39,8 @@ impl Type {
     pub fn is_primitive(&self) -> bool {
         match self {
             Type::I32 => true,
+            Type::USize => true,
+            Type::U32 => true,
             Type::U64 => true,
             Type::U8 => true,
             Type::Ptr(_) => true,
@@ -50,8 +52,10 @@ impl Type {
     pub fn is_integer_type(&self) -> bool {
         match self {
             Type::I32 => true,
-            Type::U64 => true,
+            Type::USize => true,
             Type::U8 => true,
+            Type::U32 => true,
+            Type::U64 => true,
             Type::Ptr(_) => false,
         }
     }
