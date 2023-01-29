@@ -25,7 +25,7 @@ impl LLVMCodegenerator<'_> {
                 // Contextに登録
                 self.context
                     .borrow_mut()
-                    .set_variable(name, Type::U64, variable_pointer);
+                    .set_variable(name, Type::I32, variable_pointer);
 
                 Ok(())
             }

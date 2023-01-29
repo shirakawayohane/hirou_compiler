@@ -23,7 +23,7 @@ impl LLVMCodegenerator<'_> {
                 Type::I32 => self.eval_i32(value_str),
                 Type::U64 => {
                     if let Ok(n) = value_str.parse::<u64>() {
-                        let int_value = self.llvm_context.i64_type().const_int(n as u64, false);
+                        let int_value = self.llvm_context.i64_type().const_int(n, false);
                         Ok(Value::U64Value(int_value))
                     } else {
                         todo!()
