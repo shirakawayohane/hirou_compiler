@@ -133,6 +133,7 @@ dependencies = [
  "anyhow",
  "clap",
  "inkwell",
+ "llvm-sys",
  "nom",
  "nom_locate",
  "thiserror",

@@ -12,3 +12,4 @@ inkwell = {git = "https://github.com/TheDan64/inkwell", branch = "master", featu
 nom = {version = "7.1.2", features = ["alloc"]}
 nom_locate = "4.0.0"
 thiserror = "1.0.38"
+llvm-sys = "140"

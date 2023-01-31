@@ -41,7 +41,6 @@ pub enum CompileError {
 #[derive(Debug, Clone, Copy)]
 pub enum PointerSize {
     SixteenFour,
-    ThirtyTwo,
 }
 
 pub struct LLVMCodegenerator<'a> {
@@ -86,7 +85,8 @@ impl<'a> LLVMCodegenerator<'a> {
                     Type::U32 => Value::U32Value(value.into_int_value()),
                     Type::U64 => Value::U64Value(value.into_int_value()),
                     Type::USize => Value::USizeValue(value.into_int_value()),
-                    Type::Ptr(_) => todo!(),
+                    Type::Ptr(_) => Value::PointerValue(value.into_pointer_value()),
+                    Type::Void => Value::Void,
                 });
             }
         }
@@ -95,16 +95,18 @@ impl<'a> LLVMCodegenerator<'a> {
         })
     }
 
-    pub fn gen_module(&self, module: Module) -> Result<(), CompileError> {
+    pub fn gen_module(self, module: Module) -> Result<LLVMModule<'a>, CompileError> {
+        // Add global scope
+        self.context.borrow_mut().push_scope();
+        self.context.borrow_mut().push_function_scope();
         self.gen_intrinsic_functions();
         for top in module.toplevels {
             match top {
                 TopLevel::Function { decl, body } => self.gen_function(decl, body)?,
             }
         }
-        Ok(())
-    }
-    pub fn get_module(&'a self) -> &LLVMModule<'a> {
-        &self.llvm_module
+        self.context.borrow_mut().pop_scope();
+        self.context.borrow_mut().pop_function_scope();
+        Ok(self.llvm_module)
     }
 }

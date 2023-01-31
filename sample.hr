@@ -1,5 +1,6 @@
 
 fn main(): i32 {
-  let buf: *u8 = __malloc(2);
+  let buf: *u8 = malloc(2);
+  print-u8-ptr(buf);
   return 0;
 }

@@ -33,6 +33,7 @@ pub enum Type {
     USize,
     U8,
     Ptr(Box<Type>),
+    Void,
 }
 
 impl Type {
@@ -44,6 +45,7 @@ impl Type {
             Type::U64 => true,
             Type::U8 => true,
             Type::Ptr(_) => true,
+            Type::Void => false,
         }
     }
     pub fn is_float_type(&self) -> bool {
@@ -57,6 +59,7 @@ impl Type {
             Type::U32 => true,
             Type::U64 => true,
             Type::Ptr(_) => false,
+            Type::Void => false
         }
     }
     pub fn is_pointer(&self) -> bool {
