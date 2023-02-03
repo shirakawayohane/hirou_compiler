@@ -7,77 +7,77 @@ use nom::{
 };
 
 #[inline(always)]
-pub(super) fn lparen(input: Span) -> ParseResult<char> {
+pub(super) fn lparen(input: Span) -> NotLocatedParseResult<char> {
     char('(')(input)
 }
 
 #[inline(always)]
-pub(super) fn rparen(input: Span) -> ParseResult<char> {
+pub(super) fn rparen(input: Span) -> NotLocatedParseResult<char> {
     char(')')(input)
 }
 
 #[inline(always)]
-pub(super) fn lbracket(input: Span) -> ParseResult<char> {
+pub(super) fn lbracket(input: Span) -> NotLocatedParseResult<char> {
     char('{')(input)
 }
 
 #[inline(always)]
-pub(super) fn rbracket(input: Span) -> ParseResult<char> {
+pub(super) fn rbracket(input: Span) -> NotLocatedParseResult<char> {
     char('}')(input)
 }
 
 #[inline(always)]
-pub(super) fn comma(input: Span) -> ParseResult<char> {
+pub(super) fn comma(input: Span) -> NotLocatedParseResult<char> {
     char(',')(input)
 }
 
 #[inline(always)]
-pub(super) fn semicolon(input: Span) -> ParseResult<char> {
+pub(super) fn semicolon(input: Span) -> NotLocatedParseResult<char> {
     char(';')(input)
 }
 
 #[inline(always)]
-pub(super) fn colon(input: Span) -> ParseResult<char> {
+pub(super) fn colon(input: Span) -> NotLocatedParseResult<char> {
     char(':')(input)
 }
 
 #[inline(always)]
-pub(super) fn equals(input: Span) -> ParseResult<char> {
+pub(super) fn equals(input: Span) -> NotLocatedParseResult<char> {
     char('=')(input)
 }
 
 #[inline(always)]
-pub(super) fn asterisk(input: Span) -> ParseResult<char> {
+pub(super) fn asterisk(input: Span) -> NotLocatedParseResult<char> {
     char('*')(input)
 }
 
 #[inline(always)]
-pub(super) fn fn_token(input: Span) -> ParseResult<Span> {
+pub(super) fn fn_token(input: Span) -> NotLocatedParseResult<Span> {
     tag("fn")(input)
 }
 
 #[inline(always)]
-pub(super) fn let_token(input: Span) -> ParseResult<Span> {
+pub(super) fn let_token(input: Span) -> NotLocatedParseResult<Span> {
     tag("let")(input)
 }
 
 #[inline(always)]
-pub(super) fn i32(input: Span) -> ParseResult<Span> {
+pub(super) fn i32(input: Span) -> NotLocatedParseResult<Span> {
     tag("i32")(input)
 }
 
 #[inline(always)]
-pub(super) fn usize(input: Span) -> ParseResult<Span> {
+pub(super) fn usize(input: Span) -> NotLocatedParseResult<Span> {
     tag("usize")(input)
 }
 
 #[inline(always)]
-pub(super) fn u8(input: Span) -> ParseResult<Span> {
+pub(super) fn u8(input: Span) -> NotLocatedParseResult<Span> {
     tag("u8")(input)
 }
 
 #[inline(always)]
-pub(super) fn parse_identifier(input: Span) -> ParseResult<String> {
+pub(super) fn parse_identifier(input: Span) -> NotLocatedParseResult<String> {
     let (s, _) = not(digit1)(input)?;
     map(
         take_till1(|x: char| !x.is_alphabetic() && !x.is_digit(10) && !['-', '_'].contains(&x)),

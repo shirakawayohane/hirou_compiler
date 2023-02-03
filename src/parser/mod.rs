@@ -14,34 +14,19 @@ use nom::{
 };
 use nom_locate::{position, LocatedSpan};
 
-use crate::ast::{BinaryOp, FunctionDecl, Module, Statement, TopLevel};
+use crate::ast::{BinaryOp, FunctionDecl, Located, Module, Statement, TopLevel};
 
-use self::{toplevel::parse_toplevel, util::skip0};
+use self::{
+    toplevel::parse_toplevel,
+    util::{located, skip0},
+};
 
 pub type Span<'a> = LocatedSpan<&'a str>;
 
-#[derive(Debug, Clone, Copy)]
-pub struct Position {
-    line: u32,
-    col: usize,
-}
+type ParseResult<'a, T> = IResult<Span<'a>, Located<'a, T>, VerboseError<Span<'a>>>;
+type NotLocatedParseResult<'a, T> = IResult<Span<'a>, T, VerboseError<Span<'a>>>;
 
-#[derive(Debug, Clone, Copy)]
-pub struct Range<'a> {
-    pub from: Position,
-    pub to: Position,
-    pub fragment: &'a str,
-}
-
-#[derive(Debug)]
-pub struct Located<'a, T> {
-    range: Range<'a>,
-    value: T,
-}
-
-type ParseResult<'a, T> = IResult<Span<'a>, T, VerboseError<Span<'a>>>;
-
-pub fn parse_module(input: Span) -> ParseResult<Module> {
+pub fn parse_module<'a>(input: Span<'a>) -> IResult<Span, Module, VerboseError<Span<'a>>> {
     context(
         "module",
         map(

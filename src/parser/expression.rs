@@ -8,109 +8,87 @@ use nom::{
     sequence::{delimited, pair},
 };
 
-use crate::ast::Expression;
+use crate::{ast::Expression, util::unbox_located_expression};
 
 use super::{token::*, util::*, *};
 
-fn parse_number_literal(input: Span) -> ParseResult<Located<Expression>> {
-    located(map(digit1, |str: Span| Expression::NumberLiteral {
-        value: str.to_string(),
+fn parse_number_literal(input: Span) -> ParseResult<Box<Expression>> {
+    located(map(digit1, |str: Span| {
+        Box::new(Expression::NumberLiteral {
+            value: str.to_string(),
+        })
     }))(input)
 }
 
-fn parse_variable_ref(input: Span) -> ParseResult<Located<Expression>> {
+fn parse_variable_ref(input: Span) -> ParseResult<Box<Expression>> {
     located(map(
         permutation((many0(asterisk), parse_identifier)),
-        |(asterisks, name)| Expression::VariableRef {
-            deref_count: asterisks.len() as u32,
-            name,
+        |(asterisks, name)| {
+            Box::new(Expression::VariableRef {
+                deref_count: asterisks.len() as u32,
+                name,
+            })
         },
     ))(input)
 }
 
-fn fold_binexp(first: Expression, rest: &[(BinaryOp, Expression)]) -> Box<Expression> {
-    if rest.len() == 0 {
-        return Box::new(first);
-    } else {
-        let (binop, second) = rest.get(0).unwrap().clone();
-
-        if rest.len() == 1 {
-            return Box::new(Expression::BinaryExpr {
-                op: binop,
-                lhs: Box::new(first),
-                rhs: Box::new(second),
-            });
-        }
-
-        Box::new(Expression::BinaryExpr {
-            op: binop,
-            lhs: Box::new(first),
-            rhs: fold_binexp(second, &rest[1..]),
-        })
-    }
-}
-
-fn parse_multiplicative_expression(input: Span) -> ParseResult<Expression> {
-    let (s, _) = skip0(input)?;
-    let (s, lhs) = parse_postfix_expression(s)?;
-    let (s, rhss) = many0(map(
+fn parse_multiplicative_expression(input: Span) -> ParseResult<Box<Expression>> {
+    located(map(
         permutation((
+            parse_postfix_expression,
+            multispace0,
             alt((char('*'), char('/'))),
             multispace0,
             parse_postfix_expression,
         )),
-        |(op, _, expression)| {
-            (
-                match op {
+        |(lhs, _, op, _, rhs)| {
+            Box::new(Expression::BinaryExpr {
+                op: match op {
                     '*' => BinaryOp::Mul,
                     '/' => BinaryOp::Div,
                     _ => unreachable!(),
                 },
-                expression.value,
-            )
+                lhs,
+                rhs,
+            })
         },
-    ))(s)?;
-    let exp = fold_binexp(lhs.value, &rhss);
-    Ok((s, *exp))
+    ))(input)
 }
 
-fn parse_additive_expression(input: Span) -> ParseResult<Located<Expression>> {
-    fn parse_additive_expression_impl(input: Span) -> ParseResult<Expression> {
-        let (s, _) = skip0(input)?;
-        let (s, lhs) = parse_multiplicative_expression(s)?;
-        let (s, rhss) = many0(map(
-            permutation((
-                alt((char('+'), char('-'))),
-                multispace0,
-                parse_postfix_expression,
-            )),
-            |(op, _, expression)| {
-                (
-                    match op {
-                        '+' => BinaryOp::Add,
-                        '-' => BinaryOp::Sub,
-                        _ => unreachable!(),
-                    },
-                    expression.value,
-                )
-            },
-        ))(s)?;
-        let exp = fold_binexp(lhs, &rhss);
-        Ok((s, *exp))
-    }
-    located(parse_additive_expression_impl)(input)
+fn parse_additive_expression(input: Span) -> ParseResult<Box<Expression>> {
+    located(map(
+        permutation((
+            parse_multiplicative_expression,
+            multispace0,
+            alt((char('+'), char('-'))),
+            multispace0,
+            parse_postfix_expression,
+        )),
+        |(lhs, _, op, _, rhs)| {
+            Box::new(Expression::BinaryExpr {
+                op: match op {
+                    '+' => BinaryOp::Add,
+                    '-' => BinaryOp::Sub,
+                    // unreachable because I believe nom.
+                    _ => unreachable!(),
+                },
+                lhs,
+                rhs,
+            })
+        },
+    ))(input)
 }
 
-fn parse_primary_expression(input: Span) -> ParseResult<Located<Expression>> {
+fn parse_primary_expression(input: Span) -> ParseResult<Box<Expression>> {
     let (s, _) = skip0(input)?;
     alt((
         parse_number_literal,
-        delimited(lparen, parse_expression, rparen),
+        delimited(lparen, parse_boxed_expression, rparen),
         parse_variable_ref,
     ))(s)
 }
 
-fn parse_function_call_expression(input: Span) -> ParseResult<Located<Expression>> {
+fn parse_function_call_expression(input: Span) -> ParseResult<Box<Expression>> {
     located(map(
         pair(
             parse_identifier,
@@ -120,17 +98,22 @@ fn parse_function_call_expression(input: Span) -> ParseResult<Located<Expression
                 rparen,
             ),
         ),
-        |(name, args)| Expression::CallExpr { name, args },
+        |(name, args)| Box::new(Expression::CallExpr { name, args }),
     ))(input)
 }
 
-fn parse_postfix_expression(input: Span) -> ParseResult<Located<Expression>> {
+fn parse_postfix_expression(input: Span) -> ParseResult<Box<Expression>> {
     alt((parse_primary_expression, parse_function_call_expression))(input)
 }
 
-pub(super) fn parse_expression(input: Span) -> ParseResult<Located<Expression>> {
+fn parse_boxed_expression(input: Span) -> ParseResult<Box<Expression>> {
     context(
         "expression",
         alt((parse_function_call_expression, parse_additive_expression)),
     )(input)
+}
+
+pub(super) fn parse_expression(input: Span) -> ParseResult<Expression> {
+    let (s, loc_expr) = parse_boxed_expression(input)?;
+    Ok((s, unbox_located_expression(loc_expr)))
 }

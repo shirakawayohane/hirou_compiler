@@ -418,9 +418,13 @@ impl LLVMCodegenerator<'_> {
                 ContextType::NumberLiteralExpression,
                 self.eval_integer_literal(&value, annotation)
             ),
-            Expression::BinaryExpr { op, lhs, rhs } => error_context!(
+            Expression::BinaryExpr {
+                op,
+                lhs: loc_lhs,
+                rhs: loc_rhs,
+            } => error_context!(
                 ContextType::BinaryExpression,
-                self.eval_binary_expr(*op, lhs, rhs)
+                self.eval_binary_expr(*op, &loc_lhs.value, &loc_rhs.value)
             ),
             Expression::CallExpr { name, args } => error_context!(
                 ContextType::CallExpression,

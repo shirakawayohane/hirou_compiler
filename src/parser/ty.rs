@@ -2,22 +2,24 @@ use nom::{branch::alt, combinator::map, error::context, sequence::preceded};
 
 use crate::ast::Type;
 
-use super::{token::*, ParseResult, Span};
+use super::{token::*, util::located, ParseResult, Span};
 
 fn i32_type(input: Span) -> ParseResult<Type> {
-    map(i32, |_| Type::I32)(input)
+    located(map(i32, |_| Type::I32))(input)
 }
 
 fn usize_type(input: Span) -> ParseResult<Type> {
-    map(usize, |_| Type::USize)(input)
+    located(map(usize, |_| Type::USize))(input)
 }
 
 fn u8_type(input: Span) -> ParseResult<Type> {
-    map(u8, |_| Type::U8)(input)
+    located(map(u8, |_| Type::U8))(input)
 }
 
 fn ptr_type(input: Span) -> ParseResult<Type> {
-    map(preceded(asterisk, parse_type), |ty| Type::Ptr(Box::new(ty)))(input)
+    located(map(preceded(asterisk, parse_type), |ty| {
+        Type::Ptr(Box::new(ty.value))
+    }))(input)
 }
 
 pub(super) fn parse_type(input: Span) -> ParseResult<Type> {

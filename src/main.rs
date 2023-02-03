@@ -3,6 +3,7 @@ mod ast;
 mod llvm_codegen;
 mod location;
 mod parser;
+mod util;
 use clap::{command, Parser};
 use inkwell::context::Context as LLVMContext;
 use nom::{

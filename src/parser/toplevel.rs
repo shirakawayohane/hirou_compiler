@@ -11,13 +11,14 @@ use nom::{
     sequence::delimited,
 };
 
-fn parse_function_decl(input: Span) -> ParseResult<Located<FunctionDecl>> {
+fn parse_function_decl(input: Span) -> ParseResult<FunctionDecl> {
     context(
         "function_decl",
         located(map(
             permutation((
                 fn_token,
                 delimited(multispace0, parse_identifier, multispace0),
+                // params
                 delimited(
                     token::lparen,
                     delimited(
@@ -56,23 +57,16 @@ fn parse_function_decl(input: Span) -> ParseResult<Located<FunctionDecl>> {
     )(input)
 }
 
-pub fn parse_block(input: Span) -> ParseResult<Vec<Statement>> {
-    context(
-        "block",
-        delimited(
-            lbracket,
-            many0(delimited(
-                skip0,
-                map(parse_statement, |loc_stmt| loc_stmt.value),
-                skip0,
-            )),
-            rbracket,
-        ),
+pub fn parse_block(input: Span) -> NotLocatedParseResult<Vec<Located<Statement>>> {
+    delimited(
+        lbracket,
+        many0(delimited(skip0, parse_statement, skip0)),
+        rbracket,
     )(input)
 }
 
 fn parse_function(input: Span) -> ParseResult<TopLevel> {
-    context(
+    located(context(
         "function",
         map(
             permutation((parse_function_decl, skip0, parse_block)),
@@ -81,7 +75,7 @@ fn parse_function(input: Span) -> ParseResult<TopLevel> {
                 body,
             },
         ),
-    )(input)
+    ))(input)
 }
 
 pub(crate) fn parse_toplevel(input: Span) -> ParseResult<TopLevel> {

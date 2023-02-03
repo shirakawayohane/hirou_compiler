@@ -222,14 +222,23 @@ impl LLVMCodegenerator<'_> {
     }
     pub(super) fn gen_statement(&self, statement: Statement) -> Result<(), CompileError> {
         match statement {
-            Statement::VariableDecl { ty, name, value } => {
+            Statement::VariableDecl {
+                ty: loc_ty,
+                name,
+                value: loc_value,
+            } => {
                 error_context!(
                     ContextType::VariableDeclStatement,
-                    self.gen_variable_decl(ty, name, value)
+                    self.gen_variable_decl(loc_ty.value, name, loc_value.value)
                 )
             }
-            Statement::Return { expression } => {
-                error_context!(ContextType::ReturnStatement, self.gen_return(expression))
+            Statement::Return {
+                expression: loc_expr,
+            } => {
+                error_context!(
+                    ContextType::ReturnStatement,
+                    self.gen_return(loc_expr.map(|x| x.value))
+                )
             }
             Statement::Asignment {
                 deref_count,
@@ -237,11 +246,13 @@ impl LLVMCodegenerator<'_> {
                 expression,
             } => error_context!(
                 ContextType::AsignStatement,
-                self.gen_asignment(deref_count, name, expression)
+                self.gen_asignment(deref_count, name, expression.value)
             ),
-            Statement::DiscardedExpression { expression } => error_context!(
+            Statement::DiscardedExpression {
+                expression: loc_expr,
+            } => error_context!(
                 ContextType::DiscardedExpressionStatement,
-                self.gen_discarded_expression(expression)
+                self.gen_discarded_expression(loc_expr.value)
             ),
         }?;
         Ok(())

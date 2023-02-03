@@ -6,17 +6,16 @@ mod statement;
 mod toplevel;
 mod value;
 
-use crate::ast::{Module, TopLevel, Type};
+use crate::ast::{Module, Type};
 use inkwell::builder::Builder as LLVMBuilder;
 use inkwell::context::Context as LLVMContext;
 use inkwell::module::Module as LLVMModule;
 use inkwell::types::IntType;
 use inkwell::values::PointerValue;
 
-use std::cell::{Ref, RefCell};
+use std::cell::RefCell;
 
 use std::rc::Rc;
-use thiserror::Error;
 
 use self::context::Context;
 use self::error::{CompileError, CompileErrorKind};
@@ -99,7 +98,7 @@ impl<'a> LLVMCodegenerator<'a> {
         self.context.borrow_mut().push_function_scope();
         self.gen_intrinsic_functions();
         for top in module.toplevels {
-            self.gen_toplevel(top)?;
+            self.gen_toplevel(top.value)?;
         }
         self.context.borrow_mut().pop_scope();
         self.context.borrow_mut().pop_function_scope();

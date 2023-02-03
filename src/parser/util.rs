@@ -1,3 +1,5 @@
+use crate::ast::{Expression, Located, Position, Range};
+
 use super::*;
 use nom::{
     branch::{alt, permutation},
@@ -9,7 +11,7 @@ use nom::{
     Parser,
 };
 
-fn comment(s: Span) -> ParseResult<()> {
+fn comment<'a>(s: Span<'a>) -> IResult<Span<'a>, (), VerboseError<Span<'a>>> {
     map(
         permutation((
             tag("//"),
@@ -20,13 +22,13 @@ fn comment(s: Span) -> ParseResult<()> {
     )(s)
 }
 
-pub(super) fn skip0(input: Span) -> ParseResult<()> {
+pub(super) fn skip0<'a>(input: Span<'a>) -> IResult<Span<'a>, (), VerboseError<Span<'a>>> {
     map(many0(alt((comment, map(multispace1, |_| ())))), |_| ())(input)
 }
 
 pub(super) fn located<'a, O>(
     mut parser: impl Parser<Span<'a>, O, VerboseError<Span<'a>>>,
-) -> impl FnMut(Span<'a>) -> ParseResult<Located<O>> {
+) -> impl FnMut(Span<'a>) -> ParseResult<O> {
     move |input: Span<'a>| {
         let (s, _) = skip0(input)?;
         let (s, from) = position(s)?;

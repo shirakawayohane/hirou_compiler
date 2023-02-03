@@ -18,9 +18,11 @@ impl LLVMCodegenerator<'_> {
         // パラメーターをFunctionBodyにallocし、Contextにも登録する
         self.context.borrow_mut().push_scope();
         self.context.borrow_mut().push_function_scope();
+
         // Set parameters in function body
-        for (i, parameter) in function.get_param_iter().enumerate() {
-            let (ty, name) = &decl.params[i];
+        for (i, (loc_ty, name)) in decl.params.into_iter().enumerate() {
+            let ty = loc_ty.value;
+            let parameter = function.get_nth_param(i as u32).unwrap();
             parameter.set_name(name.as_str());
             if let Type::Void = ty {
                 continue;
@@ -29,7 +31,7 @@ impl LLVMCodegenerator<'_> {
                 self.llvm_builder.build_store(allocated_pointer, parameter);
                 self.context
                     .borrow_mut()
-                    .set_variable(name.clone(), ty.clone(), allocated_pointer);
+                    .set_variable(name.clone(), ty, allocated_pointer);
             }
         }
 
@@ -44,7 +46,10 @@ impl LLVMCodegenerator<'_> {
     pub(super) fn gen_toplevel(&self, top: TopLevel) -> Result<(), CompileError> {
         match top {
             TopLevel::Function { decl, body } => {
-                error_context!(ContextType::Function, self.gen_function(decl, body))
+                error_context!(
+                    ContextType::Function,
+                    self.gen_function(decl, body.into_iter().map(|x| x.value).collect::<Vec<_>>())
+                )
             }
         }
     }

@@ -4,17 +4,15 @@ use nom::{
     character::complete::{char, multispace0, multispace1, space0, space1},
     combinator::{map, opt},
     error::context,
-    multi::{many0, many1},
-    sequence::{delimited, preceded},
+    multi::many0,
+    sequence::preceded,
 };
 
-use crate::ast::Statement;
+use crate::ast::{Expression, Located, Statement};
 
-use super::{
-    expression::parse_expression, token::*, ty::parse_type, util::*, Located, ParseResult, Span,
-};
+use super::{expression::parse_expression, token::*, ty::parse_type, util::*, ParseResult, Span};
 
-fn parse_asignment(input: Span) -> ParseResult<Located<Statement>> {
+fn parse_asignment(input: Span) -> ParseResult<Statement> {
     located(map(
         permutation((
             many0(asterisk),
@@ -27,12 +25,12 @@ fn parse_asignment(input: Span) -> ParseResult<Located<Statement>> {
         |(asterisks, name, _, _, _, expression)| Statement::Asignment {
             deref_count: asterisks.len() as u32,
             name,
-            expression: expression.value,
+            expression,
         },
     ))(input)
 }
 
-fn parse_variable_decl(input: Span) -> ParseResult<Located<Statement>> {
+fn parse_variable_decl(input: Span) -> ParseResult<Statement> {
     located(map(
         permutation((
             let_token,
@@ -44,32 +42,30 @@ fn parse_variable_decl(input: Span) -> ParseResult<Located<Statement>> {
             preceded(skip0, char('=')),
             preceded(skip0, parse_expression),
         )),
-        |(_, name, ty, _, loc_expr)| Statement::VariableDecl {
+        |(_, name, ty, _, expression)| Statement::VariableDecl {
             ty,
             name,
-            value: loc_expr.value,
+            value: expression,
         },
     ))(input)
 }
 
-fn parse_discarded_expression_statement(input: Span) -> ParseResult<Located<Statement>> {
-    located(map(parse_expression, |expr| {
-        Statement::DiscardedExpression {
-            expression: expr.value,
-        }
+fn parse_discarded_expression_statement(input: Span) -> ParseResult<Statement> {
+    located(map(parse_expression, |expression| {
+        Statement::DiscardedExpression { expression }
     }))(input)
 }
 
-fn parse_return_statement(input: Span) -> ParseResult<Located<Statement>> {
+fn parse_return_statement(input: Span) -> ParseResult<Statement> {
     located(map(
         permutation((tag("return"), multispace1, opt(parse_expression))),
         |(_, _, opt_expr)| Statement::Return {
-            expression: opt_expr.map(|x| x.value),
+            expression: opt_expr,
         },
     ))(input)
 }
 
-pub(super) fn parse_statement(input: Span) -> ParseResult<Located<Statement>> {
+pub(super) fn parse_statement(input: Span) -> ParseResult<Statement> {
     context(
         "statement",
         map(
