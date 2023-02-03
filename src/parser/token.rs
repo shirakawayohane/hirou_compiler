@@ -47,8 +47,23 @@ pub(super) fn equals(input: Span) -> NotLocatedParseResult<char> {
 }
 
 #[inline(always)]
+pub(super) fn plus(input: Span) -> NotLocatedParseResult<char> {
+    char('+')(input)
+}
+
+#[inline(always)]
+pub(super) fn minus(input: Span) -> NotLocatedParseResult<char> {
+    char('-')(input)
+}
+
+#[inline(always)]
 pub(super) fn asterisk(input: Span) -> NotLocatedParseResult<char> {
     char('*')(input)
+}
+
+#[inline(always)]
+pub(super) fn slash(input: Span) -> NotLocatedParseResult<char> {
+    char('/')(input)
 }
 
 #[inline(always)]

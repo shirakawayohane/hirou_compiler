@@ -35,11 +35,14 @@ fn parse_variable_decl(input: Span) -> ParseResult<Statement> {
         permutation((
             let_token,
             preceded(space1, parse_identifier),
-            map(
-                permutation((space0, colon, space0, parse_type)),
-                |(_, _, _, ty)| ty,
+            context(
+                "type_annotation",
+                map(
+                    permutation((space0, colon, space0, parse_type)),
+                    |(_, _, _, ty)| ty,
+                ),
             ),
-            preceded(skip0, char('=')),
+            preceded(skip0, equals),
             preceded(skip0, parse_expression),
         )),
         |(_, name, ty, _, expression)| Statement::VariableDecl {
@@ -66,20 +69,17 @@ fn parse_return_statement(input: Span) -> ParseResult<Statement> {
 }
 
 pub(super) fn parse_statement(input: Span) -> ParseResult<Statement> {
-    context(
-        "statement",
-        map(
-            permutation((
-                alt((
-                    parse_return_statement,
-                    parse_asignment,
-                    parse_variable_decl,
-                    parse_discarded_expression_statement,
-                )),
-                multispace0,
-                semicolon,
+    map(
+        permutation((
+            alt((
+                context("return_statement", parse_return_statement),
+                context("assignment", parse_asignment),
+                context("variable_decl", parse_variable_decl),
+                context("discarded_expression", parse_discarded_expression_statement),
             )),
-            |(loc_stmt, _, _)| loc_stmt,
-        ),
+            multispace0,
+            semicolon,
+        )),
+        |(loc_stmt, _, _)| loc_stmt,
     )(input)
 }

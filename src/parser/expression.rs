@@ -2,10 +2,10 @@ use nom::{
     branch::{alt, permutation},
     character::complete::digit1,
     character::complete::{char, multispace0},
-    combinator::map,
+    combinator::{map, opt},
     error::context,
     multi::{many0, separated_list0},
-    sequence::{delimited, pair},
+    sequence::{delimited, pair, preceded},
 };
 
 use crate::{ast::Expression, util::unbox_located_expression};
@@ -36,21 +36,21 @@ fn parse_multiplicative_expression(input: Span) -> ParseResult<Box<Expression>> 
     located(map(
         permutation((
             parse_postfix_expression,
-            multispace0,
-            alt((char('*'), char('/'))),
-            multispace0,
-            parse_postfix_expression,
+            skip0,
+            opt(permutation((
+                alt((
+                    map(asterisk, |_| BinaryOp::Mul),
+                    map(slash, |_| BinaryOp::Div),
+                )),
+                preceded(skip0, parse_postfix_expression),
+            ))),
         )),
-        |(lhs, _, op, _, rhs)| {
-            Box::new(Expression::BinaryExpr {
-                op: match op {
-                    '*' => BinaryOp::Mul,
-                    '/' => BinaryOp::Div,
-                    _ => unreachable!(),
-                },
-                lhs,
-                rhs,
-            })
+        |(lhs, _, op_and_rhs)| {
+            if let Some((op, rhs)) = op_and_rhs {
+                Box::new(Expression::BinaryExpr { op, lhs, rhs })
+            } else {
+                lhs.value
+            }
         },
     ))(input)
 }
@@ -59,22 +59,18 @@ fn parse_additive_expression(input: Span) -> ParseResult<Box<Expression>> {
     located(map(
         permutation((
             parse_multiplicative_expression,
-            multispace0,
-            alt((char('+'), char('-'))),
-            multispace0,
-            parse_postfix_expression,
+            skip0,
+            opt(permutation((
+                alt((map(plus, |_| BinaryOp::Add), map(minus, |_| BinaryOp::Sub))),
+                preceded(skip0, parse_postfix_expression),
+            ))),
         )),
-        |(lhs, _, op, _, rhs)| {
-            Box::new(Expression::BinaryExpr {
-                op: match op {
-                    '+' => BinaryOp::Add,
-                    '-' => BinaryOp::Sub,
-                    // unreachable because I believe nom.
-                    _ => unreachable!(),
-                },
-                lhs,
-                rhs,
-            })
+        |(lhs, _, op_and_rhs)| {
+            if let Some((op, rhs)) = op_and_rhs {
+                Box::new(Expression::BinaryExpr { op, lhs, rhs })
+            } else {
+                lhs.value
+            }
         },
     ))(input)
 }
