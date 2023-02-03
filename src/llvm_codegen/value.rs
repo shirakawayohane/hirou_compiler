@@ -1,6 +1,6 @@
 use core::panic;
 
-use inkwell::values::{BasicValueEnum, IntValue, PointerValue};
+use inkwell::values::{IntValue, PointerValue};
 
 use crate::ast::Type;
 

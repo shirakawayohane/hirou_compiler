@@ -18,7 +18,7 @@ use crate::ast::{BinaryOp, FunctionDecl, Located, Module, Statement, TopLevel};
 
 use self::{
     toplevel::parse_toplevel,
-    util::{located, skip0},
+    util::{skip0},
 };
 
 pub type Span<'a> = LocatedSpan<&'a str>;

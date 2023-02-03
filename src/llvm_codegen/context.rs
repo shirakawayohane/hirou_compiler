@@ -1,13 +1,8 @@
 use std::collections::HashMap;
 
-use inkwell::{
-    builder::Builder as LLVMBuilder,
-    values::{FunctionValue, PointerValue},
-};
+use inkwell::values::{FunctionValue, PointerValue};
 
 use crate::ast::Type;
-
-use super::value::Value;
 
 pub(super) struct Context<'a> {
     pub scopes: Vec<HashMap<String, (Type, PointerValue<'a>)>>,

@@ -1,14 +1,14 @@
 use nom::{
     branch::{alt, permutation},
     bytes::complete::tag,
-    character::complete::{char, multispace0, multispace1, space0, space1},
+    character::complete::{multispace0, multispace1, space0, space1},
     combinator::{map, opt},
     error::context,
     multi::many0,
     sequence::preceded,
 };
 
-use crate::ast::{Expression, Located, Statement};
+use crate::ast::{Statement};
 
 use super::{expression::parse_expression, token::*, ty::parse_type, util::*, ParseResult, Span};
 

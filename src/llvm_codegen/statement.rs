@@ -79,7 +79,7 @@ impl LLVMCodegenerator<'_> {
                     .set_variable(name, ty, variable_pointer);
             }
             Type::Void => {
-                let result = self.eval_expression(&value, Some(ty.clone()));
+                let _result = self.eval_expression(&value, Some(ty.clone()));
                 unsafe {
                     let null_pointer = 0 as *const PointerValue;
                     self.context
