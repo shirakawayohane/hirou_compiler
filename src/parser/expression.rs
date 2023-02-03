@@ -19,9 +19,13 @@ fn parse_number_literal(input: Span) -> ParseResult<Located<Expression>> {
 }
 
 fn parse_variable_ref(input: Span) -> ParseResult<Located<Expression>> {
-    located(map(parse_identifier, |name| Expression::VariableRef {
-        name,
-    }))(input)
+    located(map(
+        permutation((many0(asterisk), parse_identifier)),
+        |(asterisks, name)| Expression::VariableRef {
+            deref_count: asterisks.len() as u32,
+            name,
+        },
+    ))(input)
 }
 
 fn fold_binexp(first: Expression, rest: &[(BinaryOp, Expression)]) -> Box<Expression> {

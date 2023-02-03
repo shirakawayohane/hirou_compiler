@@ -4,7 +4,8 @@ use nom::{
     character::complete::{char, multispace0, multispace1, space0, space1},
     combinator::{map, opt},
     error::context,
-    sequence::preceded,
+    multi::{many0, many1},
+    sequence::{delimited, preceded},
 };
 
 use crate::ast::Statement;
@@ -16,13 +17,15 @@ use super::{
 fn parse_asignment(input: Span) -> ParseResult<Located<Statement>> {
     located(map(
         permutation((
+            many0(asterisk),
             parse_identifier,
             multispace0,
             equals,
             multispace0,
             parse_expression,
         )),
-        |(name, _, _, _, expression)| Statement::Asignment {
+        |(asterisks, name, _, _, _, expression)| Statement::Asignment {
+            deref_count: asterisks.len() as u32,
             name,
             expression: expression.value,
         },

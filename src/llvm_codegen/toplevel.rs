@@ -1,12 +1,9 @@
+use super::error::{CompileError, ContextType};
 use super::*;
-use crate::ast::*;
+use crate::{ast::*, error_context};
 
 impl LLVMCodegenerator<'_> {
-    pub(super) fn gen_function(
-        &self,
-        decl: FunctionDecl,
-        body: Vec<Statement>,
-    ) -> Result<(), CompileError> {
+    fn gen_function(&self, decl: FunctionDecl, body: Vec<Statement>) -> Result<(), CompileError> {
         // TODO: int以外の型にも対応する
         let params = decl
             .params
@@ -43,5 +40,12 @@ impl LLVMCodegenerator<'_> {
         self.context.borrow_mut().pop_scope();
         self.context.borrow_mut().pop_function_scope();
         Ok(())
+    }
+    pub(super) fn gen_toplevel(&self, top: TopLevel) -> Result<(), CompileError> {
+        match top {
+            TopLevel::Function { decl, body } => {
+                error_context!(ContextType::Function, self.gen_function(decl, body))
+            }
+        }
     }
 }

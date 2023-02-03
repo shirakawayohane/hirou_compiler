@@ -1,7 +1,7 @@
-use super::value::Value;
+use super::error::{CompileErrorKind, ContextType};
 use super::*;
-use crate::ast::*;
-
+use super::{error::CompileError, value::Value};
+use crate::{ast::*, error_context};
 use clap::error::Result;
 use inkwell::values::{BasicMetadataValueEnum, BasicValueEnum};
 
@@ -52,10 +52,28 @@ impl LLVMCodegenerator<'_> {
     }
     fn eval_variable_ref(
         &self,
+        deref_count: u32,
         name: &str,
         _annotation: Option<Type>,
     ) -> Result<Value, CompileError> {
-        self.get_variable(&name)
+        let mut value = self.gen_load_variable(name)?;
+        for _ in 0..deref_count {
+            match value {
+                Value::PointerValue(ty, ptr) => {
+                    value = self.gen_load(&ty, ptr)?;
+                }
+                _ => {
+                    return Err(CompileError::from_error_kind(
+                        CompileErrorKind::CannotDeref {
+                            name: name.to_string(),
+                            deref_count,
+                        },
+                    ))
+                }
+            }
+        }
+
+        Ok(value)
     }
     fn eval_binary_expr(
         &self,
@@ -114,7 +132,7 @@ impl LLVMCodegenerator<'_> {
                     Type::Void => None,
                 },
                 Type::Ptr(_) => None,
-                Type::Void => None
+                Type::Void => None,
             }
         }
 
@@ -122,13 +140,16 @@ impl LLVMCodegenerator<'_> {
             self.eval_expression(lhs, None)?,
             self.eval_expression(rhs, None)?,
         );
-        let lhs_type_opt = lhs_value.get_primitive_type();
-        let rhs_type_opt = rhs_value.get_primitive_type();
-        if lhs_type_opt.is_none() || rhs_type_opt.is_none() {
-            return Err(CompileError::InvalidOperand);
+
+        if lhs_value.get_type().is_primitive() {
+            return Err(CompileError::from_error_kind(
+                CompileErrorKind::InvalidOperand,
+            ));
         }
-        let lhs_type = lhs_type_opt.unwrap();
-        let rhs_type = rhs_type_opt.unwrap();
+
+        let lhs_type = lhs_value.get_type();
+        let rhs_type = rhs_value.get_type();
+
         if lhs_type.is_integer_type() && rhs_type.is_integer_type() {
             let lhs_cast_type =
                 get_cast_type_with_other_operand_of_bin_op(self.pointer_size, &lhs_type, &rhs_type);
@@ -319,7 +340,7 @@ impl LLVMCodegenerator<'_> {
     ) -> Result<Value, CompileError> {
         let context = self.context.borrow();
         let result = context.find_function(&name);
-        if let Some((_return_type, arg_types, func)) = result {
+        if let Some((return_type, arg_types, func)) = result {
             let mut evaluated_args: Vec<BasicMetadataValueEnum> = Vec::new();
             assert_eq!(arg_exprs.len(), arg_types.len());
             for i in 0..arg_exprs.len() {
@@ -332,8 +353,14 @@ impl LLVMCodegenerator<'_> {
                     Value::U32Value(v) => BasicMetadataValueEnum::IntValue(v),
                     Value::U64Value(v) => BasicMetadataValueEnum::IntValue(v),
                     Value::USizeValue(v) => BasicMetadataValueEnum::IntValue(v),
-                    Value::PointerValue(v) => BasicMetadataValueEnum::PointerValue(v),
-                    Value::Void => return Err(CompileError::InvalidArgument),
+                    Value::PointerValue(_, pointer_value) => {
+                        BasicMetadataValueEnum::PointerValue(pointer_value)
+                    }
+                    Value::Void => {
+                        return Err(CompileError::from_error_kind(
+                            CompileErrorKind::InvalidArgument,
+                        ))
+                    }
                 });
             }
             Ok(
@@ -347,7 +374,13 @@ impl LLVMCodegenerator<'_> {
                         BasicValueEnum::ArrayValue(_) => todo!(),
                         BasicValueEnum::IntValue(int_value) => Value::I32Value(int_value),
                         BasicValueEnum::FloatValue(_) => todo!(),
-                        BasicValueEnum::PointerValue(v) => Value::PointerValue(v),
+                        BasicValueEnum::PointerValue(pointer_value) => {
+                            let pointer_of = match return_type {
+                                Type::Ptr(pointer_of) => pointer_of,
+                                _ => unreachable!(),
+                            };
+                            Value::PointerValue(pointer_of.clone(), pointer_value)
+                        }
                         BasicValueEnum::StructValue(_) => todo!(),
                         BasicValueEnum::VectorValue(_) => todo!(),
                     },
@@ -356,13 +389,17 @@ impl LLVMCodegenerator<'_> {
             )
         } else {
             if context.find_variable(&name).is_some() {
-                Err(CompileError::CallNotFunctionValue {
-                    name: name.to_string(),
-                })
+                Err(CompileError::from_error_kind(
+                    CompileErrorKind::CallNotFunctionValue {
+                        name: name.to_string(),
+                    },
+                ))
             } else {
-                Err(CompileError::FunctionNotFound {
-                    name: name.to_string(),
-                })
+                Err(CompileError::from_error_kind(
+                    CompileErrorKind::FunctionNotFound {
+                        name: name.to_string(),
+                    },
+                ))
             }
         }
     }
@@ -372,10 +409,23 @@ impl LLVMCodegenerator<'_> {
         annotation: Option<Type>,
     ) -> Result<Value, CompileError> {
         match expr {
-            Expression::VariableRef { name } => self.eval_variable_ref(&name, annotation),
-            Expression::NumberLiteral { value } => self.eval_integer_literal(&value, annotation),
-            Expression::BinaryExpr { op, lhs, rhs } => self.eval_binary_expr(*op, lhs, rhs),
-            Expression::CallExpr { name, args } => self.eval_call_expr(&name, args, annotation),
+            Expression::VariableRef { deref_count, name } => {
+                error_context!(ContextType::VariableRefExpression, {
+                    self.eval_variable_ref(*deref_count, &name, annotation)
+                })
+            }
+            Expression::NumberLiteral { value } => error_context!(
+                ContextType::NumberLiteralExpression,
+                self.eval_integer_literal(&value, annotation)
+            ),
+            Expression::BinaryExpr { op, lhs, rhs } => error_context!(
+                ContextType::BinaryExpression,
+                self.eval_binary_expr(*op, lhs, rhs)
+            ),
+            Expression::CallExpr { name, args } => error_context!(
+                ContextType::CallExpression,
+                self.eval_call_expr(&name, args, annotation)
+            ),
         }
     }
 }

@@ -1,3 +1,5 @@
+use core::panic;
+
 #[derive(Debug, Clone, Copy)]
 pub enum BinaryOp {
     Add,
@@ -9,6 +11,7 @@ pub enum BinaryOp {
 #[derive(Debug, Clone)]
 pub enum Expression {
     VariableRef {
+        deref_count: u32,
         name: String,
     },
     NumberLiteral {
@@ -37,20 +40,6 @@ pub enum Type {
 }
 
 impl Type {
-    pub fn is_primitive(&self) -> bool {
-        match self {
-            Type::I32 => true,
-            Type::USize => true,
-            Type::U32 => true,
-            Type::U64 => true,
-            Type::U8 => true,
-            Type::Ptr(_) => true,
-            Type::Void => false,
-        }
-    }
-    pub fn is_float_type(&self) -> bool {
-        false
-    }
     pub fn is_integer_type(&self) -> bool {
         match self {
             Type::I32 => true,
@@ -59,13 +48,25 @@ impl Type {
             Type::U32 => true,
             Type::U64 => true,
             Type::Ptr(_) => false,
-            Type::Void => false
+            Type::Void => false,
         }
     }
-    pub fn is_pointer(&self) -> bool {
+    pub fn is_primitive(&self) -> bool {
         match self {
-            Type::Ptr(_) => true,
-            _ => false,
+            Type::I32 => true,
+            Type::U32 => true,
+            Type::U64 => true,
+            Type::USize => true,
+            Type::U8 => true,
+            Type::Ptr(_) => false,
+            Type::Void => false,
+        }
+    }
+    pub fn unwrap_pointer_type(&self) -> &Type {
+        if let Type::Ptr(pointer_of) = self {
+            return pointer_of;
+        } else {
+            panic!()
         }
     }
 }
@@ -73,6 +74,7 @@ impl Type {
 #[derive(Debug)]
 pub enum Statement {
     Asignment {
+        deref_count: u32,
         name: String,
         expression: Expression,
     },

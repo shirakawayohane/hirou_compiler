@@ -1,4 +1,5 @@
 mod context;
+mod error;
 mod expression;
 mod intrinsic;
 mod statement;
@@ -10,33 +11,16 @@ use inkwell::builder::Builder as LLVMBuilder;
 use inkwell::context::Context as LLVMContext;
 use inkwell::module::Module as LLVMModule;
 use inkwell::types::IntType;
+use inkwell::values::PointerValue;
 
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell};
 
 use std::rc::Rc;
 use thiserror::Error;
 
 use self::context::Context;
+use self::error::{CompileError, CompileErrorKind};
 use self::value::Value;
-
-#[derive(Debug, Error)]
-pub enum CompileError {
-    #[error("Variable `{name:?}` is not found in this scope.")]
-    VariableNotFound { name: String },
-    #[error("Function `{name:?}` is not found.")]
-    FunctionNotFound { name: String },
-    #[error("`{name:?}` is not a function")]
-    CallNotFunctionValue { name: String },
-    #[error("Invalid operand.")]
-    InvalidOperand,
-    #[error("Invalid operand.")]
-    InvalidArgument,
-    #[error("Asign value does not match")]
-    AsignValueDoesNotMatch {
-        expected: Box<Type>,
-        actual: Box<Type>,
-    },
-}
 
 #[derive(Debug, Clone, Copy)]
 pub enum PointerSize {
@@ -55,6 +39,40 @@ pub struct LLVMCodegenerator<'a> {
 }
 
 impl<'a> LLVMCodegenerator<'a> {
+    fn gen_load<'ptr>(
+        &self,
+        ty: &Type,
+        pointer: PointerValue<'ptr>,
+    ) -> Result<Value<'ptr>, CompileError>
+    where
+        'a: 'ptr,
+    {
+        let value = self.llvm_builder.build_load(pointer, "load");
+        return Ok(match ty {
+            Type::I32 => Value::I32Value(value.into_int_value()),
+            Type::U8 => Value::U8Value(value.into_int_value()),
+            Type::U32 => Value::U32Value(value.into_int_value()),
+            Type::U64 => Value::U64Value(value.into_int_value()),
+            Type::USize => Value::USizeValue(value.into_int_value()),
+            Type::Ptr(pointer_of) => {
+                Value::PointerValue(pointer_of.clone(), value.into_pointer_value())
+            }
+            Type::Void => Value::Void,
+        });
+    }
+    // find value from context. If found, load and return as Value.
+    fn gen_load_variable(&self, name: &str) -> Result<Value, CompileError> {
+        for scope in self.context.borrow().scopes.iter().rev() {
+            if let Some((ty, pointer)) = scope.get(name) {
+                return self.gen_load(ty, *pointer);
+            }
+        }
+        Err(CompileError::from_error_kind(
+            CompileErrorKind::VariableNotFound {
+                name: name.to_string(),
+            },
+        ))
+    }
     pub fn new(llvm_context: &'a LLVMContext) -> LLVMCodegenerator<'a> {
         let llvm_module = llvm_context.create_module("main");
         let llvm_builder = llvm_context.create_builder();
@@ -75,35 +93,13 @@ impl<'a> LLVMCodegenerator<'a> {
 }
 
 impl<'a> LLVMCodegenerator<'a> {
-    fn get_variable(&self, name: &str) -> Result<Value, CompileError> {
-        for scope in self.context.borrow().scopes.iter().rev() {
-            if let Some((ty, pointer)) = scope.get(name) {
-                let value = self.llvm_builder.build_load(*pointer, name);
-                return Ok(match *ty {
-                    Type::I32 => Value::I32Value(value.into_int_value()),
-                    Type::U8 => Value::U8Value(value.into_int_value()),
-                    Type::U32 => Value::U32Value(value.into_int_value()),
-                    Type::U64 => Value::U64Value(value.into_int_value()),
-                    Type::USize => Value::USizeValue(value.into_int_value()),
-                    Type::Ptr(_) => Value::PointerValue(value.into_pointer_value()),
-                    Type::Void => Value::Void,
-                });
-            }
-        }
-        Err(CompileError::VariableNotFound {
-            name: name.to_string(),
-        })
-    }
-
     pub fn gen_module(self, module: Module) -> Result<LLVMModule<'a>, CompileError> {
         // Add global scope
         self.context.borrow_mut().push_scope();
         self.context.borrow_mut().push_function_scope();
         self.gen_intrinsic_functions();
         for top in module.toplevels {
-            match top {
-                TopLevel::Function { decl, body } => self.gen_function(decl, body)?,
-            }
+            self.gen_toplevel(top)?;
         }
         self.context.borrow_mut().pop_scope();
         self.context.borrow_mut().pop_function_scope();

@@ -1,12 +1,10 @@
-use std::ptr::null;
-
 use inkwell::values::{BasicValue, PointerValue};
 use inkwell::AddressSpace;
-use llvm_sys::prelude::LLVMValueRef;
 
+use super::error::ContextType;
 use super::value::Value;
 use super::*;
-use crate::ast::*;
+use crate::{ast::*, error_context};
 
 impl LLVMCodegenerator<'_> {
     fn gen_variable_decl(
@@ -70,7 +68,7 @@ impl LLVMCodegenerator<'_> {
                     | Value::USizeValue(v) => {
                         self.llvm_builder.build_store(variable_pointer, v);
                     }
-                    Value::PointerValue(ptr) => {
+                    Value::PointerValue(_, ptr) => {
                         self.llvm_builder.build_store(variable_pointer, ptr);
                     }
                     Value::Void => (),
@@ -101,7 +99,7 @@ impl LLVMCodegenerator<'_> {
                 Value::U32Value(v) => Some(v),
                 Value::U64Value(v) => Some(v),
                 Value::USizeValue(v) => Some(v),
-                Value::PointerValue(ptr) => Some(ptr),
+                Value::PointerValue(_, ptr) => Some(ptr),
                 Value::Void => None,
             };
             self.llvm_builder.build_return(return_value);
@@ -110,80 +108,111 @@ impl LLVMCodegenerator<'_> {
         }
         Ok(())
     }
-    fn gen_asignment(&self, name: String, expression: Expression) -> Result<(), CompileError> {
+    fn gen_asignment(
+        &self,
+        deref_count: u32,
+        name: String,
+        expression: Expression,
+    ) -> Result<(), CompileError> {
         if let Some((ty, ptr)) = self.context.borrow().find_variable(&name) {
+            let mut ptr_to_asign = ptr;
+            for _ in 0..deref_count {
+                ptr_to_asign = match self.llvm_builder.build_load(ptr_to_asign, "deref") {
+                    inkwell::values::BasicValueEnum::PointerValue(ptr) => ptr,
+                    _ => {
+                        return Err(CompileError::from_error_kind(
+                            CompileErrorKind::CannotDeref { name, deref_count },
+                        ))
+                    }
+                }
+            }
+
             let value = self.eval_expression(&expression, None)?;
-            if let Type::Ptr(_) = ty {
+            if let Type::Ptr(_) = &ty {
                 self.llvm_builder.build_store(
-                    *ptr,
+                    ptr_to_asign,
                     match value {
-                        Value::PointerValue(v) => v,
+                        Value::PointerValue(_, v) => v,
                         _ => {
-                            return Err(CompileError::AsignValueDoesNotMatch {
-                                expected: todo!(), // Ptr<Unknown>
-                                actual: Box::new(ty.clone()),
-                            });
+                            return Err(CompileError::from_error_kind(
+                                CompileErrorKind::TypeMismatch {
+                                    expected: Box::new(ty.clone()),
+                                    actual: Box::new(value.get_type()),
+                                },
+                            ));
                         }
                     },
                 );
             } else {
                 self.llvm_builder.build_store(
-                    *ptr,
+                    ptr_to_asign,
                     match value {
                         Value::U8Value(v) => {
                             if *ty != Type::U8 {
-                                return Err(CompileError::AsignValueDoesNotMatch {
-                                    expected: Box::new(Type::U8),
-                                    actual: Box::new(ty.clone()),
-                                });
+                                return Err(CompileError::from_error_kind(
+                                    CompileErrorKind::TypeMismatch {
+                                        expected: Box::new(Type::U8),
+                                        actual: Box::new(ty.clone()),
+                                    },
+                                ));
                             }
                             v
                         }
                         Value::I32Value(v) => {
                             if *ty != Type::I32 {
-                                return Err(CompileError::AsignValueDoesNotMatch {
-                                    expected: Box::new(Type::I32),
-                                    actual: Box::new(ty.clone()),
-                                });
+                                return Err(CompileError::from_error_kind(
+                                    CompileErrorKind::TypeMismatch {
+                                        expected: Box::new(Type::I32),
+                                        actual: Box::new(ty.clone()),
+                                    },
+                                ));
                             }
                             v
                         }
                         Value::U32Value(v) => {
                             if *ty != Type::U32 {
-                                return Err(CompileError::AsignValueDoesNotMatch {
-                                    expected: Box::new(Type::USize),
-                                    actual: Box::new(ty.clone()),
-                                });
+                                return Err(CompileError::from_error_kind(
+                                    CompileErrorKind::TypeMismatch {
+                                        expected: Box::new(Type::USize),
+                                        actual: Box::new(ty.clone()),
+                                    },
+                                ));
                             }
                             v
                         }
                         Value::U64Value(v) => {
                             if *ty != Type::U64 {
-                                return Err(CompileError::AsignValueDoesNotMatch {
-                                    expected: Box::new(Type::U64),
-                                    actual: Box::new(ty.clone()),
-                                });
+                                return Err(CompileError::from_error_kind(
+                                    CompileErrorKind::TypeMismatch {
+                                        expected: Box::new(Type::U64),
+                                        actual: Box::new(ty.clone()),
+                                    },
+                                ));
                             }
                             v
                         }
                         Value::USizeValue(v) => {
                             if *ty != Type::USize {
-                                return Err(CompileError::AsignValueDoesNotMatch {
-                                    expected: Box::new(Type::USize),
-                                    actual: Box::new(ty.clone()),
-                                });
+                                return Err(CompileError::from_error_kind(
+                                    CompileErrorKind::TypeMismatch {
+                                        expected: Box::new(Type::USize),
+                                        actual: Box::new(ty.clone()),
+                                    },
+                                ));
                             }
                             v
                         }
                         Value::Void => return Ok(()),
-                        Value::PointerValue(_) => unreachable!(),
+                        Value::PointerValue(_, _) => unreachable!(),
                     },
                 );
             };
         } else {
-            return Err(CompileError::VariableNotFound {
-                name: name.to_string(),
-            });
+            return Err(CompileError::from_error_kind(
+                CompileErrorKind::VariableNotFound {
+                    name: name.to_string(),
+                },
+            ));
         }
         Ok(())
     }
@@ -193,12 +222,27 @@ impl LLVMCodegenerator<'_> {
     }
     pub(super) fn gen_statement(&self, statement: Statement) -> Result<(), CompileError> {
         match statement {
-            Statement::VariableDecl { ty, name, value } => self.gen_variable_decl(ty, name, value),
-            Statement::Return { expression } => self.gen_return(expression),
-            Statement::Asignment { name, expression } => self.gen_asignment(name, expression),
-            Statement::DiscardedExpression { expression } => {
-                self.gen_discarded_expression(expression)
+            Statement::VariableDecl { ty, name, value } => {
+                error_context!(
+                    ContextType::VariableDeclStatement,
+                    self.gen_variable_decl(ty, name, value)
+                )
             }
+            Statement::Return { expression } => {
+                error_context!(ContextType::ReturnStatement, self.gen_return(expression))
+            }
+            Statement::Asignment {
+                deref_count,
+                name,
+                expression,
+            } => error_context!(
+                ContextType::AsignStatement,
+                self.gen_asignment(deref_count, name, expression)
+            ),
+            Statement::DiscardedExpression { expression } => error_context!(
+                ContextType::DiscardedExpressionStatement,
+                self.gen_discarded_expression(expression)
+            ),
         }?;
         Ok(())
     }
