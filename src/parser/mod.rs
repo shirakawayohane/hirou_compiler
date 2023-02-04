@@ -12,14 +12,12 @@ use nom::{
     sequence::delimited,
     IResult,
 };
+
 use nom_locate::{position, LocatedSpan};
 
 use crate::ast::{BinaryOp, FunctionDecl, Located, Module, Statement, TopLevel};
 
-use self::{
-    toplevel::parse_toplevel,
-    util::{skip0},
-};
+use self::{toplevel::parse_toplevel, util::skip0};
 
 pub type Span<'a> = LocatedSpan<&'a str>;
 

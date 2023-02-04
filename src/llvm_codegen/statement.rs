@@ -29,7 +29,7 @@ impl LLVMCodegenerator<'_> {
                     &name,
                 );
 
-                let evaluated_value = self.eval_expression(&value, Some(ty.clone()))?;
+                let evaluated_value = self.eval_expression(&value, Some(&ty))?;
 
                 match evaluated_value {
                     Value::I32Value(v) | Value::U64Value(v) | Value::U8Value(v) => {
@@ -58,7 +58,7 @@ impl LLVMCodegenerator<'_> {
                     .ptr_type(AddressSpace::default()),
                     &name,
                 );
-                let evaluated_value = self.eval_expression(&value, Some(ty.clone()))?;
+                let evaluated_value = self.eval_expression(&value, Some(&ty))?;
 
                 match evaluated_value {
                     Value::I32Value(v)
@@ -79,7 +79,7 @@ impl LLVMCodegenerator<'_> {
                     .set_variable(name, ty, variable_pointer);
             }
             Type::Void => {
-                let _result = self.eval_expression(&value, Some(ty.clone()));
+                let _result = self.eval_expression(&value, Some(&ty));
                 unsafe {
                     let null_pointer = 0 as *const PointerValue;
                     self.context
@@ -116,6 +116,7 @@ impl LLVMCodegenerator<'_> {
     ) -> Result<(), CompileError> {
         if let Some((ty, ptr)) = self.context.borrow().find_variable(&name) {
             let mut ptr_to_asign = ptr;
+            let mut asign_ty = ty;
             for _ in 0..deref_count {
                 ptr_to_asign = match self.llvm_builder.build_load(ptr_to_asign, "deref") {
                     inkwell::values::BasicValueEnum::PointerValue(ptr) => ptr,
@@ -124,11 +125,20 @@ impl LLVMCodegenerator<'_> {
                             CompileErrorKind::CannotDeref { name, deref_count },
                         ))
                     }
-                }
+                };
+                asign_ty = match asign_ty {
+                    Type::Ptr(pointer_of) => &pointer_of,
+                    _ => {
+                        return Err(CompileError::from_error_kind(
+                            CompileErrorKind::CannotDeref { name, deref_count },
+                        ))
+                    }
+                };
             }
 
-            let value = self.eval_expression(&expression, None)?;
-            if let Type::Ptr(_) = &ty {
+            let value = self.eval_expression(&expression, Some(asign_ty))?;
+
+            if let Type::Ptr(_) = asign_ty {
                 self.llvm_builder.build_store(
                     ptr_to_asign,
                     match value {
@@ -148,7 +158,7 @@ impl LLVMCodegenerator<'_> {
                     ptr_to_asign,
                     match value {
                         Value::U8Value(v) => {
-                            if *ty != Type::U8 {
+                            if *asign_ty != Type::U8 {
                                 return Err(CompileError::from_error_kind(
                                     CompileErrorKind::TypeMismatch {
                                         expected: Box::new(Type::U8),
@@ -159,7 +169,7 @@ impl LLVMCodegenerator<'_> {
                             v
                         }
                         Value::I32Value(v) => {
-                            if *ty != Type::I32 {
+                            if *asign_ty != Type::I32 {
                                 return Err(CompileError::from_error_kind(
                                     CompileErrorKind::TypeMismatch {
                                         expected: Box::new(Type::I32),
@@ -170,7 +180,7 @@ impl LLVMCodegenerator<'_> {
                             v
                         }
                         Value::U32Value(v) => {
-                            if *ty != Type::U32 {
+                            if *asign_ty != Type::U32 {
                                 return Err(CompileError::from_error_kind(
                                     CompileErrorKind::TypeMismatch {
                                         expected: Box::new(Type::USize),
@@ -181,7 +191,7 @@ impl LLVMCodegenerator<'_> {
                             v
                         }
                         Value::U64Value(v) => {
-                            if *ty != Type::U64 {
+                            if *asign_ty != Type::U64 {
                                 return Err(CompileError::from_error_kind(
                                     CompileErrorKind::TypeMismatch {
                                         expected: Box::new(Type::U64),
@@ -192,7 +202,7 @@ impl LLVMCodegenerator<'_> {
                             v
                         }
                         Value::USizeValue(v) => {
-                            if *ty != Type::USize {
+                            if *asign_ty != Type::USize {
                                 return Err(CompileError::from_error_kind(
                                     CompileErrorKind::TypeMismatch {
                                         expected: Box::new(Type::USize),

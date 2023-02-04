@@ -9,7 +9,7 @@ impl LLVMCodegenerator<'_> {
     fn eval_u8(&self, value_str: &str) -> Result<Value, CompileError> {
         let n = value_str.parse::<u8>().unwrap();
         let int_value = self.i8_type.const_int(n as u64, true);
-        Ok(Value::I32Value(int_value))
+        Ok(Value::U8Value(int_value))
     }
     fn eval_i32(&self, value_str: &str) -> Result<Value, CompileError> {
         let n = value_str.parse::<i32>().unwrap();
@@ -28,13 +28,17 @@ impl LLVMCodegenerator<'_> {
     }
     fn eval_usize(&self, value_str: &str) -> Result<Value, CompileError> {
         match self.pointer_size {
-            PointerSize::SixteenFour => self.eval_u64(value_str),
+            PointerSize::SixteenFour => {
+                let n = value_str.parse::<u64>().unwrap();
+                let int_value = self.i64_type.const_int(n as u64, false);
+                Ok(Value::USizeValue(int_value))
+            }
         }
     }
     fn eval_integer_literal(
         &self,
         value_str: &str,
-        annotation: Option<Type>,
+        annotation: Option<&Type>,
     ) -> Result<Value, CompileError> {
         if let Some(annotation) = annotation {
             match annotation {
@@ -43,8 +47,8 @@ impl LLVMCodegenerator<'_> {
                 Type::I32 => self.eval_i32(value_str),
                 Type::U64 => self.eval_u64(value_str),
                 Type::USize => self.eval_usize(value_str),
-                Type::Ptr(_) => todo!(),
-                Type::Void => todo!(),
+                Type::Ptr(_) => unreachable!(),
+                Type::Void => unreachable!(),
             }
         } else {
             self.eval_i32(value_str)
@@ -54,7 +58,7 @@ impl LLVMCodegenerator<'_> {
         &self,
         deref_count: u32,
         name: &str,
-        _annotation: Option<Type>,
+        _annotation: Option<&Type>,
     ) -> Result<Value, CompileError> {
         let mut value = self.gen_load_variable(name)?;
         for _ in 0..deref_count {
@@ -80,38 +84,37 @@ impl LLVMCodegenerator<'_> {
         op: BinaryOp,
         lhs: &Expression,
         rhs: &Expression,
-        // _annotation: Option<Type>,
     ) -> Result<Value, CompileError> {
-        pub fn get_cast_type_with_other_operand_of_bin_op(
+        pub fn get_cast_type_with_other_operand_of_bin_op<'a>(
             pointer_size: PointerSize,
-            ty: &Type,
-            other: &Type,
-        ) -> Option<Type> {
+            ty: &'a Type,
+            other: &'a Type,
+        ) -> Option<&'a Type> {
             match ty {
                 Type::U8 => match other {
                     Type::U8 => None,
-                    Type::I32 => Some(Type::I32),
-                    Type::U32 => Some(Type::U32),
-                    Type::U64 => Some(Type::U64),
-                    Type::USize => Some(Type::USize),
+                    Type::I32 => Some(&Type::I32),
+                    Type::U32 => Some(&Type::U32),
+                    Type::U64 => Some(&Type::U64),
+                    Type::USize => Some(&Type::USize),
                     Type::Void => None,
                     Type::Ptr(_) => None,
                 },
                 Type::I32 => match other {
                     Type::U8 => None,
                     Type::I32 => None,
-                    Type::USize => Some(Type::USize),
-                    Type::U32 => Some(Type::U32),
-                    Type::U64 => Some(Type::U64),
+                    Type::USize => Some(&Type::USize),
+                    Type::U32 => Some(&Type::U32),
+                    Type::U64 => Some(&Type::U64),
                     Type::Ptr(_) => None,
                     Type::Void => None,
                 },
                 Type::U32 => match other {
                     Type::I32 => None,
                     Type::U32 => None,
-                    Type::U64 => Some(Type::U64),
+                    Type::U64 => Some(&Type::U64),
                     Type::USize => match pointer_size {
-                        PointerSize::SixteenFour => Some(Type::U64),
+                        PointerSize::SixteenFour => Some(&Type::U64),
                     },
                     Type::U8 => None,
                     Type::Ptr(_) => None,
@@ -121,10 +124,10 @@ impl LLVMCodegenerator<'_> {
                 Type::USize => match other {
                     Type::U8 => None,
                     Type::I32 => match pointer_size {
-                        PointerSize::SixteenFour => Some(Type::U64),
+                        PointerSize::SixteenFour => Some(&Type::U64),
                     },
                     Type::U32 => match pointer_size {
-                        PointerSize::SixteenFour => Some(Type::U64),
+                        PointerSize::SixteenFour => Some(&Type::U64),
                     },
                     Type::U64 => None,
                     Type::USize => None,
@@ -250,7 +253,7 @@ impl LLVMCodegenerator<'_> {
             } else {
                 rhs_value
             };
-            let result_type = lhs_cast_type.unwrap_or(rhs_cast_type.unwrap_or(lhs_type));
+            let result_type = lhs_cast_type.unwrap_or(rhs_cast_type.unwrap_or(&lhs_type));
             match op {
                 BinaryOp::Add => {
                     let result = self.llvm_builder.build_int_add(
@@ -336,7 +339,7 @@ impl LLVMCodegenerator<'_> {
         &'b self,
         name: &str,
         arg_exprs: &[Expression],
-        _annotation: Option<Type>,
+        _annotation: Option<&Type>,
     ) -> Result<Value, CompileError> {
         let context = self.context.borrow();
         let result = context.find_function(&name);
@@ -346,7 +349,7 @@ impl LLVMCodegenerator<'_> {
             for i in 0..arg_exprs.len() {
                 let arg_expr = arg_exprs.get(i).unwrap();
                 let arg_type = arg_types.get(i).unwrap();
-                let evaluated_arg = self.eval_expression(arg_expr, Some(arg_type.clone()))?;
+                let evaluated_arg = self.eval_expression(arg_expr, Some(&arg_type))?;
                 evaluated_args.push(match evaluated_arg {
                     Value::U8Value(v) => BasicMetadataValueEnum::IntValue(v),
                     Value::I32Value(v) => BasicMetadataValueEnum::IntValue(v),
@@ -406,7 +409,7 @@ impl LLVMCodegenerator<'_> {
     pub(super) fn eval_expression(
         &self,
         expr: &Expression,
-        annotation: Option<Type>,
+        annotation: Option<&Type>,
     ) -> Result<Value, CompileError> {
         match expr {
             Expression::VariableRef { deref_count, name } => {
