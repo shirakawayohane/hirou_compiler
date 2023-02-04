@@ -1,7 +1,3 @@
-use core::panic;
-
-
-
 #[derive(Debug, Clone, Copy)]
 pub struct Position {
     pub line: u32,
@@ -45,7 +41,7 @@ pub enum Expression<'a> {
     },
     CallExpr {
         name: String,
-        args: Vec<Expression<'a>>,
+        args: Vec<Located<'a, Expression<'a>>>,
     },
 }
 
@@ -72,7 +68,7 @@ impl Type {
             Type::Void => false,
         }
     }
-    pub fn is_primitive(&self) -> bool {
+    pub fn is_valid_as_operand(&self) -> bool {
         match self {
             Type::I32 => true,
             Type::U32 => true,
@@ -81,13 +77,6 @@ impl Type {
             Type::U8 => true,
             Type::Ptr(_) => false,
             Type::Void => false,
-        }
-    }
-    pub fn unwrap_pointer_type(&self) -> &Type {
-        if let Type::Ptr(pointer_of) = self {
-            return pointer_of;
-        } else {
-            panic!()
         }
     }
 }
@@ -107,7 +96,7 @@ pub enum Statement<'a> {
     Return {
         expression: Option<Located<'a, Expression<'a>>>,
     },
-    DiscardedExpression {
+    Effect {
         expression: Located<'a, Expression<'a>>,
     },
 }

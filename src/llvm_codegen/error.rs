@@ -31,7 +31,7 @@ pub enum CompileErrorKind {
     #[error("`{name:?}` is not a function")]
     CallNotFunctionValue { name: String },
     #[error("Invalid operand.")]
-    InvalidOperand,
+    InvalidOperand(Box<Type>),
     #[error("Invalid operand.")]
     InvalidArgument,
     #[error("Asign value does not match")]
@@ -39,7 +39,7 @@ pub enum CompileErrorKind {
         expected: Box<Type>,
         actual: Box<Type>,
     },
-    #[error("Cannot deref {name:?} for {deref_count:?} times.")]
+    #[error("Cannot deref {name} for {deref_count:?} times.")]
     CannotDeref { name: String, deref_count: u32 },
 }
 

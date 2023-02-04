@@ -144,14 +144,19 @@ impl LLVMCodegenerator<'_> {
             self.eval_expression(rhs, None)?,
         );
 
-        if lhs_value.get_type().is_primitive() {
-            return Err(CompileError::from_error_kind(
-                CompileErrorKind::InvalidOperand,
-            ));
-        }
-
         let lhs_type = lhs_value.get_type();
         let rhs_type = rhs_value.get_type();
+
+        if lhs_type.is_valid_as_operand() {
+            return Err(CompileError::from_error_kind(
+                CompileErrorKind::InvalidOperand(Box::new(lhs_type)),
+            ));
+        }
+        if rhs_type.is_valid_as_operand() {
+            return Err(CompileError::from_error_kind(
+                CompileErrorKind::InvalidOperand(Box::new(rhs_type)),
+            ));
+        }
 
         if lhs_type.is_integer_type() && rhs_type.is_integer_type() {
             let lhs_cast_type =
@@ -332,13 +337,13 @@ impl LLVMCodegenerator<'_> {
                 }
             }
         } else {
-            todo!("impl float arithmetic");
+            unimplemented!()
         }
     }
-    fn eval_call_expr<'b>(
-        &'b self,
+    fn eval_call_expr(
+        &self,
         name: &str,
-        arg_exprs: &[Expression],
+        arg_exprs: &[Located<Expression>],
         _annotation: Option<&Type>,
     ) -> Result<Value, CompileError> {
         let context = self.context.borrow();
@@ -349,7 +354,7 @@ impl LLVMCodegenerator<'_> {
             for i in 0..arg_exprs.len() {
                 let arg_expr = arg_exprs.get(i).unwrap();
                 let arg_type = arg_types.get(i).unwrap();
-                let evaluated_arg = self.eval_expression(arg_expr, Some(&arg_type))?;
+                let evaluated_arg = self.eval_expression(&arg_expr.value, Some(&arg_type))?;
                 evaluated_args.push(match evaluated_arg {
                     Value::U8Value(v) => BasicMetadataValueEnum::IntValue(v),
                     Value::I32Value(v) => BasicMetadataValueEnum::IntValue(v),

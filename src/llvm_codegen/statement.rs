@@ -211,7 +211,7 @@ impl LLVMCodegenerator<'_> {
                 ContextType::AsignStatement,
                 self.gen_asignment(deref_count, name, expression.value)
             ),
-            Statement::DiscardedExpression {
+            Statement::Effect {
                 expression: loc_expr,
             } => error_context!(
                 ContextType::DiscardedExpressionStatement,

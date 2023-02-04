@@ -1,7 +1,6 @@
 use std::fs::read_to_string;
 mod ast;
 mod llvm_codegen;
-mod location;
 mod parser;
 mod util;
 use clap::{command, Parser};

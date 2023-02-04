@@ -32,11 +32,6 @@ pub(super) fn comma(input: Span) -> NotLocatedParseResult<char> {
 }
 
 #[inline(always)]
-pub(super) fn semicolon(input: Span) -> NotLocatedParseResult<char> {
-    char(';')(input)
-}
-
-#[inline(always)]
 pub(super) fn colon(input: Span) -> NotLocatedParseResult<char> {
     char(':')(input)
 }
@@ -89,6 +84,11 @@ pub(super) fn usize(input: Span) -> NotLocatedParseResult<Span> {
 #[inline(always)]
 pub(super) fn u8(input: Span) -> NotLocatedParseResult<Span> {
     tag("u8")(input)
+}
+
+#[inline(always)]
+pub(super) fn return_token(input: Span) -> NotLocatedParseResult<Span> {
+    tag("return")(input)
 }
 
 #[inline(always)]

@@ -7,8 +7,8 @@ use nom::{
     character::complete::{multispace0, space0},
     combinator::map,
     error::context,
-    multi::{separated_list0},
-    sequence::delimited,
+    multi::{many1, separated_list0},
+    sequence::{delimited, terminated},
 };
 
 fn parse_function_decl(input: Span) -> ParseResult<FunctionDecl> {
@@ -69,11 +69,14 @@ fn parse_function_decl(input: Span) -> ParseResult<FunctionDecl> {
 // }
 
 pub fn parse_block(input: Span) -> NotLocatedParseResult<Vec<Located<Statement>>> {
+    if delimited(lbracket, skip0, rbracket)(input).is_ok() {
+        return Ok((input, Vec::new()));
+    }
     context(
         "block",
         delimited(
             lbracket,
-            delimited(skip0, separated_list0(skip0, parse_statement), skip0),
+            delimited(skip0, many1(terminated(parse_statement, skip0)), skip0),
             rbracket,
         ),
     )(input)

@@ -3,7 +3,7 @@ use nom::{
     character::complete::digit1,
     combinator::{map, opt},
     error::context,
-    multi::{many0, separated_list0},
+    multi::many0,
     sequence::{delimited, pair, preceded},
 };
 
@@ -83,15 +83,26 @@ fn parse_primary_expression(input: Span) -> ParseResult<Box<Expression>> {
     ))(s)
 }
 
-fn parse_function_call_expression(input: Span) -> ParseResult<Box<Expression>> {
+pub(super) fn parse_function_call_expression(input: Span) -> ParseResult<Box<Expression>> {
+    fn parse_arguments(s: Span) -> NotLocatedParseResult<Vec<Located<Expression>>> {
+        let mut args = Vec::new();
+        let mut s = s;
+        loop {
+            (s, _) = skip0(s)?;
+            if rparen(s).is_ok() {
+                break;
+            }
+            let (rest_s, v) = parse_expression(s)?;
+            args.push(v);
+            s = rest_s;
+        }
+        Ok((s, args))
+    }
     located(map(
-        pair(
-            parse_identifier,
-            delimited(
-                lparen,
-                separated_list0(comma, map(parse_expression, |loc_expr| loc_expr.value)),
-                rparen,
-            ),
+        delimited(
+            lparen,
+            pair(parse_identifier, preceded(skip0, parse_arguments)),
+            rparen,
         ),
         |(name, args)| Box::new(Expression::CallExpr { name, args }),
     ))(input)
