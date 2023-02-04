@@ -116,7 +116,7 @@ impl LLVMCodegenerator<'_> {
     ) -> Result<(), CompileError> {
         if let Some((ty, ptr)) = self.context.borrow().find_variable(&name) {
             let mut ptr_to_asign = ptr;
-            let mut asign_ty = ty;
+            let mut asign_type = ty;
             for _ in 0..deref_count {
                 ptr_to_asign = match self.llvm_builder.build_load(ptr_to_asign, "deref") {
                     inkwell::values::BasicValueEnum::PointerValue(ptr) => ptr,
@@ -126,7 +126,7 @@ impl LLVMCodegenerator<'_> {
                         ))
                     }
                 };
-                asign_ty = match asign_ty {
+                asign_type = match asign_type {
                     Type::Ptr(pointer_of) => &pointer_of,
                     _ => {
                         return Err(CompileError::from_error_kind(
@@ -136,9 +136,9 @@ impl LLVMCodegenerator<'_> {
                 };
             }
 
-            let value = self.eval_expression(&expression, Some(asign_ty))?;
+            let value = self.eval_expression(&expression, Some(asign_type))?;
 
-            if let Type::Ptr(_) = asign_ty {
+            if let Type::Ptr(_) = asign_type {
                 self.llvm_builder.build_store(
                     ptr_to_asign,
                     match value {
@@ -154,68 +154,21 @@ impl LLVMCodegenerator<'_> {
                     },
                 );
             } else {
-                self.llvm_builder.build_store(
-                    ptr_to_asign,
-                    match value {
-                        Value::U8Value(v) => {
-                            if *asign_ty != Type::U8 {
-                                return Err(CompileError::from_error_kind(
-                                    CompileErrorKind::TypeMismatch {
-                                        expected: Box::new(Type::U8),
-                                        actual: Box::new(ty.clone()),
-                                    },
-                                ));
-                            }
-                            v
-                        }
-                        Value::I32Value(v) => {
-                            if *asign_ty != Type::I32 {
-                                return Err(CompileError::from_error_kind(
-                                    CompileErrorKind::TypeMismatch {
-                                        expected: Box::new(Type::I32),
-                                        actual: Box::new(ty.clone()),
-                                    },
-                                ));
-                            }
-                            v
-                        }
-                        Value::U32Value(v) => {
-                            if *asign_ty != Type::U32 {
-                                return Err(CompileError::from_error_kind(
-                                    CompileErrorKind::TypeMismatch {
-                                        expected: Box::new(Type::USize),
-                                        actual: Box::new(ty.clone()),
-                                    },
-                                ));
-                            }
-                            v
-                        }
-                        Value::U64Value(v) => {
-                            if *asign_ty != Type::U64 {
-                                return Err(CompileError::from_error_kind(
-                                    CompileErrorKind::TypeMismatch {
-                                        expected: Box::new(Type::U64),
-                                        actual: Box::new(ty.clone()),
-                                    },
-                                ));
-                            }
-                            v
-                        }
-                        Value::USizeValue(v) => {
-                            if *asign_ty != Type::USize {
-                                return Err(CompileError::from_error_kind(
-                                    CompileErrorKind::TypeMismatch {
-                                        expected: Box::new(Type::USize),
-                                        actual: Box::new(ty.clone()),
-                                    },
-                                ));
-                            }
-                            v
-                        }
-                        Value::Void => return Ok(()),
-                        Value::PointerValue(_, _) => unreachable!(),
-                    },
-                );
+                let value_type = value.get_type();
+                if value_type != *asign_type {
+                    return Err(CompileError::from_error_kind(
+                        CompileErrorKind::TypeMismatch {
+                            expected: Box::new(asign_type.clone()),
+                            actual: Box::new(value_type),
+                        },
+                    ));
+                }
+                if value.is_integer() {
+                    self.llvm_builder
+                        .build_store(ptr_to_asign, value.unwrap_int_value());
+                } else {
+                    unimplemented!();
+                }
             };
         } else {
             return Err(CompileError::from_error_kind(
