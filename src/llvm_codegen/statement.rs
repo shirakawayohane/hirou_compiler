@@ -1,3 +1,5 @@
+use core::panic;
+
 use inkwell::values::{BasicValue, PointerValue};
 use inkwell::AddressSpace;
 
@@ -29,7 +31,7 @@ impl LLVMCodegenerator<'_> {
                     &name,
                 );
 
-                let evaluated_value = self.eval_expression(&value, Some(&ty))?;
+                let evaluated_value = self.eval_expression(value, Some(&ty))?;
 
                 match evaluated_value {
                     Value::I32Value(v) | Value::U64Value(v) | Value::U8Value(v) => {
@@ -58,7 +60,7 @@ impl LLVMCodegenerator<'_> {
                     .ptr_type(AddressSpace::default()),
                     &name,
                 );
-                let evaluated_value = self.eval_expression(&value, Some(&ty))?;
+                let evaluated_value = self.eval_expression(value, Some(&ty))?;
 
                 match evaluated_value {
                     Value::I32Value(v)
@@ -79,7 +81,7 @@ impl LLVMCodegenerator<'_> {
                     .set_variable(name, ty, variable_pointer);
             }
             Type::Void => {
-                let _result = self.eval_expression(&value, Some(&ty));
+                let _result = self.eval_expression(value, Some(&ty));
                 unsafe {
                     let null_pointer = 0 as *const PointerValue;
                     self.context
@@ -92,7 +94,7 @@ impl LLVMCodegenerator<'_> {
     }
     fn gen_return(&self, opt_expr: Option<Expression>) -> Result<(), CompileError> {
         if let Some(exp) = opt_expr {
-            let value = self.eval_expression(&exp, None)?;
+            let value = self.eval_expression(exp, None)?;
             let return_value: Option<&dyn BasicValue> = match &value {
                 Value::U8Value(v) => Some(v),
                 Value::I32Value(v) => Some(v),
@@ -111,12 +113,14 @@ impl LLVMCodegenerator<'_> {
     fn gen_asignment(
         &self,
         deref_count: u32,
+        index_access: Option<Located<Expression>>,
         name: String,
-        expression: Expression,
+        expression: Located<Expression>,
     ) -> Result<(), CompileError> {
         if let Some((ty, ptr)) = self.context.borrow().find_variable(&name) {
             let mut ptr_to_asign = ptr;
             let mut asign_type = ty;
+
             for _ in 0..deref_count {
                 ptr_to_asign = match self.llvm_builder.build_load(ptr_to_asign, "deref") {
                     inkwell::values::BasicValueEnum::PointerValue(ptr) => ptr,
@@ -136,39 +140,61 @@ impl LLVMCodegenerator<'_> {
                 };
             }
 
-            let value = self.eval_expression(&expression, Some(asign_type))?;
+            if let Some(index_expr) = index_access {
+                // Check type first
+                asign_type = match asign_type {
+                    Type::Ptr(v) => &**v,
+                    _ => {
+                        return Err(CompileError::from_error_kind(
+                            CompileErrorKind::CannotIndexAccess {
+                                name: name.to_string(),
+                                ty: asign_type.clone(),
+                            },
+                        ))
+                    }
+                };
 
-            if let Type::Ptr(_) = asign_type {
-                self.llvm_builder.build_store(
-                    ptr_to_asign,
-                    match value {
-                        Value::PointerValue(_, v) => v,
-                        _ => {
-                            return Err(CompileError::from_error_kind(
-                                CompileErrorKind::TypeMismatch {
-                                    expected: Box::new(ty.clone()),
-                                    actual: Box::new(value.get_type()),
-                                },
-                            ));
-                        }
+                let index_value = self.eval_expression(index_expr.value, Some(&Type::USize))?;
+                // deref and move ptr by sizeof(T) * index
+                ptr_to_asign = match self.llvm_builder.build_load(ptr_to_asign, "deref") {
+                    inkwell::values::BasicValueEnum::PointerValue(ptr) => ptr,
+                    _ => {
+                        return Err(CompileError::from_error_kind(
+                            CompileErrorKind::CannotDeref { name, deref_count },
+                        ))
+                    }
+                };
+                ptr_to_asign = unsafe {
+                    self.llvm_builder.build_gep(
+                        ptr_to_asign,
+                        &[index_value.unwrap_int_value()],
+                        "array_indexing",
+                    )
+                };
+            }
+
+            let value = self.eval_expression(expression.value, Some(asign_type))?;
+
+            let value_type = value.get_type();
+
+            // Type checking
+            if value_type != *asign_type {
+                return Err(CompileError::from_error_kind(
+                    CompileErrorKind::TypeMismatch {
+                        expected: asign_type.clone(),
+                        actual: value_type,
                     },
-                );
+                ));
+            }
+
+            if value.get_type().is_integer_type() {
+                self.llvm_builder
+                    .build_store(ptr_to_asign, value.unwrap_int_value());
+            } else if value.get_type().is_pointer_type() {
+                self.llvm_builder
+                    .build_store(ptr_to_asign, value.unwrap_pointer_value());
             } else {
-                let value_type = value.get_type();
-                if value_type != *asign_type {
-                    return Err(CompileError::from_error_kind(
-                        CompileErrorKind::TypeMismatch {
-                            expected: Box::new(asign_type.clone()),
-                            actual: Box::new(value_type),
-                        },
-                    ));
-                }
-                if value.is_integer() {
-                    self.llvm_builder
-                        .build_store(ptr_to_asign, value.unwrap_int_value());
-                } else {
-                    unimplemented!();
-                }
+                panic!()
             };
         } else {
             return Err(CompileError::from_error_kind(
@@ -180,7 +206,7 @@ impl LLVMCodegenerator<'_> {
         Ok(())
     }
     fn gen_discarded_expression(&self, expression: Expression) -> Result<(), CompileError> {
-        self.eval_expression(&expression, None)?;
+        self.eval_expression(expression, None)?;
         Ok(())
     }
     pub(super) fn gen_statement(&self, statement: Statement) -> Result<(), CompileError> {
@@ -205,11 +231,12 @@ impl LLVMCodegenerator<'_> {
             }
             Statement::Asignment {
                 deref_count,
+                index_access,
                 name,
                 expression,
             } => error_context!(
                 ContextType::AsignStatement,
-                self.gen_asignment(deref_count, name, expression.value)
+                self.gen_asignment(deref_count, index_access, name, expression)
             ),
             Statement::Effect {
                 expression: loc_expr,

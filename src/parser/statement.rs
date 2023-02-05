@@ -22,15 +22,19 @@ fn parse_asignment(input: Span) -> NotLocatedParseResult<Statement> {
         permutation((
             many0(asterisk),
             parse_identifier,
+            skip0,
+            opt(index_access),
+            skip0,
             multispace0,
             equals,
             multispace0,
             parse_expression,
         )),
-        |(asterisks, name, _, _, _, expression)| Statement::Asignment {
+        |(asterisks, name, _, index_access, _, _, _, _, value_expr)| Statement::Asignment {
             deref_count: asterisks.len() as u32,
+            index_access,
             name,
-            expression,
+            expression: value_expr,
         },
     )(input)
 }

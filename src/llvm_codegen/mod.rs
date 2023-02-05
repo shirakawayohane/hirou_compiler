@@ -59,19 +59,6 @@ impl<'a> LLVMCodegenerator<'a> {
             Type::Void => Value::Void,
         });
     }
-    // find value from context. If found, load and return as Value.
-    fn gen_load_variable(&self, name: &str) -> Result<Value, CompileError> {
-        for scope in self.context.borrow().scopes.iter().rev() {
-            if let Some((ty, pointer)) = scope.get(name) {
-                return self.gen_load(ty, *pointer);
-            }
-        }
-        Err(CompileError::from_error_kind(
-            CompileErrorKind::VariableNotFound {
-                name: name.to_string(),
-            },
-        ))
-    }
     pub fn new(llvm_context: &'a LLVMContext) -> LLVMCodegenerator<'a> {
         let llvm_module = llvm_context.create_module("main");
         let llvm_builder = llvm_context.create_builder();

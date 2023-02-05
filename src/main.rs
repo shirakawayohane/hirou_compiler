@@ -39,6 +39,7 @@ fn main() {
             return;
         }
     };
+
     let llvm_context: LLVMContext = LLVMContext::create();
     let llvm_codegenerator = llvm_codegen::LLVMCodegenerator::new(&llvm_context);
     match llvm_codegenerator.gen_module(module) {

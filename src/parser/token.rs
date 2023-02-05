@@ -27,6 +27,16 @@ pub(super) fn rbracket(input: Span) -> NotLocatedParseResult<char> {
 }
 
 #[inline(always)]
+pub(super) fn lsqrbracket(input: Span) -> NotLocatedParseResult<char> {
+    char('[')(input)
+}
+
+#[inline(always)]
+pub(super) fn rsqrbracket(input: Span) -> NotLocatedParseResult<char> {
+    char(']')(input)
+}
+
+#[inline(always)]
 pub(super) fn comma(input: Span) -> NotLocatedParseResult<char> {
     char(',')(input)
 }
@@ -98,4 +108,12 @@ pub(super) fn parse_identifier(input: Span) -> NotLocatedParseResult<String> {
         take_till1(|x: char| !x.is_alphabetic() && !x.is_digit(10) && !['-', '_'].contains(&x)),
         |s: Span| s.to_string(),
     )(s)
+}
+
+#[test]
+fn parse_identifier_test() {
+    assert!(parse_identifier("}".into()).is_err());
+    assert!(parse_identifier("{".into()).is_err());
+    assert!(parse_identifier("(".into()).is_err());
+    assert!(parse_identifier(")".into()).is_err());
 }

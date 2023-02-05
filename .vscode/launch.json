@@ -7,19 +7,19 @@
     {
       "type": "lldb",
       "request": "launch",
-      "name": "Debug executable 'dummy_c_rust'",
+      "name": "Debug executable 'hirou_compiler'",
       "cargo": {
         "args": [
           "build",
-          "--bin=dummy_c_rust",
-          "--package=dummy_c_rust"
+          "--bin=hirou_compiler",
+          "--package=hirou_compiler"
         ],
         "filter": {
-          "name": "dummy_c_rust",
+          "name": "hirou_compiler",
           "kind": "bin"
         }
       },
-      "args": ["sample.dc"],
+      "args": ["sample.hr"],
       "cwd": "${workspaceFolder}"
     },
     {

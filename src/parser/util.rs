@@ -1,12 +1,16 @@
-use crate::ast::{Located, Position, Range};
+use crate::ast::{Expression, Located, Position, Range};
 
-use super::*;
+use super::{
+    expression::parse_expression,
+    token::{lsqrbracket, parse_identifier, rsqrbracket},
+    *,
+};
 use nom::{
-    branch::{alt, permutation},
+    branch::{alt, permutation, Alt, Permutation},
     bytes::complete::{tag, take_till},
     character::complete::{line_ending, multispace1},
     combinator::{eof, map},
-    error::VerboseError,
+    error::{ParseError, VerboseError},
     multi::many0,
     Parser,
 };
@@ -54,4 +58,12 @@ pub(super) fn located<'a, O>(
             },
         ))
     }
+}
+
+pub(super) fn index_access<'a>(input: Span<'a>) -> NotLocatedParseResult<Located<Expression>> {
+    delimited(
+        lsqrbracket,
+        delimited(skip0, parse_expression, skip0),
+        rsqrbracket,
+    )(input)
 }

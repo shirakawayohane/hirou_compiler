@@ -29,6 +29,7 @@ pub enum BinaryOp {
 pub enum Expression<'a> {
     VariableRef {
         deref_count: u32,
+        index_access: Option<Located<'a, Box<Expression<'a>>>>,
         name: String,
     },
     NumberLiteral {
@@ -36,8 +37,7 @@ pub enum Expression<'a> {
     },
     BinaryExpr {
         op: BinaryOp,
-        lhs: Located<'a, Box<Expression<'a>>>,
-        rhs: Located<'a, Box<Expression<'a>>>,
+        args: Vec<Located<'a, Expression<'a>>>,
     },
     CallExpr {
         name: String,
@@ -79,12 +79,20 @@ impl Type {
             Type::Void => false,
         }
     }
+    pub fn is_pointer_type(&self) -> bool {
+        if let Type::Ptr(_) = self {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 #[derive(Debug)]
 pub enum Statement<'a> {
     Asignment {
         deref_count: u32,
+        index_access: Option<Located<'a, Expression<'a>>>,
         name: String,
         expression: Located<'a, Expression<'a>>,
     },

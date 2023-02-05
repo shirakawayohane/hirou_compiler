@@ -57,17 +57,6 @@ fn parse_function_decl(input: Span) -> ParseResult<FunctionDecl> {
     )(input)
 }
 
-// pub fn parse_block(input: Span) -> NotLocatedParseResult<Vec<Located<Statement>>> {
-//     context(
-//         "block",
-//         delimited(
-//             lbracket,
-//             many0(delimited(skip0, parse_statement, skip0)),
-//             rbracket,
-//         ),
-//     )(input)
-// }
-
 pub fn parse_block(input: Span) -> NotLocatedParseResult<Vec<Located<Statement>>> {
     if delimited(lbracket, skip0, rbracket)(input).is_ok() {
         return Ok((input, Vec::new()));

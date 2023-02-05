@@ -35,12 +35,13 @@ pub enum CompileErrorKind {
     #[error("Invalid operand.")]
     InvalidArgument,
     #[error("Asign value does not match")]
-    TypeMismatch {
-        expected: Box<Type>,
-        actual: Box<Type>,
-    },
+    TypeMismatch { expected: Type, actual: Type },
     #[error("Cannot deref {name} for {deref_count:?} times.")]
     CannotDeref { name: String, deref_count: u32 },
+    #[error("Cannot access {name} by index.")]
+    CannotIndexAccess { name: String, ty: Type },
+    #[error("Array index must be an integer value")]
+    InvalidArrayIndex,
 }
 
 #[derive(Debug, Error)]
@@ -53,7 +54,6 @@ impl CompileError {
         CompileError { errors: vec![kind] }
     }
     pub fn append(kind: CompileErrorKind, mut other: Self) -> Self {
-        println!("append");
         other.errors.push(kind);
         other
     }

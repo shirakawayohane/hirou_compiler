@@ -181,13 +181,6 @@ impl LLVMCodegenerator<'_> {
             .add_function(MALLOC_FUNCTION, malloc_fn_type, None);
 
         self.context.borrow_mut().set_function(
-            "__malloc".to_string(),
-            Type::Void,
-            vec![Type::I32],
-            malloc_function,
-        );
-
-        self.context.borrow_mut().set_function(
             MALLOC_FUNCTION.to_string(),
             Type::Ptr(Box::new(Type::U8)),
             vec![Type::USize],
