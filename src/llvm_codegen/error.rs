@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use thiserror::Error;
 
-use crate::ast::Type;
+use crate::ast::ResolvedType;
 
 #[derive(Debug)]
 pub enum ContextType {
@@ -31,17 +31,22 @@ pub enum CompileErrorKind {
     #[error("`{name:?}` is not a function")]
     CallNotFunctionValue { name: String },
     #[error("Invalid operand.")]
-    InvalidOperand(Box<Type>),
+    InvalidOperand(Box<ResolvedType>),
     #[error("Invalid operand.")]
     InvalidArgument,
     #[error("Asign value does not match")]
-    TypeMismatch { expected: Type, actual: Type },
+    TypeMismatch {
+        expected: ResolvedType,
+        actual: ResolvedType,
+    },
     #[error("Cannot deref {name} for {deref_count:?} times.")]
     CannotDeref { name: String, deref_count: u32 },
     #[error("Cannot access {name} by index.")]
-    CannotIndexAccess { name: String, ty: Type },
+    CannotIndexAccess { name: String, ty: ResolvedType },
     #[error("Array index must be an integer value")]
     InvalidArrayIndex,
+    #[error("Cannot find type name {name}")]
+    TypeNotFound { name: String },
 }
 
 #[derive(Debug, Error)]

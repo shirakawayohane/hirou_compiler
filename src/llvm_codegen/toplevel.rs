@@ -16,7 +16,7 @@ impl LLVMCodegenerator<'_> {
         self.llvm_builder.position_at_end(entry_basic_block);
 
         // パラメーターをFunctionBodyにallocし、Contextにも登録する
-        self.context.borrow_mut().push_scope();
+        self.context.borrow_mut().push_variable_scope();
         self.context.borrow_mut().push_function_scope();
 
         // Set parameters in function body
@@ -24,7 +24,7 @@ impl LLVMCodegenerator<'_> {
             let ty = loc_ty.value;
             let parameter = function.get_nth_param(i as u32).unwrap();
             parameter.set_name(name.as_str());
-            if let Type::Void = ty {
+            if let ResolvedType::Void = ty {
                 continue;
             } else {
                 let allocated_pointer = self.llvm_builder.build_alloca(parameter.get_type(), &name);
@@ -39,7 +39,7 @@ impl LLVMCodegenerator<'_> {
             self.gen_statement(statement)?;
         }
 
-        self.context.borrow_mut().pop_scope();
+        self.context.borrow_mut().pop_variable_scope();
         self.context.borrow_mut().pop_function_scope();
         Ok(())
     }

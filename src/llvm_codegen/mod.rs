@@ -4,9 +4,10 @@ mod expression;
 mod intrinsic;
 mod statement;
 mod toplevel;
+mod ty;
 mod value;
 
-use crate::ast::{Module, Type};
+use crate::ast::{Module, ResolvedType};
 use inkwell::builder::Builder as LLVMBuilder;
 use inkwell::context::Context as LLVMContext;
 use inkwell::module::Module as LLVMModule;
@@ -40,7 +41,7 @@ pub struct LLVMCodegenerator<'a> {
 impl<'a> LLVMCodegenerator<'a> {
     fn gen_load<'ptr>(
         &self,
-        ty: &Type,
+        ty: &ResolvedType,
         pointer: PointerValue<'ptr>,
     ) -> Result<Value<'ptr>, CompileError>
     where
@@ -48,15 +49,15 @@ impl<'a> LLVMCodegenerator<'a> {
     {
         let value = self.llvm_builder.build_load(pointer, "load");
         return Ok(match ty {
-            Type::I32 => Value::I32Value(value.into_int_value()),
-            Type::U8 => Value::U8Value(value.into_int_value()),
-            Type::U32 => Value::U32Value(value.into_int_value()),
-            Type::U64 => Value::U64Value(value.into_int_value()),
-            Type::USize => Value::USizeValue(value.into_int_value()),
-            Type::Ptr(pointer_of) => {
+            ResolvedType::I32 => Value::I32Value(value.into_int_value()),
+            ResolvedType::U8 => Value::U8Value(value.into_int_value()),
+            ResolvedType::U32 => Value::U32Value(value.into_int_value()),
+            ResolvedType::U64 => Value::U64Value(value.into_int_value()),
+            ResolvedType::USize => Value::USizeValue(value.into_int_value()),
+            ResolvedType::Ptr(pointer_of) => {
                 Value::PointerValue(pointer_of.clone(), value.into_pointer_value())
             }
-            Type::Void => Value::Void,
+            ResolvedType::Void => Value::Void,
         });
     }
     pub fn new(llvm_context: &'a LLVMContext) -> LLVMCodegenerator<'a> {
@@ -79,16 +80,22 @@ impl<'a> LLVMCodegenerator<'a> {
 }
 
 impl<'a> LLVMCodegenerator<'a> {
+    fn prepare_instrinsic_type(&self) {
+        let mut context = self.context.borrow_mut();
+    }
     pub fn gen_module(self, module: Module) -> Result<LLVMModule<'a>, CompileError> {
         // Add global scope
-        self.context.borrow_mut().push_scope();
-        self.context.borrow_mut().push_function_scope();
+        let mut context = self.context.borrow_mut();
+        context.push_variable_scope();
+        context.push_function_scope();
+        context.push_type_scope();
         self.gen_intrinsic_functions();
         for top in module.toplevels {
             self.gen_toplevel(top.value)?;
         }
-        self.context.borrow_mut().pop_scope();
-        self.context.borrow_mut().pop_function_scope();
+        context.pop_type_scope();
+        context.pop_function_scope();
+        context.pop_variable_scope();
         Ok(self.llvm_module)
     }
 }

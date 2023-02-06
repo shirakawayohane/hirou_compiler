@@ -39,17 +39,17 @@ impl<'a> LLVMCodegenerator<'a> {
     fn eval_integer_literal(
         &self,
         value_str: &str,
-        annotation: Option<&Type>,
+        annotation: Option<&ResolvedType>,
     ) -> Result<Value, CompileError> {
         if let Some(annotation) = annotation {
             match annotation {
-                Type::U8 => self.eval_u8(value_str),
-                Type::U32 => self.eval_u32(value_str),
-                Type::I32 => self.eval_i32(value_str),
-                Type::U64 => self.eval_u64(value_str),
-                Type::USize => self.eval_usize(value_str),
-                Type::Ptr(_) => unreachable!(),
-                Type::Void => unreachable!(),
+                ResolvedType::U8 => self.eval_u8(value_str),
+                ResolvedType::U32 => self.eval_u32(value_str),
+                ResolvedType::I32 => self.eval_i32(value_str),
+                ResolvedType::U64 => self.eval_u64(value_str),
+                ResolvedType::USize => self.eval_usize(value_str),
+                ResolvedType::Ptr(_) => unreachable!(),
+                ResolvedType::Void => unreachable!(),
             }
         } else {
             self.eval_i32(value_str)
@@ -60,20 +60,28 @@ impl<'a> LLVMCodegenerator<'a> {
         deref_count: u32,
         index_access: Option<Located<Expression>>,
         name: &str,
-        _annotation: Option<&Type>,
+        _annotation: Option<&ResolvedType>,
     ) -> Result<Value, CompileError> {
-        if let Some((ty, ptr)) = self
-            .context
-            .borrow()
+        let context = self.context.borrow();
+        if let Some((ty, ptr)) = context
             .scopes
             .iter()
             .rev()
             .find_map(|scope| scope.get(name))
         {
+            let ty = if let Some(resolved_ty) = self.context.borrow().resolve_type(ty) {
+                resolved_ty
+            } else {
+                return Err(CompileError::from_error_kind(
+                    CompileErrorKind::TypeNotFound {
+                        name: format!("{}", ty),
+                    },
+                ));
+            };
             let mut value = self.gen_load(&ty, *ptr)?;
 
             if let Some(index_expr) = index_access {
-                if !ty.is_pointer_type() {
+                if !ty.is_integer_type() {
                     return Err(CompileError::from_error_kind(
                         CompileErrorKind::CannotIndexAccess {
                             name: name.to_string(),
@@ -84,7 +92,7 @@ impl<'a> LLVMCodegenerator<'a> {
                 match &value {
                     Value::PointerValue(pointer_of, first_elelement_ptr) => {
                         let index_value =
-                            self.eval_expression(index_expr.value, Some(&Type::USize))?;
+                            self.eval_expression(index_expr.value, Some(&ResolvedType::USize))?;
                         let element_ptr = unsafe {
                             self.llvm_builder.build_gep(
                                 *first_elelement_ptr,
@@ -142,55 +150,55 @@ impl<'a> LLVMCodegenerator<'a> {
     {
         pub fn get_cast_type_with_other_operand_of_bin_op<'a>(
             pointer_size: PointerSize,
-            ty: &'a Type,
-            other: &'a Type,
-        ) -> Option<Type> {
+            ty: &'a ResolvedType,
+            other: &'a ResolvedType,
+        ) -> Option<ResolvedType> {
             match ty {
-                Type::U8 => match other {
-                    Type::U8 => None,
-                    Type::I32 => Some(Type::I32),
-                    Type::U32 => Some(Type::U32),
-                    Type::U64 => Some(Type::U64),
-                    Type::USize => Some(Type::USize),
-                    Type::Void => None,
-                    Type::Ptr(_) => None,
+                ResolvedType::U8 => match other {
+                    ResolvedType::U8 => None,
+                    ResolvedType::I32 => Some(ResolvedType::I32),
+                    ResolvedType::U32 => Some(ResolvedType::U32),
+                    ResolvedType::U64 => Some(ResolvedType::U64),
+                    ResolvedType::USize => Some(ResolvedType::USize),
+                    ResolvedType::Void => None,
+                    ResolvedType::Ptr(_) => None,
                 },
-                Type::I32 => match other {
-                    Type::U8 => None,
-                    Type::I32 => None,
-                    Type::USize => Some(Type::USize),
-                    Type::U32 => Some(Type::U32),
-                    Type::U64 => Some(Type::U64),
-                    Type::Ptr(_) => None,
-                    Type::Void => None,
+                ResolvedType::I32 => match other {
+                    ResolvedType::U8 => None,
+                    ResolvedType::I32 => None,
+                    ResolvedType::USize => Some(ResolvedType::USize),
+                    ResolvedType::U32 => Some(ResolvedType::U32),
+                    ResolvedType::U64 => Some(ResolvedType::U64),
+                    ResolvedType::Ptr(_) => None,
+                    ResolvedType::Void => None,
                 },
-                Type::U32 => match other {
-                    Type::I32 => None,
-                    Type::U32 => None,
-                    Type::U64 => Some(Type::U64),
-                    Type::USize => match pointer_size {
-                        PointerSize::SixteenFour => Some(Type::U64),
+                ResolvedType::U32 => match other {
+                    ResolvedType::I32 => None,
+                    ResolvedType::U32 => None,
+                    ResolvedType::U64 => Some(ResolvedType::U64),
+                    ResolvedType::USize => match pointer_size {
+                        PointerSize::SixteenFour => Some(ResolvedType::U64),
                     },
-                    Type::U8 => None,
-                    Type::Ptr(_) => None,
-                    Type::Void => None,
+                    ResolvedType::U8 => None,
+                    ResolvedType::Ptr(_) => None,
+                    ResolvedType::Void => None,
                 },
-                Type::U64 => None,
-                Type::USize => match other {
-                    Type::U8 => None,
-                    Type::I32 => match pointer_size {
-                        PointerSize::SixteenFour => Some(Type::U64),
+                ResolvedType::U64 => None,
+                ResolvedType::USize => match other {
+                    ResolvedType::U8 => None,
+                    ResolvedType::I32 => match pointer_size {
+                        PointerSize::SixteenFour => Some(ResolvedType::U64),
                     },
-                    Type::U32 => match pointer_size {
-                        PointerSize::SixteenFour => Some(Type::U64),
+                    ResolvedType::U32 => match pointer_size {
+                        PointerSize::SixteenFour => Some(ResolvedType::U64),
                     },
-                    Type::U64 => None,
-                    Type::USize => None,
-                    Type::Ptr(_) => None,
-                    Type::Void => None,
+                    ResolvedType::U64 => None,
+                    ResolvedType::USize => None,
+                    ResolvedType::Ptr(_) => None,
+                    ResolvedType::Void => None,
                 },
-                Type::Ptr(_) => None,
-                Type::Void => None,
+                ResolvedType::Ptr(_) => None,
+                ResolvedType::Void => None,
             }
         }
 
@@ -232,13 +240,13 @@ impl<'a> LLVMCodegenerator<'a> {
                         "int+int",
                     );
                     Ok(match result_type {
-                        Type::U8 => Value::U8Value(result),
-                        Type::I32 => Value::I32Value(result),
-                        Type::U32 => Value::U32Value(result),
-                        Type::U64 => Value::U64Value(result),
-                        Type::USize => Value::U64Value(result),
-                        Type::Ptr(_) => unreachable!(),
-                        Type::Void => unreachable!(),
+                        ResolvedType::U8 => Value::U8Value(result),
+                        ResolvedType::I32 => Value::I32Value(result),
+                        ResolvedType::U32 => Value::U32Value(result),
+                        ResolvedType::U64 => Value::U64Value(result),
+                        ResolvedType::USize => Value::U64Value(result),
+                        ResolvedType::Ptr(_) => unreachable!(),
+                        ResolvedType::Void => unreachable!(),
                     })
                 }
                 BinaryOp::Sub => {
@@ -248,13 +256,13 @@ impl<'a> LLVMCodegenerator<'a> {
                         "int-int",
                     );
                     Ok(match result_type {
-                        Type::U8 => Value::U8Value(result),
-                        Type::I32 => Value::I32Value(result),
-                        Type::U32 => Value::U32Value(result),
-                        Type::U64 => Value::U64Value(result),
-                        Type::USize => Value::U64Value(result),
-                        Type::Ptr(_) => unreachable!(),
-                        Type::Void => unreachable!(),
+                        ResolvedType::U8 => Value::U8Value(result),
+                        ResolvedType::I32 => Value::I32Value(result),
+                        ResolvedType::U32 => Value::U32Value(result),
+                        ResolvedType::U64 => Value::U64Value(result),
+                        ResolvedType::USize => Value::U64Value(result),
+                        ResolvedType::Ptr(_) => unreachable!(),
+                        ResolvedType::Void => unreachable!(),
                     })
                 }
                 BinaryOp::Mul => {
@@ -264,40 +272,41 @@ impl<'a> LLVMCodegenerator<'a> {
                         "int*int",
                     );
                     Ok(match result_type {
-                        Type::U8 => Value::U8Value(result),
-                        Type::I32 => Value::I32Value(result),
-                        Type::U32 => Value::U32Value(result),
-                        Type::U64 => Value::U64Value(result),
-                        Type::USize => Value::U64Value(result),
-                        Type::Ptr(_) => unreachable!(),
-                        Type::Void => unreachable!(),
+                        ResolvedType::U8 => Value::U8Value(result),
+                        ResolvedType::I32 => Value::I32Value(result),
+                        ResolvedType::U32 => Value::U32Value(result),
+                        ResolvedType::U64 => Value::U64Value(result),
+                        ResolvedType::USize => Value::U64Value(result),
+                        ResolvedType::Ptr(_) => unreachable!(),
+                        ResolvedType::Void => unreachable!(),
                     })
                 }
                 BinaryOp::Div => {
                     let result = match result_type {
-                        Type::I32 => self.llvm_builder.build_int_signed_div(
+                        ResolvedType::I32 => self.llvm_builder.build_int_signed_div(
                             lhs_integer_value.unwrap_int_value(),
                             rhs_integer_value.unwrap_int_value(),
                             "int/int(signed)",
                         ),
-                        Type::U8 | Type::U32 | Type::U64 | Type::USize => {
-                            self.llvm_builder.build_int_unsigned_div(
-                                lhs_integer_value.unwrap_int_value(),
-                                rhs_integer_value.unwrap_int_value(),
-                                "int/int(unsigned)",
-                            )
-                        }
-                        Type::Ptr(_) => unreachable!(),
-                        Type::Void => unreachable!(),
+                        ResolvedType::U8
+                        | ResolvedType::U32
+                        | ResolvedType::U64
+                        | ResolvedType::USize => self.llvm_builder.build_int_unsigned_div(
+                            lhs_integer_value.unwrap_int_value(),
+                            rhs_integer_value.unwrap_int_value(),
+                            "int/int(unsigned)",
+                        ),
+                        ResolvedType::Ptr(_) => unreachable!(),
+                        ResolvedType::Void => unreachable!(),
                     };
                     Ok(match result_type {
-                        Type::U8 => Value::U8Value(result),
-                        Type::I32 => Value::I32Value(result),
-                        Type::U32 => Value::U32Value(result),
-                        Type::U64 => Value::U64Value(result),
-                        Type::USize => Value::U64Value(result),
-                        Type::Ptr(_) => unreachable!(),
-                        Type::Void => unreachable!(),
+                        ResolvedType::U8 => Value::U8Value(result),
+                        ResolvedType::I32 => Value::I32Value(result),
+                        ResolvedType::U32 => Value::U32Value(result),
+                        ResolvedType::U64 => Value::U64Value(result),
+                        ResolvedType::USize => Value::U64Value(result),
+                        ResolvedType::Ptr(_) => unreachable!(),
+                        ResolvedType::Void => unreachable!(),
                     })
                 }
             }
@@ -311,14 +320,6 @@ impl<'a> LLVMCodegenerator<'a> {
         op: BinaryOp,
         mut args: Vec<Located<Expression>>,
     ) -> Result<Value, CompileError> {
-        // let hoge = args.into_iter().fold(Value::Void, |val, rhs| {
-        //     let rhs_value = match self.eval_expression(rhs.value, None) {
-        //         Ok(_) => todo!(),
-        //         Err(err) => return Err(err)
-        //     }
-        //     self.eval_binary_expr(op, value, rhs_value)?
-        // });
-        // todo!()
         let lhs = args.remove(0);
         let mut lhs_value = self.eval_expression(lhs.value, None)?;
         while !args.is_empty() {
@@ -332,15 +333,15 @@ impl<'a> LLVMCodegenerator<'a> {
         &self,
         name: &str,
         arg_exprs: Vec<Located<Expression>>,
-        _annotation: Option<&Type>,
+        _annotation: Option<&ResolvedType>,
     ) -> Result<Value, CompileError> {
         let context = self.context.borrow();
-        let result = context.find_function(&name);
-        if let Some((return_type, arg_types, func)) = result {
+        if let Some((return_type, arg_types, func)) = context.find_function(&name) {
+            let return_type = self.resolve_type(return_type)?;
             let mut evaluated_args: Vec<BasicMetadataValueEnum> = Vec::new();
             assert_eq!(arg_exprs.len(), arg_types.len());
             for (i, arg_expr) in arg_exprs.into_iter().enumerate() {
-                let arg_type = arg_types.get(i).unwrap();
+                let arg_type = self.resolve_type(arg_types.get(i).unwrap())?;
                 let evaluated_arg = self.eval_expression(arg_expr.value, Some(&arg_type))?;
                 evaluated_args.push(match evaluated_arg {
                     Value::U8Value(v) => BasicMetadataValueEnum::IntValue(v),
@@ -371,7 +372,7 @@ impl<'a> LLVMCodegenerator<'a> {
                         BasicValueEnum::FloatValue(_) => todo!(),
                         BasicValueEnum::PointerValue(pointer_value) => {
                             let pointer_of = match return_type {
-                                Type::Ptr(pointer_of) => pointer_of,
+                                ResolvedType::Ptr(pointer_of) => pointer_of,
                                 _ => unreachable!(),
                             };
                             Value::PointerValue(pointer_of.clone(), pointer_value)
@@ -401,7 +402,7 @@ impl<'a> LLVMCodegenerator<'a> {
     pub(super) fn eval_expression(
         &self,
         expr: Expression,
-        annotation: Option<&Type>,
+        annotation: Option<&ResolvedType>,
     ) -> Result<Value, CompileError> {
         match expr {
             Expression::VariableRef {

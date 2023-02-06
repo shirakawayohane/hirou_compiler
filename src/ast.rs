@@ -1,3 +1,5 @@
+use std::fmt::{Display, Write};
+
 #[derive(Debug, Clone, Copy)]
 pub struct Position {
     pub line: u32,
@@ -46,41 +48,78 @@ pub enum Expression<'a> {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Type {
+pub enum ResolvedType {
     I32,
     U32,
     U64,
     USize,
     U8,
-    Ptr(Box<Type>),
+    Ptr(Box<ResolvedType>),
     Void,
 }
 
-impl Type {
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub enum UnresolvedType<'a> {
+    TypeRef {
+        name: &'a str,
+        generic_args: Option<Vec<UnresolvedType<'a>>>,
+    },
+    Pointer {
+        inner_type: Box<UnresolvedType<'a>>,
+    },
+    Array {
+        inner_type: Box<UnresolvedType<'a>>,
+    },
+}
+
+impl Display for UnresolvedType<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UnresolvedType::TypeRef { name, generic_args } => {
+                f.write_str(name);
+                if let Some(args) = generic_args {
+                    f.write_char('<')?;
+                    for arg in args {
+                        arg.fmt(f)?;
+                    }
+                    f.write_char('>')?;
+                }
+            }
+            UnresolvedType::Pointer { inner_type } => {
+                f.write_char('*');
+                inner_type.fmt(f)?;
+            }
+            UnresolvedType::Array { inner_type } => todo!(),
+        }
+        Ok(())
+    }
+}
+
+impl ResolvedType {
     pub fn is_integer_type(&self) -> bool {
         match self {
-            Type::I32 => true,
-            Type::USize => true,
-            Type::U8 => true,
-            Type::U32 => true,
-            Type::U64 => true,
-            Type::Ptr(_) => false,
-            Type::Void => false,
+            ResolvedType::I32 => true,
+            ResolvedType::USize => true,
+            ResolvedType::U8 => true,
+            ResolvedType::U32 => true,
+            ResolvedType::U64 => true,
+            ResolvedType::Ptr(_) => false,
+            ResolvedType::Void => false,
         }
     }
     pub fn is_valid_as_operand(&self) -> bool {
         match self {
-            Type::I32 => true,
-            Type::U32 => true,
-            Type::U64 => true,
-            Type::USize => true,
-            Type::U8 => true,
-            Type::Ptr(_) => false,
-            Type::Void => false,
+            ResolvedType::I32 => true,
+            ResolvedType::U32 => true,
+            ResolvedType::U64 => true,
+            ResolvedType::USize => true,
+            ResolvedType::U8 => true,
+            ResolvedType::Ptr(_) => false,
+            ResolvedType::Void => false,
         }
     }
     pub fn is_pointer_type(&self) -> bool {
-        if let Type::Ptr(_) = self {
+        if let ResolvedType::Ptr(_) = self {
             true
         } else {
             false
@@ -97,7 +136,7 @@ pub enum Statement<'a> {
         expression: Located<'a, Expression<'a>>,
     },
     VariableDecl {
-        ty: Located<'a, Type>,
+        ty: Located<'a, ResolvedType>,
         name: String,
         value: Located<'a, Expression<'a>>,
     },
@@ -112,8 +151,8 @@ pub enum Statement<'a> {
 #[derive(Debug)]
 pub struct FunctionDecl<'a> {
     pub name: String,
-    pub params: Vec<(Located<'a, Type>, String)>,
-    pub return_type: Located<'a, Type>,
+    pub params: Vec<(Located<'a, UnresolvedType<'a>>, String)>,
+    pub return_type: Located<'a, UnresolvedType<'a>>,
 }
 
 #[derive(Debug)]

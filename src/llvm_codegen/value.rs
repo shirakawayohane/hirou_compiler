@@ -2,7 +2,7 @@ use core::panic;
 
 use inkwell::values::{BasicValue, BasicValueEnum, IntValue, PointerValue};
 
-use crate::ast::Type;
+use crate::ast::ResolvedType;
 
 use super::{error::CompileError, LLVMCodegenerator};
 
@@ -13,20 +13,20 @@ pub enum Value<'a> {
     U64Value(IntValue<'a>),
     U32Value(IntValue<'a>),
     USizeValue(IntValue<'a>),
-    PointerValue(Box<Type>, PointerValue<'a>),
+    PointerValue(Box<ResolvedType>, PointerValue<'a>),
     Void,
 }
 
 impl<'a> Value<'a> {
-    pub fn get_type(&self) -> Type {
+    pub fn get_type(&self) -> ResolvedType {
         match self {
-            Value::U8Value(_) => Type::U8,
-            Value::I32Value(_) => Type::I32,
-            Value::U64Value(_) => Type::U64,
-            Value::U32Value(_) => Type::U32,
-            Value::USizeValue(_) => Type::USize,
-            Value::PointerValue(pointer_of, _) => Type::Ptr(pointer_of.clone()),
-            Value::Void => Type::Void,
+            Value::U8Value(_) => ResolvedType::U8,
+            Value::I32Value(_) => ResolvedType::I32,
+            Value::U64Value(_) => ResolvedType::U64,
+            Value::U32Value(_) => ResolvedType::U32,
+            Value::USizeValue(_) => ResolvedType::USize,
+            Value::PointerValue(pointer_of, _) => ResolvedType::Ptr(pointer_of.clone()),
+            Value::Void => ResolvedType::Void,
         }
     }
     pub fn unwrap_int_value(self) -> IntValue<'a> {
@@ -53,28 +53,28 @@ impl LLVMCodegenerator<'_> {
     pub(crate) fn gen_try_cast<'ctx>(
         &'ctx self,
         value: Value<'ctx>,
-        ty: &Type,
+        ty: &ResolvedType,
     ) -> Result<Value<'ctx>, CompileError> {
         Ok(match ty {
-            Type::I32 => Value::I32Value(self.llvm_builder.build_int_cast_sign_flag(
+            ResolvedType::I32 => Value::I32Value(self.llvm_builder.build_int_cast_sign_flag(
                 value.unwrap_int_value(),
                 self.i32_type,
                 true,
                 "(i32)",
             )),
-            Type::U32 => Value::U32Value(self.llvm_builder.build_int_cast_sign_flag(
+            ResolvedType::U32 => Value::U32Value(self.llvm_builder.build_int_cast_sign_flag(
                 value.unwrap_int_value(),
                 self.i32_type,
                 false,
                 "(u32)",
             )),
-            Type::U64 => Value::U64Value(self.llvm_builder.build_int_cast_sign_flag(
+            ResolvedType::U64 => Value::U64Value(self.llvm_builder.build_int_cast_sign_flag(
                 value.unwrap_int_value(),
                 self.i64_type,
                 false,
                 "(u64)",
             )),
-            Type::USize => Value::USizeValue(self.llvm_builder.build_int_cast_sign_flag(
+            ResolvedType::USize => Value::USizeValue(self.llvm_builder.build_int_cast_sign_flag(
                 value.unwrap_int_value(),
                 match self.pointer_size {
                     super::PointerSize::SixteenFour => self.i64_type,
@@ -82,14 +82,14 @@ impl LLVMCodegenerator<'_> {
                 false,
                 "(u64)",
             )),
-            Type::U8 => Value::U8Value(self.llvm_builder.build_int_cast_sign_flag(
+            ResolvedType::U8 => Value::U8Value(self.llvm_builder.build_int_cast_sign_flag(
                 value.unwrap_int_value(),
                 self.i8_type,
                 false,
                 "(u8)",
             )),
-            Type::Ptr(_) => unimplemented!(),
-            Type::Void => unimplemented!(),
+            ResolvedType::Ptr(_) => unimplemented!(),
+            ResolvedType::Void => unimplemented!(),
         })
     }
 }

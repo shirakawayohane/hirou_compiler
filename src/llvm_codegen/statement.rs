@@ -11,21 +11,25 @@ use crate::{ast::*, error_context};
 impl LLVMCodegenerator<'_> {
     fn gen_variable_decl(
         &self,
-        ty: Type,
+        ty: ResolvedType,
         name: String,
         value: Expression,
     ) -> Result<(), CompileError> {
         match &ty {
-            Type::I32 | Type::U8 | Type::U32 | Type::U64 | Type::USize => {
+            ResolvedType::I32
+            | ResolvedType::U8
+            | ResolvedType::U32
+            | ResolvedType::U64
+            | ResolvedType::USize => {
                 let variable_pointer = self.llvm_builder.build_alloca(
                     match ty {
-                        Type::I32 => self.i32_type,
-                        Type::USize => match self.pointer_size {
+                        ResolvedType::I32 => self.i32_type,
+                        ResolvedType::USize => match self.pointer_size {
                             PointerSize::SixteenFour => self.i64_type,
                         },
-                        Type::U32 => self.i32_type,
-                        Type::U64 => self.i64_type,
-                        Type::U8 => self.i8_type,
+                        ResolvedType::U32 => self.i32_type,
+                        ResolvedType::U64 => self.i64_type,
+                        ResolvedType::U8 => self.i8_type,
                         _ => panic!(),
                     },
                     &name,
@@ -45,16 +49,16 @@ impl LLVMCodegenerator<'_> {
                     .borrow_mut()
                     .set_variable(name, ty, variable_pointer);
             }
-            Type::Ptr(ptr_ty) => {
+            ResolvedType::Ptr(ptr_ty) => {
                 let variable_pointer = self.llvm_builder.build_alloca(
                     match **ptr_ty {
-                        Type::I32 => self.i32_type,
-                        Type::USize => match self.pointer_size {
+                        ResolvedType::I32 => self.i32_type,
+                        ResolvedType::USize => match self.pointer_size {
                             PointerSize::SixteenFour => self.i64_type,
                         },
-                        Type::U32 => self.i32_type,
-                        Type::U64 => self.i64_type,
-                        Type::U8 => self.i8_type,
+                        ResolvedType::U32 => self.i32_type,
+                        ResolvedType::U64 => self.i64_type,
+                        ResolvedType::U8 => self.i8_type,
                         _ => panic!(),
                     }
                     .ptr_type(AddressSpace::default()),
@@ -80,7 +84,7 @@ impl LLVMCodegenerator<'_> {
                     .borrow_mut()
                     .set_variable(name, ty, variable_pointer);
             }
-            Type::Void => {
+            ResolvedType::Void => {
                 let _result = self.eval_expression(value, Some(&ty));
                 unsafe {
                     let null_pointer = 0 as *const PointerValue;
@@ -131,7 +135,7 @@ impl LLVMCodegenerator<'_> {
                     }
                 };
                 asign_type = match asign_type {
-                    Type::Ptr(pointer_of) => &pointer_of,
+                    ResolvedType::Ptr(pointer_of) => &pointer_of,
                     _ => {
                         return Err(CompileError::from_error_kind(
                             CompileErrorKind::CannotDeref { name, deref_count },
@@ -143,7 +147,7 @@ impl LLVMCodegenerator<'_> {
             if let Some(index_expr) = index_access {
                 // Check type first
                 asign_type = match asign_type {
-                    Type::Ptr(v) => &**v,
+                    ResolvedType::Ptr(v) => &**v,
                     _ => {
                         return Err(CompileError::from_error_kind(
                             CompileErrorKind::CannotIndexAccess {
@@ -154,7 +158,8 @@ impl LLVMCodegenerator<'_> {
                     }
                 };
 
-                let index_value = self.eval_expression(index_expr.value, Some(&Type::USize))?;
+                let index_value =
+                    self.eval_expression(index_expr.value, Some(&ResolvedType::USize))?;
                 // deref and move ptr by sizeof(T) * index
                 ptr_to_asign = match self.llvm_builder.build_load(ptr_to_asign, "deref") {
                     inkwell::values::BasicValueEnum::PointerValue(ptr) => ptr,
