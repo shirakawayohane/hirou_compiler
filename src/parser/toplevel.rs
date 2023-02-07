@@ -58,17 +58,17 @@ fn parse_function_decl(input: Span) -> ParseResult<FunctionDecl> {
 }
 
 pub fn parse_block(input: Span) -> NotLocatedParseResult<Vec<Located<Statement>>> {
-    if delimited(lbracket, skip0, rbracket)(input).is_ok() {
-        return Ok((input, Vec::new()));
+    let (s, _) = skip0(input)?;
+    let (s, _) = lbracket(s)?;
+    let (s, _) = skip0(s)?;
+    let mut statements = Vec::new();
+    let mut s = s;
+    while !s.starts_with("}") {
+        let (rest, stmt) = parse_statement(s)?;
+        statements.push(stmt);
+        (s, _) = skip0(rest)?;
     }
-    context(
-        "block",
-        delimited(
-            lbracket,
-            delimited(skip0, many1(terminated(parse_statement, skip0)), skip0),
-            rbracket,
-        ),
-    )(input)
+    Ok((s, statements))
 }
 
 fn parse_function(input: Span) -> ParseResult<TopLevel> {

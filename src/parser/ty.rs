@@ -1,27 +1,39 @@
-use nom::{branch::alt, combinator::map, error::context, sequence::preceded};
+use nom::{
+    branch::alt,
+    combinator::{map, opt},
+    error::context,
+    multi::separated_list1,
+    sequence::{delimited, pair},
+};
 
-use crate::ast::ResolvedType;
+use crate::ast::*;
 
 use super::{token::*, util::located, ParseResult, Span};
 
-fn i32_type(input: Span) -> ParseResult<ResolvedType> {
-    located(map(i32, |_| ResolvedType::I32))(input)
-}
-
-fn usize_type(input: Span) -> ParseResult<ResolvedType> {
-    located(map(usize, |_| ResolvedType::USize))(input)
-}
-
-fn u8_type(input: Span) -> ParseResult<ResolvedType> {
-    located(map(u8, |_| ResolvedType::U8))(input)
-}
-
-fn ptr_type(input: Span) -> ParseResult<ResolvedType> {
-    located(map(preceded(asterisk, parse_type), |ty| {
-        ResolvedType::Ptr(Box::new(ty.value))
+fn parse_array(input: Span) -> ParseResult<UnresolvedType> {
+    located(map(delimited(lsqrbracket, parse_type, rsqrbracket), |ty| {
+        UnresolvedType::Array(Box::new(ty.value))
     }))(input)
 }
 
-pub(super) fn parse_type(input: Span) -> ParseResult<ResolvedType> {
-    context("type", alt((ptr_type, i32_type, u8_type, usize_type)))(input)
+fn parse_typeref(input: Span) -> ParseResult<UnresolvedType> {
+    located(map(
+        pair(
+            parse_identifier,
+            opt(delimited(
+                lsqrbracket,
+                separated_list1(comma, parse_typeref),
+                rsqrbracket,
+            )),
+        ),
+        |(ident, generics_args)| UnresolvedType::TypeRef {
+            name: ident,
+            generic_args: generics_args
+                .map(|args| args.into_iter().map(|arg| arg.value).collect::<Vec<_>>()),
+        },
+    ))(input)
+}
+
+pub(super) fn parse_type(input: Span) -> ParseResult<UnresolvedType> {
+    context("type", alt((parse_array, parse_typeref)))(input)
 }

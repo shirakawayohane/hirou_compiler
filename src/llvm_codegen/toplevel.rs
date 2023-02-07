@@ -18,20 +18,25 @@ impl LLVMCodegenerator<'_> {
         // パラメーターをFunctionBodyにallocし、Contextにも登録する
         self.context.borrow_mut().push_variable_scope();
         self.context.borrow_mut().push_function_scope();
-
-        // Set parameters in function body
-        for (i, (loc_ty, name)) in decl.params.into_iter().enumerate() {
-            let ty = loc_ty.value;
-            let parameter = function.get_nth_param(i as u32).unwrap();
-            parameter.set_name(name.as_str());
-            if let ResolvedType::Void = ty {
-                continue;
-            } else {
-                let allocated_pointer = self.llvm_builder.build_alloca(parameter.get_type(), &name);
-                self.llvm_builder.build_store(allocated_pointer, parameter);
-                self.context
-                    .borrow_mut()
-                    .set_variable(name.clone(), ty, allocated_pointer);
+        {
+            let context = self.context.borrow();
+            // Set parameters in function body
+            for (i, (loc_ty, name)) in decl.params.into_iter().enumerate() {
+                let resolved_ty = context.resolve_type(&loc_ty.value)?;
+                let parameter = function.get_nth_param(i as u32).unwrap();
+                parameter.set_name(name.as_str());
+                if let ResolvedType::Void = &resolved_ty {
+                    continue;
+                } else {
+                    let allocated_pointer =
+                        self.llvm_builder.build_alloca(parameter.get_type(), &name);
+                    self.llvm_builder.build_store(allocated_pointer, parameter);
+                    self.context.borrow_mut().set_variable(
+                        name.clone(),
+                        loc_ty.value,
+                        allocated_pointer,
+                    );
+                }
             }
         }
 

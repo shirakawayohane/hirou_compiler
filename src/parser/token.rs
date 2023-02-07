@@ -37,6 +37,16 @@ pub(super) fn rsqrbracket(input: Span) -> NotLocatedParseResult<char> {
 }
 
 #[inline(always)]
+pub(super) fn langlebracket(input: Span) -> NotLocatedParseResult<char> {
+    char('<')(input)
+}
+
+#[inline(always)]
+pub(super) fn ranglebracket(input: Span) -> NotLocatedParseResult<char> {
+    char('>')(input)
+}
+
+#[inline(always)]
 pub(super) fn comma(input: Span) -> NotLocatedParseResult<char> {
     char(',')(input)
 }

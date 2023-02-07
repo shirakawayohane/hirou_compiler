@@ -1,19 +1,26 @@
 use std::fmt::{Display, Write};
 
-#[derive(Debug, Clone, Copy)]
+pub const U8_TYPE_NAME: &str = "u8";
+pub const I32_TYPE_NAME: &str = "i32";
+pub const U32_TYPE_NAME: &str = "u32";
+pub const U64_TYPE_NAME: &str = "u64";
+pub const USIZE_TYPE_NAME: &str = "usize";
+pub const VOID_TYPE_NAME: &str = "void";
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct Position {
     pub line: u32,
     pub col: usize,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct Range<'a> {
     pub from: Position,
     pub to: Position,
     pub fragment: &'a str,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Located<'a, T> {
     pub range: Range<'a>,
     pub value: T,
@@ -59,37 +66,32 @@ pub enum ResolvedType {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub enum UnresolvedType<'a> {
+pub enum UnresolvedType {
     TypeRef {
-        name: &'a str,
-        generic_args: Option<Vec<UnresolvedType<'a>>>,
+        name: String,
+        generic_args: Option<Vec<UnresolvedType>>,
     },
-    Pointer {
-        inner_type: Box<UnresolvedType<'a>>,
-    },
-    Array {
-        inner_type: Box<UnresolvedType<'a>>,
-    },
+    Array(Box<UnresolvedType>),
 }
 
-impl Display for UnresolvedType<'_> {
+impl Display for UnresolvedType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             UnresolvedType::TypeRef { name, generic_args } => {
-                f.write_str(name);
+                f.write_str(name)?;
                 if let Some(args) = generic_args {
                     f.write_char('<')?;
                     for arg in args {
-                        arg.fmt(f)?;
+                        write!(f, "{}", arg)?;
                     }
                     f.write_char('>')?;
                 }
             }
-            UnresolvedType::Pointer { inner_type } => {
-                f.write_char('*');
-                inner_type.fmt(f)?;
+            UnresolvedType::Array(inner_type) => {
+                f.write_char('[')?;
+                write!(f, "{}", inner_type)?;
+                f.write_char(']')?;
             }
-            UnresolvedType::Array { inner_type } => todo!(),
         }
         Ok(())
     }
@@ -136,7 +138,7 @@ pub enum Statement<'a> {
         expression: Located<'a, Expression<'a>>,
     },
     VariableDecl {
-        ty: Located<'a, ResolvedType>,
+        ty: Located<'a, UnresolvedType>,
         name: String,
         value: Located<'a, Expression<'a>>,
     },
@@ -151,8 +153,8 @@ pub enum Statement<'a> {
 #[derive(Debug)]
 pub struct FunctionDecl<'a> {
     pub name: String,
-    pub params: Vec<(Located<'a, UnresolvedType<'a>>, String)>,
-    pub return_type: Located<'a, UnresolvedType<'a>>,
+    pub params: Vec<(Located<'a, UnresolvedType>, String)>,
+    pub return_type: Located<'a, UnresolvedType>,
 }
 
 #[derive(Debug)]

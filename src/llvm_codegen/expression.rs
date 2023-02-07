@@ -64,28 +64,20 @@ impl<'a> LLVMCodegenerator<'a> {
     ) -> Result<Value, CompileError> {
         let context = self.context.borrow();
         if let Some((ty, ptr)) = context
-            .scopes
+            .variables
             .iter()
             .rev()
             .find_map(|scope| scope.get(name))
         {
-            let ty = if let Some(resolved_ty) = self.context.borrow().resolve_type(ty) {
-                resolved_ty
-            } else {
-                return Err(CompileError::from_error_kind(
-                    CompileErrorKind::TypeNotFound {
-                        name: format!("{}", ty),
-                    },
-                ));
-            };
-            let mut value = self.gen_load(&ty, *ptr)?;
+            let resolved_ty = context.resolve_type(ty)?;
+            let mut value = self.gen_load(&resolved_ty, *ptr)?;
 
             if let Some(index_expr) = index_access {
-                if !ty.is_integer_type() {
+                if !resolved_ty.is_pointer_type() {
                     return Err(CompileError::from_error_kind(
                         CompileErrorKind::CannotIndexAccess {
                             name: name.to_string(),
-                            ty: ty.clone(),
+                            ty: resolved_ty.clone(),
                         },
                     ));
                 }
@@ -102,14 +94,7 @@ impl<'a> LLVMCodegenerator<'a> {
                         };
                         value = self.gen_load(pointer_of, element_ptr)?;
                     }
-                    _ => {
-                        return Err(CompileError::from_error_kind(
-                            CompileErrorKind::CannotDeref {
-                                name: name.to_string(),
-                                deref_count,
-                            },
-                        ))
-                    }
+                    _ => unreachable!(),
                 }
             }
 
@@ -337,11 +322,12 @@ impl<'a> LLVMCodegenerator<'a> {
     ) -> Result<Value, CompileError> {
         let context = self.context.borrow();
         if let Some((return_type, arg_types, func)) = context.find_function(&name) {
-            let return_type = self.resolve_type(return_type)?;
+            let context = self.context.borrow();
+            let return_type = context.resolve_type(return_type)?;
             let mut evaluated_args: Vec<BasicMetadataValueEnum> = Vec::new();
             assert_eq!(arg_exprs.len(), arg_types.len());
             for (i, arg_expr) in arg_exprs.into_iter().enumerate() {
-                let arg_type = self.resolve_type(arg_types.get(i).unwrap())?;
+                let arg_type = context.resolve_type(arg_types.get(i).unwrap())?;
                 let evaluated_arg = self.eval_expression(arg_expr.value, Some(&arg_type))?;
                 evaluated_args.push(match evaluated_arg {
                     Value::U8Value(v) => BasicMetadataValueEnum::IntValue(v),
@@ -384,7 +370,7 @@ impl<'a> LLVMCodegenerator<'a> {
                 },
             )
         } else {
-            if context.find_variable(&name).is_some() {
+            if context.find_variable(&name).is_ok() {
                 Err(CompileError::from_error_kind(
                     CompileErrorKind::CallNotFunctionValue {
                         name: name.to_string(),

@@ -1,4 +1,4 @@
-use std::fs::read_to_string;
+use std::{fs::read_to_string, path::Path};
 mod ast;
 mod llvm_codegen;
 mod parser;
@@ -44,9 +44,7 @@ fn main() {
     let llvm_codegenerator = llvm_codegen::LLVMCodegenerator::new(&llvm_context);
     match llvm_codegenerator.gen_module(module) {
         Ok(module) => {
-            if let Some(output) = args.output {
-                module.print_to_file(output).unwrap();
-            }
+            module.print_to_file(Path::new("out.ll")).unwrap();
             let execution_engine = &module
                 .create_jit_execution_engine(inkwell::OptimizationLevel::None)
                 .unwrap();

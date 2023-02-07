@@ -8,7 +8,7 @@ mod util;
 use nom::{
     combinator::{eof, map},
     error::{context, VerboseError},
-    multi::many_till,
+    multi::{many1, many_till},
     sequence::delimited,
     IResult,
 };
@@ -28,11 +28,8 @@ pub fn parse_module<'a>(input: Span<'a>) -> IResult<Span, Module, VerboseError<S
     context(
         "module",
         map(
-            many_till(
-                delimited(skip0, parse_toplevel, skip0),
-                eof::<Span, VerboseError<Span>>,
-            ),
-            |(toplevels, _)| Module { toplevels },
+            many1(delimited(skip0, parse_toplevel, skip0)),
+            |toplevels| Module { toplevels },
         ),
     )(input)
 }

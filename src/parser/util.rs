@@ -2,15 +2,15 @@ use crate::ast::{Expression, Located, Position, Range};
 
 use super::{
     expression::parse_expression,
-    token::{lsqrbracket, parse_identifier, rsqrbracket},
+    token::{lsqrbracket, rsqrbracket},
     *,
 };
 use nom::{
-    branch::{alt, permutation, Alt, Permutation},
+    branch::{alt, permutation},
     bytes::complete::{tag, take_till},
     character::complete::{line_ending, multispace1},
     combinator::{eof, map},
-    error::{ParseError, VerboseError},
+    error::VerboseError,
     multi::many0,
     Parser,
 };

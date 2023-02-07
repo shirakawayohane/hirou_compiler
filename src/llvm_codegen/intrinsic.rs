@@ -4,13 +4,6 @@ use super::*;
 
 use inkwell::AddressSpace;
 
-const U8_TYPE_NAME: &str = "u8";
-const I32_TYPE_NAME: &str = "i32";
-const U32_TYPE_NAME: &str = "u32";
-const U64_TYPE_NAME: &str = "u64";
-const USIZE_TYPE_NAME: &str = "usize";
-const VOID_TYPE_NAME: &str = "void";
-
 const PRINTF_FUNCTION: &str = "printf";
 const MALLOC_FUNCTION: &str = "malloc";
 const PRINTU8_FUNCTION: &str = "print-u8";
@@ -61,10 +54,13 @@ impl LLVMCodegenerator<'_> {
         self.context.borrow_mut().set_function(
             PRINTU8_FUNCTION.to_string(),
             UnresolvedType::TypeRef {
-                name: VOID_TYPE_NAME,
+                name: "void".to_owned(),
                 generic_args: None,
             },
-            vec![UnresolvedType::TypeRef { name: U8_TYPE_NAME }],
+            vec![UnresolvedType::TypeRef {
+                name: "u8".to_owned(),
+                generic_args: None,
+            }],
             print_u8_function,
         );
     }
@@ -99,12 +95,12 @@ impl LLVMCodegenerator<'_> {
         self.context.borrow_mut().set_function(
             PRINTI32_FUNCTION.to_string(),
             UnresolvedType::TypeRef {
-                name: VOID_TYPE_NAME,
+                name: "void".to_owned(),
                 generic_args: None,
             },
-            vec![UnresolvedType:TypeRef {
-                name: I32_TYPE_NAME,
-                generic_args: None
+            vec![UnresolvedType::TypeRef {
+                name: "i32".to_owned(),
+                generic_args: None,
             }],
             print_i32_function,
         );
@@ -140,11 +136,11 @@ impl LLVMCodegenerator<'_> {
         self.context.borrow_mut().set_function(
             PRINTU64_FUNCTION.to_string(),
             UnresolvedType::TypeRef {
-                name: VOID_TYPE_NAME,
+                name: "void".to_owned(),
                 generic_args: None,
             },
             vec![UnresolvedType::TypeRef {
-                name: U64_TYPE_NAME,
+                name: "u64".to_owned(),
                 generic_args: None,
             }],
             print_u64_function,
@@ -183,8 +179,14 @@ impl LLVMCodegenerator<'_> {
 
         self.context.borrow_mut().set_function(
             PRINTU8_PTR_FUNCTION.to_string(),
-            ResolvedType::Void,
-            vec![ResolvedType::U8],
+            UnresolvedType::TypeRef {
+                name: "void".to_owned(),
+                generic_args: None,
+            },
+            vec![UnresolvedType::TypeRef {
+                name: "u8".to_owned(),
+                generic_args: None,
+            }],
             print_u8_ptr_function,
         );
     }
@@ -206,8 +208,14 @@ impl LLVMCodegenerator<'_> {
 
         self.context.borrow_mut().set_function(
             MALLOC_FUNCTION.to_string(),
-            ResolvedType::Ptr(Box::new(ResolvedType::U8)),
-            vec![ResolvedType::USize],
+            UnresolvedType::Array(Box::new(UnresolvedType::TypeRef {
+                name: "u8".to_owned(),
+                generic_args: None,
+            })),
+            vec![UnresolvedType::TypeRef {
+                name: "usize".to_owned(),
+                generic_args: None,
+            }],
             malloc_function,
         );
     }
@@ -218,5 +226,25 @@ impl LLVMCodegenerator<'_> {
         self.gen_print_u64();
         self.gen_print_u8_ptr();
         self.gen_malloc();
+    }
+    pub(super) fn prepare_intrinsic_types(&self) {
+        let mut context = self.context.borrow_mut();
+        for (name, ty) in [
+            ("u8", ResolvedType::U8),
+            ("u64", ResolvedType::U64),
+            ("u32", ResolvedType::U32),
+            ("u8", ResolvedType::U8),
+            ("usize", ResolvedType::USize),
+            ("i32", ResolvedType::I32),
+            ("void", ResolvedType::Void),
+        ] {
+            context.set_type(
+                UnresolvedType::TypeRef {
+                    name: name.to_owned(),
+                    generic_args: None,
+                },
+                ty,
+            );
+        }
     }
 }

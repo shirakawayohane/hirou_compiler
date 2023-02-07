@@ -4,7 +4,6 @@ mod expression;
 mod intrinsic;
 mod statement;
 mod toplevel;
-mod ty;
 mod value;
 
 use crate::ast::{Module, ResolvedType};
@@ -80,22 +79,25 @@ impl<'a> LLVMCodegenerator<'a> {
 }
 
 impl<'a> LLVMCodegenerator<'a> {
-    fn prepare_instrinsic_type(&self) {
-        let mut context = self.context.borrow_mut();
-    }
     pub fn gen_module(self, module: Module) -> Result<LLVMModule<'a>, CompileError> {
         // Add global scope
-        let mut context = self.context.borrow_mut();
-        context.push_variable_scope();
-        context.push_function_scope();
-        context.push_type_scope();
+        {
+            let mut context = self.context.borrow_mut();
+            context.push_variable_scope();
+            context.push_function_scope();
+            context.push_type_scope();
+        }
         self.gen_intrinsic_functions();
+        self.prepare_intrinsic_types();
         for top in module.toplevels {
             self.gen_toplevel(top.value)?;
         }
-        context.pop_type_scope();
-        context.pop_function_scope();
-        context.pop_variable_scope();
+        {
+            let mut context = self.context.borrow_mut();
+            context.pop_type_scope();
+            context.pop_function_scope();
+            context.pop_variable_scope();
+        }
         Ok(self.llvm_module)
     }
 }

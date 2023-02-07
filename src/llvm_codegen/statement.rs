@@ -11,18 +11,19 @@ use crate::{ast::*, error_context};
 impl LLVMCodegenerator<'_> {
     fn gen_variable_decl(
         &self,
-        ty: ResolvedType,
+        ty: UnresolvedType,
         name: String,
         value: Expression,
     ) -> Result<(), CompileError> {
-        match &ty {
+        let resolved_ty = self.context.borrow().resolve_type(&ty)?;
+        match &resolved_ty {
             ResolvedType::I32
             | ResolvedType::U8
             | ResolvedType::U32
             | ResolvedType::U64
             | ResolvedType::USize => {
                 let variable_pointer = self.llvm_builder.build_alloca(
-                    match ty {
+                    match resolved_ty {
                         ResolvedType::I32 => self.i32_type,
                         ResolvedType::USize => match self.pointer_size {
                             PointerSize::SixteenFour => self.i64_type,
@@ -35,7 +36,7 @@ impl LLVMCodegenerator<'_> {
                     &name,
                 );
 
-                let evaluated_value = self.eval_expression(value, Some(&ty))?;
+                let evaluated_value = self.eval_expression(value, Some(&resolved_ty))?;
 
                 match evaluated_value {
                     Value::I32Value(v) | Value::U64Value(v) | Value::U8Value(v) => {
@@ -64,7 +65,7 @@ impl LLVMCodegenerator<'_> {
                     .ptr_type(AddressSpace::default()),
                     &name,
                 );
-                let evaluated_value = self.eval_expression(value, Some(&ty))?;
+                let evaluated_value = self.eval_expression(value, Some(&resolved_ty))?;
 
                 match evaluated_value {
                     Value::I32Value(v)
@@ -85,7 +86,7 @@ impl LLVMCodegenerator<'_> {
                     .set_variable(name, ty, variable_pointer);
             }
             ResolvedType::Void => {
-                let _result = self.eval_expression(value, Some(&ty));
+                let _result = self.eval_expression(value, Some(&resolved_ty));
                 unsafe {
                     let null_pointer = 0 as *const PointerValue;
                     self.context
@@ -121,93 +122,87 @@ impl LLVMCodegenerator<'_> {
         name: String,
         expression: Located<Expression>,
     ) -> Result<(), CompileError> {
-        if let Some((ty, ptr)) = self.context.borrow().find_variable(&name) {
-            let mut ptr_to_asign = ptr;
-            let mut asign_type = ty;
+        let context = self.context.borrow();
+        let (ty, ptr) = context.find_variable(&name)?;
+        let mut ptr_to_asign = ptr;
+        let context = self.context.borrow();
+        let mut asign_type = context.resolve_type(ty)?;
 
-            for _ in 0..deref_count {
-                ptr_to_asign = match self.llvm_builder.build_load(ptr_to_asign, "deref") {
-                    inkwell::values::BasicValueEnum::PointerValue(ptr) => ptr,
-                    _ => {
-                        return Err(CompileError::from_error_kind(
-                            CompileErrorKind::CannotDeref { name, deref_count },
-                        ))
-                    }
-                };
-                asign_type = match asign_type {
-                    ResolvedType::Ptr(pointer_of) => &pointer_of,
-                    _ => {
-                        return Err(CompileError::from_error_kind(
-                            CompileErrorKind::CannotDeref { name, deref_count },
-                        ))
-                    }
-                };
-            }
-
-            if let Some(index_expr) = index_access {
-                // Check type first
-                asign_type = match asign_type {
-                    ResolvedType::Ptr(v) => &**v,
-                    _ => {
-                        return Err(CompileError::from_error_kind(
-                            CompileErrorKind::CannotIndexAccess {
-                                name: name.to_string(),
-                                ty: asign_type.clone(),
-                            },
-                        ))
-                    }
-                };
-
-                let index_value =
-                    self.eval_expression(index_expr.value, Some(&ResolvedType::USize))?;
-                // deref and move ptr by sizeof(T) * index
-                ptr_to_asign = match self.llvm_builder.build_load(ptr_to_asign, "deref") {
-                    inkwell::values::BasicValueEnum::PointerValue(ptr) => ptr,
-                    _ => {
-                        return Err(CompileError::from_error_kind(
-                            CompileErrorKind::CannotDeref { name, deref_count },
-                        ))
-                    }
-                };
-                ptr_to_asign = unsafe {
-                    self.llvm_builder.build_gep(
-                        ptr_to_asign,
-                        &[index_value.unwrap_int_value()],
-                        "array_indexing",
-                    )
-                };
-            }
-
-            let value = self.eval_expression(expression.value, Some(asign_type))?;
-
-            let value_type = value.get_type();
-
-            // Type checking
-            if value_type != *asign_type {
-                return Err(CompileError::from_error_kind(
-                    CompileErrorKind::TypeMismatch {
-                        expected: asign_type.clone(),
-                        actual: value_type,
-                    },
-                ));
-            }
-
-            if value.get_type().is_integer_type() {
-                self.llvm_builder
-                    .build_store(ptr_to_asign, value.unwrap_int_value());
-            } else if value.get_type().is_pointer_type() {
-                self.llvm_builder
-                    .build_store(ptr_to_asign, value.unwrap_pointer_value());
-            } else {
-                panic!()
+        for _ in 0..deref_count {
+            ptr_to_asign = match self.llvm_builder.build_load(ptr_to_asign, "deref") {
+                inkwell::values::BasicValueEnum::PointerValue(ptr) => ptr,
+                _ => {
+                    return Err(CompileError::from_error_kind(
+                        CompileErrorKind::CannotDeref { name, deref_count },
+                    ))
+                }
             };
-        } else {
+            asign_type = match asign_type {
+                ResolvedType::Ptr(pointer_of) => *pointer_of,
+                _ => {
+                    return Err(CompileError::from_error_kind(
+                        CompileErrorKind::CannotDeref { name, deref_count },
+                    ))
+                }
+            };
+        }
+
+        if let Some(index_expr) = index_access {
+            // Check type first
+            asign_type = match asign_type {
+                ResolvedType::Ptr(v) => *v,
+                _ => {
+                    return Err(CompileError::from_error_kind(
+                        CompileErrorKind::CannotIndexAccess {
+                            name: name.to_string(),
+                            ty: asign_type.clone(),
+                        },
+                    ))
+                }
+            };
+
+            let index_value = self.eval_expression(index_expr.value, Some(&ResolvedType::USize))?;
+            // deref and move ptr by sizeof(T) * index
+            ptr_to_asign = match self.llvm_builder.build_load(ptr_to_asign, "deref") {
+                inkwell::values::BasicValueEnum::PointerValue(ptr) => ptr,
+                _ => {
+                    return Err(CompileError::from_error_kind(
+                        CompileErrorKind::CannotDeref { name, deref_count },
+                    ))
+                }
+            };
+            ptr_to_asign = unsafe {
+                self.llvm_builder.build_gep(
+                    ptr_to_asign,
+                    &[index_value.unwrap_int_value()],
+                    "array_indexing",
+                )
+            };
+        }
+
+        let value = self.eval_expression(expression.value, Some(&asign_type))?;
+
+        let value_type = value.get_type();
+
+        // Type checking
+        if value_type != asign_type {
             return Err(CompileError::from_error_kind(
-                CompileErrorKind::VariableNotFound {
-                    name: name.to_string(),
+                CompileErrorKind::TypeMismatch {
+                    expected: asign_type.clone(),
+                    actual: value_type,
                 },
             ));
         }
+
+        if value.get_type().is_integer_type() {
+            self.llvm_builder
+                .build_store(ptr_to_asign, value.unwrap_int_value());
+        } else if value.get_type().is_pointer_type() {
+            self.llvm_builder
+                .build_store(ptr_to_asign, value.unwrap_pointer_value());
+        } else {
+            panic!()
+        };
         Ok(())
     }
     fn gen_discarded_expression(&self, expression: Expression) -> Result<(), CompileError> {
