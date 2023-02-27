@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use inkwell::values::{FunctionValue, PointerValue};
 
-use crate::ast::{ResolvedType, UnresolvedType};
+use crate::ast::{Function, ResolvedType, UnresolvedType};
 
 use super::error::{CompileError, CompileErrorKind};
 
@@ -15,6 +15,7 @@ pub(super) struct Context<'a> {
             (UnresolvedType, Vec<UnresolvedType>, FunctionValue<'a>),
         >,
     >,
+    pub generic_functions: Vec<HashMap<String, Function>>,
     pub types: Vec<HashMap<UnresolvedType, ResolvedType>>,
 }
 
@@ -24,6 +25,7 @@ impl<'a> Context<'a> {
             variables: Vec::new(),
             functions: Vec::new(),
             types: Vec::new(),
+            generic_functions: Vec::new(),
         }
     }
     pub fn find_variable(
@@ -101,6 +103,12 @@ impl<'a> Context<'a> {
             .unwrap()
             .insert(name, (return_type, argument_types, function));
     }
+    pub fn register_generic_function(&mut self, func: Function) {
+        self.generic_functions
+            .last_mut()
+            .unwrap()
+            .insert(func.decl.name.to_owned(), func);
+    }
     pub fn push_variable_scope(&mut self) {
         self.variables.push(HashMap::new());
     }
@@ -109,9 +117,11 @@ impl<'a> Context<'a> {
     }
     pub fn push_function_scope(&mut self) {
         self.functions.push(HashMap::new());
+        self.generic_functions.push(HashMap::new());
     }
     pub fn pop_function_scope(&mut self) {
         self.functions.pop();
+        self.generic_functions.pop();
     }
     pub fn push_type_scope(&mut self) {
         self.types.push(HashMap::new());

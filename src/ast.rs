@@ -121,7 +121,7 @@ impl ResolvedType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Statement {
     Asignment {
         deref_count: u32,
@@ -142,19 +142,29 @@ pub enum Statement {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+pub struct GenericArgument {
+    pub name: String,
+    // TODO: impl bounds
+}
+
+#[derive(Debug, Clone)]
 pub struct FunctionDecl {
     pub name: String,
+    pub generic_args: Option<Vec<Located<GenericArgument>>>,
     pub params: Vec<(Located<UnresolvedType>, String)>,
     pub return_type: Located<UnresolvedType>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+pub struct Function {
+    pub decl: FunctionDecl,
+    pub body: Vec<Located<Statement>>,
+}
+
+#[derive(Debug, Clone)]
 pub enum TopLevel {
-    Function {
-        decl: FunctionDecl,
-        body: Vec<Located<Statement>>,
-    },
+    Function(Function),
 }
 
 #[derive(Debug)]

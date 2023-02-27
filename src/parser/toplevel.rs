@@ -1,23 +1,42 @@
-use crate::parser::ty::parse_type;
+use crate::{
+    ast::{Function, GenericArgument},
+    parser::ty::parse_type,
+};
 
 use super::{statement::parse_statement, token::*, util::*, *};
 
 use nom::{
     branch::permutation,
     character::complete::{multispace0, space0},
-    combinator::map,
+    combinator::{map, opt},
     error::context,
     multi::separated_list0,
     sequence::delimited,
 };
 
 fn parse_function_decl(input: Span) -> ParseResult<FunctionDecl> {
+    fn parse_generic_argument(input: Span) -> ParseResult<GenericArgument> {
+        located(context(
+            "generic_argument",
+            map(parse_identifier, |name| GenericArgument { name }),
+        ))(input)
+    }
+    fn parse_generic_arguments<'a>(
+        input: Span<'a>,
+    ) -> NotLocatedParseResult<Vec<Located<GenericArgument>>> {
+        delimited(
+            langlebracket,
+            separated_list0(comma, parse_generic_argument),
+            ranglebracket,
+        )(input)
+    }
     context(
         "function_decl",
         located(map(
             permutation((
                 fn_token,
                 delimited(multispace0, parse_identifier, multispace0),
+                opt(parse_generic_arguments),
                 // params
                 delimited(
                     token::lparen,
@@ -48,8 +67,9 @@ fn parse_function_decl(input: Span) -> ParseResult<FunctionDecl> {
                     |(_, _, _, ty)| ty,
                 ),
             )),
-            |(_, name, params, ty)| FunctionDecl {
+            |(_, name, generic_args, params, ty)| FunctionDecl {
                 name,
+                generic_args,
                 params,
                 return_type: ty,
             },
@@ -76,9 +96,11 @@ fn parse_function(input: Span) -> ParseResult<TopLevel> {
         "function",
         map(
             permutation((parse_function_decl, skip0, parse_block)),
-            |(decl, _, body)| TopLevel::Function {
-                decl: decl.value,
-                body,
+            |(decl, _, body)| {
+                TopLevel::Function(Function {
+                    decl: decl.value,
+                    body,
+                })
             },
         ),
     ))(input)
