@@ -7,8 +7,8 @@ use nom::{
     character::complete::{multispace0, space0},
     combinator::map,
     error::context,
-    multi::{many1, separated_list0},
-    sequence::{delimited, terminated},
+    multi::separated_list0,
+    sequence::delimited,
 };
 
 fn parse_function_decl(input: Span) -> ParseResult<FunctionDecl> {

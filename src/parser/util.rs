@@ -48,7 +48,6 @@ pub(super) fn located<'a, O>(
                 line: to.location_line(),
                 col: to.get_column(),
             },
-            fragment: &input_at_start[0..(to.location_offset() - from.location_offset())],
         };
         Ok((
             s,

@@ -21,7 +21,7 @@ use self::{toplevel::parse_toplevel, util::skip0};
 
 pub type Span<'a> = LocatedSpan<&'a str>;
 
-type ParseResult<'a, T> = IResult<Span<'a>, Located<'a, T>, VerboseError<Span<'a>>>;
+type ParseResult<'a, T> = IResult<Span<'a>, Located<T>, VerboseError<Span<'a>>>;
 type NotLocatedParseResult<'a, T> = IResult<Span<'a>, T, VerboseError<Span<'a>>>;
 
 pub fn parse_module<'a>(input: Span<'a>) -> IResult<Span, Module, VerboseError<Span<'a>>> {

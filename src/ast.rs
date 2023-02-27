@@ -1,12 +1,5 @@
 use std::fmt::{Display, Write};
 
-pub const U8_TYPE_NAME: &str = "u8";
-pub const I32_TYPE_NAME: &str = "i32";
-pub const U32_TYPE_NAME: &str = "u32";
-pub const U64_TYPE_NAME: &str = "u64";
-pub const USIZE_TYPE_NAME: &str = "usize";
-pub const VOID_TYPE_NAME: &str = "void";
-
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct Position {
     pub line: u32,
@@ -14,15 +7,14 @@ pub struct Position {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub struct Range<'a> {
+pub struct Range {
     pub from: Position,
     pub to: Position,
-    pub fragment: &'a str,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct Located<'a, T> {
-    pub range: Range<'a>,
+pub struct Located<T> {
+    pub range: Range,
     pub value: T,
 }
 
@@ -35,10 +27,10 @@ pub enum BinaryOp {
 }
 
 #[derive(Debug, Clone)]
-pub enum Expression<'a> {
+pub enum Expression {
     VariableRef {
         deref_count: u32,
-        index_access: Option<Located<'a, Box<Expression<'a>>>>,
+        index_access: Option<Located<Box<Expression>>>,
         name: String,
     },
     NumberLiteral {
@@ -46,11 +38,11 @@ pub enum Expression<'a> {
     },
     BinaryExpr {
         op: BinaryOp,
-        args: Vec<Located<'a, Expression<'a>>>,
+        args: Vec<Located<Expression>>,
     },
     CallExpr {
         name: String,
-        args: Vec<Located<'a, Expression<'a>>>,
+        args: Vec<Located<Expression>>,
     },
 }
 
@@ -130,42 +122,42 @@ impl ResolvedType {
 }
 
 #[derive(Debug)]
-pub enum Statement<'a> {
+pub enum Statement {
     Asignment {
         deref_count: u32,
-        index_access: Option<Located<'a, Expression<'a>>>,
+        index_access: Option<Located<Expression>>,
         name: String,
-        expression: Located<'a, Expression<'a>>,
+        expression: Located<Expression>,
     },
     VariableDecl {
-        ty: Located<'a, UnresolvedType>,
+        ty: Located<UnresolvedType>,
         name: String,
-        value: Located<'a, Expression<'a>>,
+        value: Located<Expression>,
     },
     Return {
-        expression: Option<Located<'a, Expression<'a>>>,
+        expression: Option<Located<Expression>>,
     },
     Effect {
-        expression: Located<'a, Expression<'a>>,
+        expression: Located<Expression>,
     },
 }
 
 #[derive(Debug)]
-pub struct FunctionDecl<'a> {
+pub struct FunctionDecl {
     pub name: String,
-    pub params: Vec<(Located<'a, UnresolvedType>, String)>,
-    pub return_type: Located<'a, UnresolvedType>,
+    pub params: Vec<(Located<UnresolvedType>, String)>,
+    pub return_type: Located<UnresolvedType>,
 }
 
 #[derive(Debug)]
-pub enum TopLevel<'a> {
+pub enum TopLevel {
     Function {
-        decl: FunctionDecl<'a>,
-        body: Vec<Located<'a, Statement<'a>>>,
+        decl: FunctionDecl,
+        body: Vec<Located<Statement>>,
     },
 }
 
 #[derive(Debug)]
-pub struct Module<'a> {
-    pub toplevels: Vec<Located<'a, TopLevel<'a>>>,
+pub struct Module {
+    pub toplevels: Vec<Located<TopLevel>>,
 }
