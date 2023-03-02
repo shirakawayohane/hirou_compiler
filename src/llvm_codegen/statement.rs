@@ -10,12 +10,12 @@ use crate::{ast::*, error_context};
 
 impl LLVMCodegenerator<'_> {
     fn gen_variable_decl(
-        &self,
+        &mut self,
         ty: UnresolvedType,
         name: String,
         value: Expression,
     ) -> Result<(), CompileError> {
-        let resolved_ty = self.context.borrow().resolve_type(&ty)?;
+        let resolved_ty = self.resolve_type(&ty)?;
         match &resolved_ty {
             ResolvedType::I32
             | ResolvedType::U8
@@ -46,9 +46,7 @@ impl LLVMCodegenerator<'_> {
                 };
 
                 // Contextに登録
-                self.context
-                    .borrow_mut()
-                    .set_variable(name, ty, variable_pointer);
+                self.set_variable(name, ty, variable_pointer);
             }
             ResolvedType::Ptr(ptr_ty) => {
                 let variable_pointer = self.llvm_builder.build_alloca(
@@ -81,17 +79,13 @@ impl LLVMCodegenerator<'_> {
                     Value::Void => (),
                 };
                 // Contextに登録
-                self.context
-                    .borrow_mut()
-                    .set_variable(name, ty, variable_pointer);
+                self.set_variable(name, ty, variable_pointer);
             }
             ResolvedType::Void => {
                 let _result = self.eval_expression(value, Some(&resolved_ty));
                 unsafe {
                     let null_pointer = 0 as *const PointerValue;
-                    self.context
-                        .borrow_mut()
-                        .set_variable(name, ty, *null_pointer)
+                    self.set_variable(name, ty, *null_pointer)
                 };
             }
         }
@@ -116,17 +110,15 @@ impl LLVMCodegenerator<'_> {
         Ok(())
     }
     fn gen_asignment(
-        &self,
+        &mut self,
         deref_count: u32,
         index_access: Option<Located<Expression>>,
         name: String,
         expression: Located<Expression>,
     ) -> Result<(), CompileError> {
-        let context = self.context.borrow();
-        let (ty, ptr) = context.find_variable(&name)?;
+        let (ty, ptr) = self.find_variable(&name)?;
         let mut ptr_to_asign = ptr;
-        let context = self.context.borrow();
-        let mut asign_type = context.resolve_type(&ty)?;
+        let mut asign_type = self.resolve_type(&ty)?;
 
         for _ in 0..deref_count {
             ptr_to_asign = match self.llvm_builder.build_load(ptr_to_asign, "deref") {
@@ -205,11 +197,11 @@ impl LLVMCodegenerator<'_> {
         };
         Ok(())
     }
-    fn gen_discarded_expression(&self, expression: Expression) -> Result<(), CompileError> {
+    fn gen_discarded_expression(&mut self, expression: Expression) -> Result<(), CompileError> {
         self.eval_expression(expression, None)?;
         Ok(())
     }
-    pub(super) fn gen_statement(&self, statement: Statement) -> Result<(), CompileError> {
+    pub(super) fn gen_statement(&mut self, statement: Statement) -> Result<(), CompileError> {
         match statement {
             Statement::VariableDecl {
                 ty: loc_ty,

@@ -25,7 +25,7 @@ impl LLVMCodegenerator<'_> {
         self.llvm_module
             .add_function(PRINTF_FUNCTION, printf_type, None);
     }
-    fn gen_print_u8(&self) {
+    fn gen_print_u8(&mut self) {
         // gen printi32 function
         let i8_type = self.i8_type;
         let void_type = self.llvm_context.void_type();
@@ -53,7 +53,7 @@ impl LLVMCodegenerator<'_> {
         );
         self.llvm_builder.build_return(None);
 
-        self.context.borrow_mut().set_function(
+        self.set_function(
             PRINTU8_FUNCTION.to_string(),
             UnresolvedType::TypeRef {
                 name: "void".to_owned(),
@@ -66,7 +66,7 @@ impl LLVMCodegenerator<'_> {
             print_u8_function,
         );
     }
-    fn gen_print_i32(&self) {
+    fn gen_print_i32(&mut self) {
         // gen printi32 function
         let i32_type = self.llvm_context.i32_type();
         let void_type = self.llvm_context.void_type();
@@ -94,7 +94,7 @@ impl LLVMCodegenerator<'_> {
         );
         self.llvm_builder.build_return(None);
 
-        self.context.borrow_mut().set_function(
+        self.set_function(
             PRINTI32_FUNCTION.to_string(),
             UnresolvedType::TypeRef {
                 name: "void".to_owned(),
@@ -107,7 +107,7 @@ impl LLVMCodegenerator<'_> {
             print_i32_function,
         );
     }
-    fn gen_print_u64(&self) {
+    fn gen_print_u64(&mut self) {
         // gen printi32 function
         let i64_type = self.llvm_context.i64_type();
         let void_type = self.llvm_context.void_type();
@@ -135,7 +135,7 @@ impl LLVMCodegenerator<'_> {
         );
         self.llvm_builder.build_return(None);
 
-        self.context.borrow_mut().set_function(
+        self.set_function(
             PRINTU64_FUNCTION.to_string(),
             UnresolvedType::TypeRef {
                 name: "void".to_owned(),
@@ -148,7 +148,7 @@ impl LLVMCodegenerator<'_> {
             print_u64_function,
         )
     }
-    fn gen_print_u8_ptr(&self) {
+    fn gen_print_u8_ptr(&mut self) {
         // gen printi32 function
         let ptr_type = self
             .llvm_context
@@ -179,7 +179,7 @@ impl LLVMCodegenerator<'_> {
         );
         self.llvm_builder.build_return(None);
 
-        self.context.borrow_mut().set_function(
+        self.set_function(
             PRINTU8_PTR_FUNCTION.to_string(),
             UnresolvedType::TypeRef {
                 name: "void".to_owned(),
@@ -192,7 +192,7 @@ impl LLVMCodegenerator<'_> {
             print_u8_ptr_function,
         );
     }
-    fn gen_malloc(&self) {
+    fn gen_malloc(&mut self) {
         let i64_type = self.llvm_context.i64_type();
         let i8_ptr_type = self
             .llvm_context
@@ -223,57 +223,55 @@ impl LLVMCodegenerator<'_> {
         self.llvm_builder
             .build_return(Some(&pointer.try_as_basic_value().left().unwrap()));
 
-        self.context
-            .borrow_mut()
-            .register_generic_function(Function {
-                decl: FunctionDecl {
-                    name: "__malloc".to_owned(),
-                    generic_args: Some(vec![Located {
-                        range: Range::default(),
-                        value: GenericArgument {
-                            name: "T".to_owned(),
-                        },
-                    }]),
-                    params: vec![(
-                        Located {
-                            range: Range::default(),
-                            value: UnresolvedType::TypeRef {
-                                name: "usize".to_owned(),
-                                generic_args: None,
-                            },
-                        },
-                        "size".to_owned(),
-                    )],
-                    return_type: Located {
-                        range: Range::default(),
-                        value: UnresolvedType::Array(Box::new(UnresolvedType::TypeRef {
-                            name: "T".to_owned(),
-                            generic_args: None,
-                        })),
-                    },
-                },
-                body: vec![Located {
+        self.register_generic_function(Function {
+            decl: FunctionDecl {
+                name: "__malloc".to_owned(),
+                generic_args: Some(vec![Located {
                     range: Range::default(),
-                    value: Statement::Return {
-                        expression: Some(Located {
-                            range: Range::default(),
-                            value: Expression::CallExpr {
-                                name: MALLOC_FUNCTION.to_string(),
-                                args: vec![Located {
-                                    range: Range::default(),
-                                    value: Expression::VariableRef {
-                                        deref_count: 0,
-                                        index_access: None,
-                                        name: "size".to_owned(),
-                                    },
-                                }],
-                            },
-                        }),
+                    value: GenericArgument {
+                        name: "T".to_owned(),
                     },
-                }],
-            });
+                }]),
+                params: vec![(
+                    Located {
+                        range: Range::default(),
+                        value: UnresolvedType::TypeRef {
+                            name: "usize".to_owned(),
+                            generic_args: None,
+                        },
+                    },
+                    "size".to_owned(),
+                )],
+                return_type: Located {
+                    range: Range::default(),
+                    value: UnresolvedType::Array(Box::new(UnresolvedType::TypeRef {
+                        name: "T".to_owned(),
+                        generic_args: None,
+                    })),
+                },
+            },
+            body: vec![Located {
+                range: Range::default(),
+                value: Statement::Return {
+                    expression: Some(Located {
+                        range: Range::default(),
+                        value: Expression::CallExpr {
+                            name: MALLOC_FUNCTION.to_string(),
+                            args: vec![Located {
+                                range: Range::default(),
+                                value: Expression::VariableRef {
+                                    deref_count: 0,
+                                    index_access: None,
+                                    name: "size".to_owned(),
+                                },
+                            }],
+                        },
+                    }),
+                },
+            }],
+        });
     }
-    pub(super) fn gen_intrinsic_functions_on_llvm(&self) {
+    pub(super) fn gen_intrinsic_functions_on_llvm(&mut self) {
         self.gen_printf();
         self.gen_print_u8();
         self.gen_print_i32();
@@ -281,8 +279,7 @@ impl LLVMCodegenerator<'_> {
         self.gen_print_u8_ptr();
         self.gen_malloc();
     }
-    pub(super) fn prepare_intrinsic_types(&self) {
-        let mut context = self.context.borrow_mut();
+    pub(super) fn prepare_intrinsic_types(&mut self) {
         for (name, ty) in [
             ("u8", ResolvedType::U8),
             ("u64", ResolvedType::U64),
@@ -292,7 +289,7 @@ impl LLVMCodegenerator<'_> {
             ("i32", ResolvedType::I32),
             ("void", ResolvedType::Void),
         ] {
-            context.set_type(
+            self.set_type(
                 UnresolvedType::TypeRef {
                     name: name.to_owned(),
                     generic_args: None,

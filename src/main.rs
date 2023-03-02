@@ -41,7 +41,7 @@ fn main() {
     };
 
     let llvm_context: LLVMContext = LLVMContext::create();
-    let llvm_codegenerator = llvm_codegen::LLVMCodegenerator::new(&llvm_context);
+    let mut llvm_codegenerator = llvm_codegen::LLVMCodegenerator::new(&llvm_context);
     match llvm_codegenerator.gen_module(module) {
         Ok(module) => {
             module.print_to_file(Path::new("out.ll")).unwrap();

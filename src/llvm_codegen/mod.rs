@@ -6,20 +6,16 @@ mod statement;
 mod toplevel;
 mod value;
 
-use crate::ast::{Module, ResolvedType};
+use self::context::{Context, GenericFunctionRegistration, RegisteredFunction, Scope, ScopeKind};
+use self::error::{CompileError, CompileErrorKind};
+use self::value::Value;
+use crate::ast::{Function, Module, ResolvedType, UnresolvedType};
 use inkwell::builder::Builder as LLVMBuilder;
 use inkwell::context::Context as LLVMContext;
 use inkwell::module::Module as LLVMModule;
 use inkwell::types::IntType;
-use inkwell::values::PointerValue;
-
-use std::cell::RefCell;
-
-use std::rc::Rc;
-
-use self::context::{Context, ScopeKind};
-use self::error::{CompileError, CompileErrorKind};
-use self::value::Value;
+use inkwell::values::{FunctionValue, PointerValue};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy)]
 pub enum PointerSize {
@@ -27,7 +23,7 @@ pub enum PointerSize {
 }
 
 pub struct LLVMCodegenerator<'a> {
-    context: Rc<RefCell<Context<'a>>>,
+    context: Context<'a>,
     llvm_module: LLVMModule<'a>,
     llvm_builder: LLVMBuilder<'a>,
     llvm_context: &'a LLVMContext,
@@ -66,7 +62,7 @@ impl<'a> LLVMCodegenerator<'a> {
         let i32_type = llvm_context.i32_type();
         let i64_type = llvm_context.i64_type();
         Self {
-            context: Rc::new(RefCell::new(Context::new())),
+            context: Context::new(),
             llvm_module,
             llvm_builder,
             llvm_context,
@@ -79,25 +75,134 @@ impl<'a> LLVMCodegenerator<'a> {
 }
 
 impl<'a> LLVMCodegenerator<'a> {
-    pub fn gen_module(self, module: Module) -> Result<LLVMModule<'a>, CompileError> {
+    pub fn gen_module(&mut self, module: Module) -> Result<LLVMModule<'a>, CompileError> {
         // Add global scope
-        {
-            let mut context = self.context.borrow_mut();
-            context.push_variable_scope(ScopeKind::Global);
-            context.push_function_scope();
-            context.push_type_scope();
-        }
+        self.push_variable_scope(ScopeKind::Global);
+        self.push_function_scope();
+        self.push_type_scope();
+
         self.gen_intrinsic_functions_on_llvm();
         self.prepare_intrinsic_types();
         for top in module.toplevels {
             self.gen_toplevel(top.value)?;
         }
-        {
-            let mut context = self.context.borrow_mut();
-            context.pop_type_scope();
-            context.pop_function_scope();
-            context.pop_variable_scope();
+        // Pop global scope
+        self.pop_type_scope();
+        self.pop_function_scope();
+        self.pop_variable_scope();
+
+        Ok(self.llvm_module.clone())
+    }
+
+    pub fn find_variable(
+        &self,
+        name: &str,
+    ) -> Result<(UnresolvedType, PointerValue), CompileError> {
+        for scope in self.context.variables.iter().rev() {
+            if let Some((ty, ptr_value)) = scope.variables.get(name) {
+                return Ok((ty.clone(), *ptr_value));
+            }
         }
-        Ok(self.llvm_module)
+        Err(CompileError::from_error_kind(
+            CompileErrorKind::CallNotFunctionValue {
+                name: name.to_string(),
+            },
+        ))
+    }
+    pub fn resolve_type(
+        &self,
+        unresolved_ty: &UnresolvedType,
+    ) -> Result<ResolvedType, CompileError> {
+        match unresolved_ty {
+            UnresolvedType::TypeRef {
+                name: _,
+                generic_args: _,
+            } => {
+                for types_in_scope in self.context.types.iter().rev() {
+                    if let Some(v) = types_in_scope.get(unresolved_ty) {
+                        return Ok(v.clone());
+                    }
+                }
+                Err(CompileError::from_error_kind(
+                    CompileErrorKind::TypeNotFound {
+                        name: format!("{}", unresolved_ty),
+                    },
+                ))
+            }
+            UnresolvedType::Array(inner_ty) => {
+                let resolved_inner_ty = self.resolve_type(inner_ty)?;
+                Ok(ResolvedType::Ptr(
+                    Box::new(resolved_inner_ty.clone()).clone(),
+                ))
+            }
+        }
+    }
+    pub fn find_function(&self, name: &str) -> Option<&RegisteredFunction> {
+        for function in self.context.functions.iter().rev() {
+            if let Some(v) = function.get(name) {
+                return Some(v);
+            }
+        }
+        None
+    }
+    pub fn set_variable(&mut self, name: String, ty: UnresolvedType, pointer: PointerValue<'a>) {
+        self.context
+            .variables
+            .last_mut()
+            .unwrap()
+            .variables
+            .insert(name, (ty, pointer));
+    }
+    pub fn set_type(&mut self, unresolved: UnresolvedType, resolved: ResolvedType) {
+        self.context
+            .types
+            .last_mut()
+            .unwrap()
+            .insert(unresolved, resolved);
+    }
+    pub fn set_function(
+        &mut self,
+        name: String,
+        return_type: UnresolvedType,
+        arg_types: Vec<UnresolvedType>,
+        function_value: FunctionValue<'a>,
+    ) {
+        self.context.functions.last_mut().unwrap().insert(
+            name,
+            RegisteredFunction {
+                return_type,
+                arg_types,
+                function_value,
+            },
+        );
+    }
+    pub fn register_generic_function(&mut self, func: Function) {
+        self.context.generic_functions.last_mut().unwrap().insert(
+            func.decl.name.to_owned(),
+            GenericFunctionRegistration {
+                scope_depth: self.context.variables.len() as u16,
+                function: func,
+            },
+        );
+    }
+    pub fn push_variable_scope(&mut self, kind: ScopeKind) {
+        self.context.variables.push(Scope::new(kind));
+    }
+    pub fn pop_variable_scope(&mut self) {
+        self.context.variables.pop();
+    }
+    pub fn push_function_scope(&mut self) {
+        self.context.functions.push(HashMap::new());
+        self.context.generic_functions.push(HashMap::new());
+    }
+    pub fn pop_function_scope(&mut self) {
+        self.context.functions.pop();
+        self.context.generic_functions.pop();
+    }
+    pub fn push_type_scope(&mut self) {
+        self.context.types.push(HashMap::new());
+    }
+    pub fn pop_type_scope(&mut self) {
+        self.context.types.pop();
     }
 }

@@ -36,7 +36,7 @@ pub(super) fn located<'a, O>(
     move |input: Span<'a>| {
         let (s, _) = skip0(input)?;
         let (s, from) = position(s)?;
-        let input_at_start = s;
+        let _input_at_start = s;
         let (s, output) = parser.parse(s)?;
         let (s, to) = position(s)?;
         let range = Range {

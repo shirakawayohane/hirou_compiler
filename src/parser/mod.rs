@@ -6,9 +6,9 @@ mod ty;
 mod util;
 
 use nom::{
-    combinator::{eof, map},
+    combinator::{map},
     error::{context, VerboseError},
-    multi::{many1, many_till},
+    multi::{many1},
     sequence::delimited,
     IResult,
 };
