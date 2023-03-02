@@ -1,12 +1,12 @@
 use std::fmt::{Display, Write};
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
 pub struct Position {
     pub line: u32,
     pub col: usize,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
 pub struct Range {
     pub from: Position,
     pub to: Position,

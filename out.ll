@@ -32,7 +32,13 @@ entry:
   ret void
 }
 
-declare i8* @malloc(i64)
+declare i8* @malloc(i32)
+
+define i8* @__malloc(i32 %0) {
+entry:
+  %call = call i8* @malloc(i32 %0)
+  ret i8* %call
+}
 
 define i32 @main(...) {
 entry:
@@ -40,7 +46,7 @@ entry:
   store i32 4, i32* %size, align 4
   %buf = alloca i32*, align 8
   %load = load i32, i32* %size, align 4
-  %function_call = call i8* @malloc(i32 %load)
+  %function_call = call i8* @__malloc(i32 %load)
   store i8* %function_call, i32** %buf, align 8
   %deref = load i32*, i32** %buf, align 8
   %array_indexing = getelementptr i32, i32* %deref, i64 0

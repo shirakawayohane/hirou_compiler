@@ -1,3 +1,5 @@
+use std::cell::Ref;
+
 use super::error::{CompileErrorKind, ContextType};
 use super::*;
 use super::{error::CompileError, value::Value};
@@ -62,14 +64,15 @@ impl<'a> LLVMCodegenerator<'a> {
         name: &str,
         _annotation: Option<&ResolvedType>,
     ) -> Result<Value, CompileError> {
-        let context = self.context.borrow();
-        if let Some((ty, ptr)) = context
+        if let Some((ty, ptr)) = self
+            .context
+            .borrow()
             .variables
             .iter()
             .rev()
-            .find_map(|scope| scope.get(name))
+            .find_map(|scope| scope.variables.get(name))
         {
-            let resolved_ty = context.resolve_type(ty)?;
+            let resolved_ty = self.context.borrow().resolve_type(ty)?;
             let mut value = self.gen_load(&resolved_ty, *ptr)?;
 
             if let Some(index_expr) = index_access {
@@ -315,19 +318,19 @@ impl<'a> LLVMCodegenerator<'a> {
     }
 
     fn eval_call_expr(
-        &self,
+        &'a self,
         name: &str,
         arg_exprs: Vec<Located<Expression>>,
         _annotation: Option<&ResolvedType>,
-    ) -> Result<Value, CompileError> {
-        let context = self.context.borrow();
-        if let Some((return_type, arg_types, func)) = context.find_function(&name) {
+    ) -> Result<Value<'a>, CompileError> {
+        let context: Ref<'a, Context> = self.context.borrow();
+        if let Some(func) = context.find_function(&name) {
             let context = self.context.borrow();
-            let return_type = context.resolve_type(return_type)?;
+            let return_type = context.resolve_type(&func.return_type)?;
             let mut evaluated_args: Vec<BasicMetadataValueEnum> = Vec::new();
-            assert_eq!(arg_exprs.len(), arg_types.len());
+            assert_eq!(arg_exprs.len(), func.arg_types.len());
             for (i, arg_expr) in arg_exprs.into_iter().enumerate() {
-                let arg_type = context.resolve_type(arg_types.get(i).unwrap())?;
+                let arg_type = context.resolve_type(&func.arg_types.get(i).unwrap())?;
                 let evaluated_arg = self.eval_expression(arg_expr.value, Some(&arg_type))?;
                 evaluated_args.push(match evaluated_arg {
                     Value::U8Value(v) => BasicMetadataValueEnum::IntValue(v),
@@ -348,7 +351,7 @@ impl<'a> LLVMCodegenerator<'a> {
             Ok(
                 match self
                     .llvm_builder
-                    .build_call(*func, &evaluated_args, "function_call")
+                    .build_call(func.function_value, &evaluated_args, "function_call")
                     .try_as_basic_value()
                     .left()
                 {
@@ -370,7 +373,7 @@ impl<'a> LLVMCodegenerator<'a> {
                 },
             )
         } else {
-            if context.find_variable(&name).is_ok() {
+            if self.context.borrow().find_variable(&name).is_ok() {
                 Err(CompileError::from_error_kind(
                     CompileErrorKind::CallNotFunctionValue {
                         name: name.to_string(),

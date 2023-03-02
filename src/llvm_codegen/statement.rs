@@ -126,7 +126,7 @@ impl LLVMCodegenerator<'_> {
         let (ty, ptr) = context.find_variable(&name)?;
         let mut ptr_to_asign = ptr;
         let context = self.context.borrow();
-        let mut asign_type = context.resolve_type(ty)?;
+        let mut asign_type = context.resolve_type(&ty)?;
 
         for _ in 0..deref_count {
             ptr_to_asign = match self.llvm_builder.build_load(ptr_to_asign, "deref") {

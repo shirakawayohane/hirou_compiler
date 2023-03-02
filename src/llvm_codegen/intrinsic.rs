@@ -1,11 +1,13 @@
-use crate::ast::UnresolvedType;
+use crate::ast::{
+    Expression, Function, FunctionDecl, GenericArgument, Located, Range, Statement, UnresolvedType,
+};
 
 use super::*;
 
 use inkwell::AddressSpace;
 
 const PRINTF_FUNCTION: &str = "printf";
-const MALLOC_FUNCTION: &str = "malloc";
+const MALLOC_FUNCTION: &str = "__malloc";
 const PRINTU8_FUNCTION: &str = "print-u8";
 const PRINTU8_PTR_FUNCTION: &str = "print-u8-ptr";
 const PRINTI32_FUNCTION: &str = "print-i32";
@@ -202,24 +204,76 @@ impl LLVMCodegenerator<'_> {
             }],
             false,
         );
-        let malloc_function = self
+        let builtin_malloc_function = self
             .llvm_module
-            .add_function(MALLOC_FUNCTION, malloc_fn_type, None);
+            .add_function("malloc", malloc_fn_type, None);
 
-        self.context.borrow_mut().set_function(
-            MALLOC_FUNCTION.to_string(),
-            UnresolvedType::Array(Box::new(UnresolvedType::TypeRef {
-                name: "u8".to_owned(),
-                generic_args: None,
-            })),
-            vec![UnresolvedType::TypeRef {
-                name: "usize".to_owned(),
-                generic_args: None,
-            }],
-            malloc_function,
-        );
+        let wrapped_malloc_function =
+            self.llvm_module
+                .add_function(MALLOC_FUNCTION, malloc_fn_type, None);
+
+        let entry_basic_block = self
+            .llvm_context
+            .append_basic_block(wrapped_malloc_function, "entry");
+        self.llvm_builder.position_at_end(entry_basic_block);
+        let argument = wrapped_malloc_function.get_first_param().unwrap();
+        let pointer =
+            self.llvm_builder
+                .build_call(builtin_malloc_function, &[argument.into()], "call");
+        self.llvm_builder
+            .build_return(Some(&pointer.try_as_basic_value().left().unwrap()));
+
+        self.context
+            .borrow_mut()
+            .register_generic_function(Function {
+                decl: FunctionDecl {
+                    name: "__malloc".to_owned(),
+                    generic_args: Some(vec![Located {
+                        range: Range::default(),
+                        value: GenericArgument {
+                            name: "T".to_owned(),
+                        },
+                    }]),
+                    params: vec![(
+                        Located {
+                            range: Range::default(),
+                            value: UnresolvedType::TypeRef {
+                                name: "usize".to_owned(),
+                                generic_args: None,
+                            },
+                        },
+                        "size".to_owned(),
+                    )],
+                    return_type: Located {
+                        range: Range::default(),
+                        value: UnresolvedType::Array(Box::new(UnresolvedType::TypeRef {
+                            name: "T".to_owned(),
+                            generic_args: None,
+                        })),
+                    },
+                },
+                body: vec![Located {
+                    range: Range::default(),
+                    value: Statement::Return {
+                        expression: Some(Located {
+                            range: Range::default(),
+                            value: Expression::CallExpr {
+                                name: MALLOC_FUNCTION.to_string(),
+                                args: vec![Located {
+                                    range: Range::default(),
+                                    value: Expression::VariableRef {
+                                        deref_count: 0,
+                                        index_access: None,
+                                        name: "size".to_owned(),
+                                    },
+                                }],
+                            },
+                        }),
+                    },
+                }],
+            });
     }
-    pub(super) fn gen_intrinsic_functions(&self) {
+    pub(super) fn gen_intrinsic_functions_on_llvm(&self) {
         self.gen_printf();
         self.gen_print_u8();
         self.gen_print_i32();

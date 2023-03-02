@@ -21,7 +21,9 @@ impl LLVMCodegenerator<'_> {
         self.llvm_builder.position_at_end(entry_basic_block);
 
         // パラメーターをFunctionBodyにallocし、Contextにも登録する
-        self.context.borrow_mut().push_variable_scope();
+        self.context
+            .borrow_mut()
+            .push_variable_scope(ScopeKind::Function);
         self.context.borrow_mut().push_function_scope();
         {
             let context = self.context.borrow();

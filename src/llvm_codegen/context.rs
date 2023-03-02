@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap};
 
 use inkwell::values::{FunctionValue, PointerValue};
 
@@ -6,16 +6,52 @@ use crate::ast::{Function, ResolvedType, UnresolvedType};
 
 use super::error::{CompileError, CompileErrorKind};
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ScopeKind {
+    Global,
+    Function,
+}
+
+#[derive(Debug, Clone)]
+pub struct Scope<'a> {
+    pub kind: ScopeKind,
+    pub variables: HashMap<String, (UnresolvedType, PointerValue<'a>)>,
+}
+
+impl Scope<'_> {
+    pub fn new(kind: ScopeKind) -> Self {
+        Scope {
+            kind,
+            variables: HashMap::new(),
+        }
+    }
+}
+
+pub(super) struct RegisteredFunction<'a> {
+    pub return_type: UnresolvedType,
+    pub arg_types: Vec<UnresolvedType>,
+    pub function_value: FunctionValue<'a>,
+}
+
+pub(super) struct GenericFunctionRegistration {
+    pub scope_depth: u16,
+    pub function: Function,
+}
+
+pub(super) struct FindFunctionResult {
+    pub impl_type: Option<UnresolvedType>,
+}
+
 pub(super) struct Context<'a> {
-    pub variables: Vec<HashMap<String, (UnresolvedType, PointerValue<'a>)>>,
+    pub variables: Vec<Scope<'a>>,
     pub functions: Vec<
         HashMap<
             String,
             // TODO: make this tuple struct
-            (UnresolvedType, Vec<UnresolvedType>, FunctionValue<'a>),
+            RegisteredFunction<'a>,
         >,
     >,
-    pub generic_functions: Vec<HashMap<String, Function>>,
+    pub generic_functions: Vec<HashMap<String, GenericFunctionRegistration>>,
     pub types: Vec<HashMap<UnresolvedType, ResolvedType>>,
 }
 
@@ -33,7 +69,7 @@ impl<'a> Context<'a> {
         name: &str,
     ) -> Result<(&UnresolvedType, PointerValue), CompileError> {
         for scope in self.variables.iter().rev() {
-            if let Some((ty, ptr_value)) = scope.get(name) {
+            if let Some((ty, ptr_value)) = scope.variables.get(name) {
                 return Ok((ty, *ptr_value));
             }
         }
@@ -71,10 +107,7 @@ impl<'a> Context<'a> {
             }
         }
     }
-    pub fn find_function(
-        &self,
-        name: &str,
-    ) -> Option<&(UnresolvedType, Vec<UnresolvedType>, FunctionValue<'a>)> {
+    pub fn find_function(&self, name: &str) -> Option<&RegisteredFunction> {
         for function in self.functions.iter().rev() {
             if let Some(v) = function.get(name) {
                 return Some(v);
@@ -86,6 +119,7 @@ impl<'a> Context<'a> {
         self.variables
             .last_mut()
             .unwrap()
+            .variables
             .insert(name, (ty, pointer));
     }
     pub fn set_type(&mut self, unresolved: UnresolvedType, resolved: ResolvedType) {
@@ -95,22 +129,33 @@ impl<'a> Context<'a> {
         &mut self,
         name: String,
         return_type: UnresolvedType,
-        argument_types: Vec<UnresolvedType>,
-        function: FunctionValue<'a>,
+        arg_types: Vec<UnresolvedType>,
+        function_value: FunctionValue<'a>,
     ) {
         self.functions
             .last_mut()
             .unwrap()
-            .insert(name, (return_type, argument_types, function));
+            //, (return_type, argument_types, function)
+            .insert(
+                name,
+                RegisteredFunction {
+                    return_type,
+                    arg_types,
+                    function_value,
+                },
+            );
     }
     pub fn register_generic_function(&mut self, func: Function) {
-        self.generic_functions
-            .last_mut()
-            .unwrap()
-            .insert(func.decl.name.to_owned(), func);
+        self.generic_functions.last_mut().unwrap().insert(
+            func.decl.name.to_owned(),
+            GenericFunctionRegistration {
+                scope_depth: self.variables.len() as u16,
+                function: func,
+            },
+        );
     }
-    pub fn push_variable_scope(&mut self) {
-        self.variables.push(HashMap::new());
+    pub fn push_variable_scope(&mut self, kind: ScopeKind) {
+        self.variables.push(Scope::new(kind));
     }
     pub fn pop_variable_scope(&mut self) {
         self.variables.pop();

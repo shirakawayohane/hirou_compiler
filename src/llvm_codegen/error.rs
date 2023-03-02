@@ -11,6 +11,7 @@ pub enum ContextType {
     CallExpression,
     NumberLiteralExpression,
     BinaryExpression,
+    IntrinsicExpression,
     // statements
     AsignStatement,
     ReturnStatement,

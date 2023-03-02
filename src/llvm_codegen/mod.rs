@@ -17,7 +17,7 @@ use std::cell::RefCell;
 
 use std::rc::Rc;
 
-use self::context::Context;
+use self::context::{Context, ScopeKind};
 use self::error::{CompileError, CompileErrorKind};
 use self::value::Value;
 
@@ -83,11 +83,11 @@ impl<'a> LLVMCodegenerator<'a> {
         // Add global scope
         {
             let mut context = self.context.borrow_mut();
-            context.push_variable_scope();
+            context.push_variable_scope(ScopeKind::Global);
             context.push_function_scope();
             context.push_type_scope();
         }
-        self.gen_intrinsic_functions();
+        self.gen_intrinsic_functions_on_llvm();
         self.prepare_intrinsic_types();
         for top in module.toplevels {
             self.gen_toplevel(top.value)?;
