@@ -31,6 +31,10 @@ pub enum CompileErrorKind {
     FunctionNotFound { name: String },
     #[error("`{name:?}` is not a function")]
     CallNotFunctionValue { name: String },
+    #[error("`{name:?}` is not a typename")]
+    IsNotType { name: String },
+    #[error("`{name:?}` is not a variable")]
+    IsNotVariable { name: String },
     #[error("Invalid operand.")]
     InvalidOperand(Box<ResolvedType>),
     #[error("Invalid operand.")]

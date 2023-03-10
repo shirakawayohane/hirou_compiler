@@ -4,7 +4,7 @@ use inkwell::values::{BasicValue, PointerValue};
 use inkwell::AddressSpace;
 
 use super::error::ContextType;
-use super::value::Value;
+use super::result_value::Value;
 use super::*;
 use crate::{ast::*, error_context};
 
@@ -36,7 +36,7 @@ impl LLVMCodegenerator<'_> {
                     &name,
                 );
 
-                let evaluated_value = self.eval_expression(value, Some(&resolved_ty))?;
+                let (_, evaluated_value) = self.eval_expression(value, Some(&resolved_ty))?;
 
                 match evaluated_value {
                     Value::I32Value(v) | Value::U64Value(v) | Value::U8Value(v) => {
@@ -63,7 +63,7 @@ impl LLVMCodegenerator<'_> {
                     .ptr_type(AddressSpace::default()),
                     &name,
                 );
-                let evaluated_value = self.eval_expression(value, Some(&resolved_ty))?;
+                let (_, evaluated_value) = self.eval_expression(value, Some(&resolved_ty))?;
 
                 match evaluated_value {
                     Value::I32Value(v)
@@ -93,7 +93,7 @@ impl LLVMCodegenerator<'_> {
     }
     fn gen_return(&self, opt_expr: Option<Expression>) -> Result<(), CompileError> {
         if let Some(exp) = opt_expr {
-            let value = self.eval_expression(exp, None)?;
+            let (_, value) = self.eval_expression(exp, None)?;
             let return_value: Option<&dyn BasicValue> = match &value {
                 Value::U8Value(v) => Some(v),
                 Value::I32Value(v) => Some(v),
@@ -130,7 +130,7 @@ impl LLVMCodegenerator<'_> {
                 }
             };
             asign_type = match asign_type {
-                ResolvedType::Ptr(pointer_of) => *pointer_of,
+                ResolvedType::Ptr(pointer_of) => &pointer_of,
                 _ => {
                     return Err(CompileError::from_error_kind(
                         CompileErrorKind::CannotDeref { name, deref_count },
@@ -142,7 +142,7 @@ impl LLVMCodegenerator<'_> {
         if let Some(index_expr) = index_access {
             // Check type first
             asign_type = match asign_type {
-                ResolvedType::Ptr(v) => *v,
+                ResolvedType::Ptr(v) => &v,
                 _ => {
                     return Err(CompileError::from_error_kind(
                         CompileErrorKind::CannotIndexAccess {
@@ -153,7 +153,8 @@ impl LLVMCodegenerator<'_> {
                 }
             };
 
-            let index_value = self.eval_expression(index_expr.value, Some(&ResolvedType::USize))?;
+            let (_, index_value) =
+                self.eval_expression(index_expr.value, Some(&ResolvedType::USize))?;
             // deref and move ptr by sizeof(T) * index
             ptr_to_asign = match self.llvm_builder.build_load(ptr_to_asign, "deref") {
                 inkwell::values::BasicValueEnum::PointerValue(ptr) => ptr,
@@ -172,12 +173,12 @@ impl LLVMCodegenerator<'_> {
             };
         }
 
-        let value = self.eval_expression(expression.value, Some(&asign_type))?;
+        let (_, value) = self.eval_expression(expression.value, Some(&asign_type))?;
 
         let value_type = value.get_type();
 
         // Type checking
-        if value_type != asign_type {
+        if value_type != *asign_type {
             return Err(CompileError::from_error_kind(
                 CompileErrorKind::TypeMismatch {
                     expected: asign_type.clone(),

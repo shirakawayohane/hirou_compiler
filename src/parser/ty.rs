@@ -12,7 +12,7 @@ use super::{token::*, util::located, ParseResult, Span};
 
 fn parse_array(input: Span) -> ParseResult<UnresolvedType> {
     located(map(delimited(lsqrbracket, parse_type, rsqrbracket), |ty| {
-        UnresolvedType::Array(Box::new(ty.value))
+        UnresolvedType::Ptr(Box::new(ty.value))
     }))(input)
 }
 

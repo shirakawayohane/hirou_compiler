@@ -3,7 +3,12 @@ use super::*;
 use crate::{ast::*, error_context};
 
 impl LLVMCodegenerator<'_> {
-    fn gen_function(&mut self, func: Function) -> Result<(), CompileError> {
+    pub(super) fn gen_function_impl(
+        &mut self,
+        func: &Function,
+        generic_args: &[ResolvedType],
+        arg_types: &[ResolvedType],
+    ) -> Result<(), CompileError> {
         // TODO: int以外の型にも対応する
         let params = func
             .decl
@@ -21,8 +26,7 @@ impl LLVMCodegenerator<'_> {
         self.llvm_builder.position_at_end(entry_basic_block);
 
         // パラメーターをFunctionBodyにallocし、Contextにも登録する
-        self.push_variable_scope(ScopeKind::Function);
-        self.push_function_scope();
+        self.push_scope(ScopeKind::Function);
         {
             // Set parameters in function body
             for (i, (loc_ty, name)) in func.decl.params.into_iter().enumerate() {
@@ -44,18 +48,18 @@ impl LLVMCodegenerator<'_> {
             self.gen_statement(statement.value)?;
         }
 
-        self.pop_variable_scope();
-        self.pop_function_scope();
+        self.pop_scope();
         Ok(())
     }
     pub(super) fn gen_toplevel(&mut self, top: TopLevel) -> Result<(), CompileError> {
         match top {
             TopLevel::Function(func) => {
                 if func.decl.generic_args.is_some() {
-                    self.register_generic_function(func);
+                    self.register_function(func);
                     Ok(())
                 } else {
-                    error_context!(ContextType::Function, self.gen_function(func))
+                    self.register_function(func);
+                    Ok(())
                 }
             }
         }

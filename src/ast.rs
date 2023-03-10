@@ -46,6 +46,14 @@ pub enum Expression {
     },
 }
 
+pub const VOID_TYPE_NAME: &str = "void";
+pub const U8_TYPE_NAME: &str = "u8";
+pub const U32_TYPE_NAME: &str = "u32";
+pub const U64_TYPE_NAME: &str = "u64";
+pub const I32_TYPE_NAME: &str = "i32";
+pub const I64_TYPE_NAME: &str = "i64";
+pub const USIZE_TYPE_NAME: &str = "usize";
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ResolvedType {
     I32,
@@ -63,7 +71,16 @@ pub enum UnresolvedType {
         name: String,
         generic_args: Option<Vec<UnresolvedType>>,
     },
-    Array(Box<UnresolvedType>),
+    Ptr(Box<UnresolvedType>),
+}
+
+impl UnresolvedType {
+    pub fn is_ptr_type(&self) -> bool {
+        match self {
+            UnresolvedType::Ptr(_) => true,
+            _ => false,
+        }
+    }
 }
 
 impl Display for UnresolvedType {
@@ -79,7 +96,7 @@ impl Display for UnresolvedType {
                     f.write_char('>')?;
                 }
             }
-            UnresolvedType::Array(inner_type) => {
+            UnresolvedType::Ptr(inner_type) => {
                 f.write_char('[')?;
                 write!(f, "{}", inner_type)?;
                 f.write_char(']')?;
@@ -118,6 +135,24 @@ impl ResolvedType {
         } else {
             false
         }
+    }
+}
+
+impl Display for ResolvedType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                ResolvedType::I32 => I32_TYPE_NAME,
+                ResolvedType::U32 => U32_TYPE_NAME,
+                ResolvedType::U64 => U64_TYPE_NAME,
+                ResolvedType::USize => USIZE_TYPE_NAME,
+                ResolvedType::U8 => U8_TYPE_NAME,
+                ResolvedType::Ptr(inner_ty) => &format!("&{}", inner_ty),
+                ResolvedType::Void => VOID_TYPE_NAME,
+            }
+        )
     }
 }
 
