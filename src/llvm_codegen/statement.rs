@@ -36,7 +36,7 @@ impl LLVMCodegenerator<'_> {
                     &name,
                 );
 
-                let (_, evaluated_value) = self.eval_expression(value, Some(&resolved_ty))?;
+                let (_, evaluated_value) = self.eval_expression(&value, Some(&resolved_ty))?;
 
                 match evaluated_value {
                     Value::I32Value(v) | Value::U64Value(v) | Value::U8Value(v) => {
@@ -63,7 +63,7 @@ impl LLVMCodegenerator<'_> {
                     .ptr_type(AddressSpace::default()),
                     &name,
                 );
-                let (_, evaluated_value) = self.eval_expression(value, Some(&resolved_ty))?;
+                let (_, evaluated_value) = self.eval_expression(&value, Some(&resolved_ty))?;
 
                 match evaluated_value {
                     Value::I32Value(v)
@@ -82,7 +82,7 @@ impl LLVMCodegenerator<'_> {
                 self.set_variable(name, ty, variable_pointer);
             }
             ResolvedType::Void => {
-                let _result = self.eval_expression(value, Some(&resolved_ty));
+                let _result = self.eval_expression(&value, Some(&resolved_ty));
                 unsafe {
                     let null_pointer = 0 as *const PointerValue;
                     self.set_variable(name, ty, *null_pointer)
@@ -91,9 +91,9 @@ impl LLVMCodegenerator<'_> {
         }
         Ok(())
     }
-    fn gen_return(&self, opt_expr: Option<Expression>) -> Result<(), CompileError> {
+    fn gen_return(&self, opt_expr: &Option<Located<Expression>>) -> Result<(), CompileError> {
         if let Some(exp) = opt_expr {
-            let (_, value) = self.eval_expression(exp, None)?;
+            let (_, value) = self.eval_expression(&exp.value, None)?;
             let return_value: Option<&dyn BasicValue> = match &value {
                 Value::U8Value(v) => Some(v),
                 Value::I32Value(v) => Some(v),
@@ -112,9 +112,9 @@ impl LLVMCodegenerator<'_> {
     fn gen_asignment(
         &mut self,
         deref_count: u32,
-        index_access: Option<Located<Expression>>,
+        index_access: &Option<Located<Expression>>,
         name: String,
-        expression: Located<Expression>,
+        expression: Located<&Expression>,
     ) -> Result<(), CompileError> {
         let (ty, ptr) = self.find_variable(&name)?;
         let mut ptr_to_asign = ptr;
@@ -130,7 +130,7 @@ impl LLVMCodegenerator<'_> {
                 }
             };
             asign_type = match asign_type {
-                ResolvedType::Ptr(pointer_of) => &pointer_of,
+                ResolvedType::Ptr(pointer_of) => *pointer_of,
                 _ => {
                     return Err(CompileError::from_error_kind(
                         CompileErrorKind::CannotDeref { name, deref_count },
@@ -142,7 +142,7 @@ impl LLVMCodegenerator<'_> {
         if let Some(index_expr) = index_access {
             // Check type first
             asign_type = match asign_type {
-                ResolvedType::Ptr(v) => &v,
+                ResolvedType::Ptr(v) => *v,
                 _ => {
                     return Err(CompileError::from_error_kind(
                         CompileErrorKind::CannotIndexAccess {
@@ -154,7 +154,7 @@ impl LLVMCodegenerator<'_> {
             };
 
             let (_, index_value) =
-                self.eval_expression(index_expr.value, Some(&ResolvedType::USize))?;
+                self.eval_expression(&index_expr.value, Some(&ResolvedType::USize))?;
             // deref and move ptr by sizeof(T) * index
             ptr_to_asign = match self.llvm_builder.build_load(ptr_to_asign, "deref") {
                 inkwell::values::BasicValueEnum::PointerValue(ptr) => ptr,
@@ -173,12 +173,12 @@ impl LLVMCodegenerator<'_> {
             };
         }
 
-        let (_, value) = self.eval_expression(expression.value, Some(&asign_type))?;
+        let (_, value) = self.eval_expression(&expression.value, Some(&asign_type))?;
 
         let value_type = value.get_type();
 
         // Type checking
-        if value_type != *asign_type {
+        if value_type != asign_type {
             return Err(CompileError::from_error_kind(
                 CompileErrorKind::TypeMismatch {
                     expected: asign_type.clone(),
@@ -198,12 +198,12 @@ impl LLVMCodegenerator<'_> {
         };
         Ok(())
     }
-    fn gen_discarded_expression(&mut self, expression: Expression) -> Result<(), CompileError> {
+    fn gen_discarded_expression(&mut self, expression: &Expression) -> Result<(), CompileError> {
         self.eval_expression(expression, None)?;
         Ok(())
     }
-    pub(super) fn gen_statement(&mut self, statement: Statement) -> Result<(), CompileError> {
-        match statement {
+    pub(super) fn gen_statement(&mut self, statement: &Statement) -> Result<(), CompileError> {
+        match &statement {
             Statement::VariableDecl {
                 ty: loc_ty,
                 name,
@@ -211,7 +211,7 @@ impl LLVMCodegenerator<'_> {
             } => {
                 error_context!(
                     ContextType::VariableDeclStatement,
-                    self.gen_variable_decl(loc_ty.value, name, loc_value.value)
+                    self.gen_variable_decl(loc_ty.value.clone(), name.clone(), loc_value.value.clone())
                 )
             }
             Statement::Return {
@@ -219,7 +219,7 @@ impl LLVMCodegenerator<'_> {
             } => {
                 error_context!(
                     ContextType::ReturnStatement,
-                    self.gen_return(loc_expr.map(|x| x.value))
+                    self.gen_return(loc_expr)
                 )
             }
             Statement::Asignment {
@@ -229,13 +229,13 @@ impl LLVMCodegenerator<'_> {
                 expression,
             } => error_context!(
                 ContextType::AsignStatement,
-                self.gen_asignment(deref_count, index_access, name, expression)
+                self.gen_asignment(*deref_count, index_access, name.clone(), expression.as_inner_ref())
             ),
             Statement::Effect {
                 expression: loc_expr,
             } => error_context!(
                 ContextType::DiscardedExpressionStatement,
-                self.gen_discarded_expression(loc_expr.value)
+                self.gen_discarded_expression(&loc_expr.value)
             ),
         }?;
         Ok(())

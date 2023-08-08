@@ -13,3 +13,4 @@ nom = {version = "7.1.2", features = ["alloc"]}
 nom_locate = "4.0.0"
 thiserror = "1.0.38"
 llvm-sys = "140"
+once_cell = "1.18.0"

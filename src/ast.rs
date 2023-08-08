@@ -18,6 +18,21 @@ pub struct Located<T> {
     pub value: T,
 }
 
+impl<T> Located<T> {
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Located<U> {
+        Located {
+            range: self.range,
+            value: f(self.value),
+        }
+    }
+    pub fn as_inner_ref(&self) -> Located<&T> {
+        Located {
+            range: self.range,
+            value: &self.value,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum BinaryOp {
     Add,
@@ -38,11 +53,11 @@ pub enum Expression {
     },
     BinaryExpr {
         op: BinaryOp,
-        args: Vec<Located<Expression>>,
+        args: Vec<Located<Box<Expression>>>,
     },
     CallExpr {
         name: String,
-        args: Vec<Located<Expression>>,
+        args: Vec<Located<Box<Expression>>>,
     },
 }
 
@@ -140,6 +155,9 @@ impl ResolvedType {
 
 impl Display for ResolvedType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let ResolvedType::Ptr(inner_type) = self {
+            return write!(f, "[{}]", inner_type);
+        }
         write!(
             f,
             "{}",
@@ -149,7 +167,7 @@ impl Display for ResolvedType {
                 ResolvedType::U64 => U64_TYPE_NAME,
                 ResolvedType::USize => USIZE_TYPE_NAME,
                 ResolvedType::U8 => U8_TYPE_NAME,
-                ResolvedType::Ptr(inner_ty) => &format!("&{}", inner_ty),
+                ResolvedType::Ptr(_) => unreachable!(),
                 ResolvedType::Void => VOID_TYPE_NAME,
             }
         )

@@ -35,9 +35,11 @@ pub struct LLVMCodegenerator<'a> {
 pub fn mangle_function_name(ns: &str, function_decl: &FunctionDecl) -> String {
     todo!()
 }
+
 pub fn mangle_type_name(ns: &str, unresolved_ty: &UnresolvedType) -> String {
     todo!()
 }
+
 pub fn mangle_global_variable_name(ns: &str) -> String {
     todo!()
 }
@@ -125,7 +127,7 @@ impl<'a> LLVMCodegenerator<'a> {
     pub fn resolve_type(
         &self,
         unresolved_ty: &UnresolvedType,
-    ) -> Result<&ResolvedType, CompileError> {
+    ) -> Result<ResolvedType, CompileError> {
         match unresolved_ty {
             UnresolvedType::TypeRef {
                 name,
@@ -139,7 +141,7 @@ impl<'a> LLVMCodegenerator<'a> {
                                 if let Some(ty) =
                                     self.context.resolved_types.get(&mangled_type_name)
                                 {
-                                    return Ok(ty);
+                                    return Ok(ty.clone());
                                 }
                             }
                             _ => {
@@ -160,7 +162,7 @@ impl<'a> LLVMCodegenerator<'a> {
             }
             UnresolvedType::Ptr(inner_ty) => {
                 let resolved_inner_ty = self.resolve_type(inner_ty)?;
-                Ok(&ResolvedType::Ptr(
+                Ok(ResolvedType::Ptr(
                     Box::new(resolved_inner_ty.clone()).clone(),
                 ))
             }
@@ -192,29 +194,33 @@ impl<'a> LLVMCodegenerator<'a> {
         ))
     }
     pub fn set_variable(&mut self, name: String, ty: UnresolvedType, pointer: PointerValue<'a>) {
+        let current_ns = self.context.get_current_ns();
         self.context.scopes.last_mut().unwrap().set(
             name,
             Registration::Variable {
-                ns: self.context.get_current_ns(),
+                ns: current_ns,
                 ty,
                 value: pointer,
             },
         );
     }
     pub fn set_type(&mut self, name: String, unresolved_ty: UnresolvedType) {
+        let current_ns = self.context.get_current_ns();
         self.context.scopes.last_mut().unwrap().set(
             name,
             Registration::Type {
-                ns: self.context.get_current_ns(),
+                ns: current_ns,
                 unresolved_ty,
             },
         )
     }
     pub fn register_function(&mut self, func: Function) {
+        let current_ns = self.context.get_current_ns();
+        let func_name = func.decl.name.clone();
         self.context.scopes.last_mut().unwrap().set(
-            func.decl.name,
+            func_name,
             Registration::Function {
-                ns: self.context.get_current_ns(),
+                ns: current_ns,
                 function: func,
             },
         );

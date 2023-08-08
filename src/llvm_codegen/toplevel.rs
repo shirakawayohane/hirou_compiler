@@ -29,7 +29,7 @@ impl LLVMCodegenerator<'_> {
         self.push_scope(ScopeKind::Function);
         {
             // Set parameters in function body
-            for (i, (loc_ty, name)) in func.decl.params.into_iter().enumerate() {
+            for (i, (loc_ty, name)) in func.decl.params.iter().enumerate() {
                 let resolved_ty = self.resolve_type(&loc_ty.value)?;
                 let parameter = function_value.get_nth_param(i as u32).unwrap();
                 parameter.set_name(name.as_str());
@@ -39,13 +39,13 @@ impl LLVMCodegenerator<'_> {
                     let allocated_pointer =
                         self.llvm_builder.build_alloca(parameter.get_type(), &name);
                     self.llvm_builder.build_store(allocated_pointer, parameter);
-                    self.set_variable(name.clone(), loc_ty.value, allocated_pointer);
+                    self.set_variable(name.clone(), loc_ty.value.clone(), allocated_pointer);
                 }
             }
         }
 
-        for statement in func.body {
-            self.gen_statement(statement.value)?;
+        for statement in &func.body {
+            self.gen_statement(&statement.value)?;
         }
 
         self.pop_scope();

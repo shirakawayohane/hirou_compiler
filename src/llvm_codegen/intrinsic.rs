@@ -2,6 +2,7 @@ use super::*;
 use crate::ast::*;
 
 use inkwell::AddressSpace;
+use once_cell::sync::Lazy;
 
 const PRINTF_FUNCTION: &str = "printf";
 const MALLOC_FUNCTION: &str = "__malloc";
@@ -10,40 +11,41 @@ const PRINTU8_PTR_FUNCTION: &str = "print-u8-ptr";
 const PRINTI32_FUNCTION: &str = "print-i32";
 const PRINTU64_FUNCTION: &str = "print-u64";
 
-pub const UNRESOLVED_VOID_TYPE: UnresolvedType = UnresolvedType::TypeRef {
+pub const UNRESOLVED_VOID_TYPE: Lazy<UnresolvedType> = Lazy::new(|| UnresolvedType::TypeRef {
     name: VOID_TYPE_NAME.to_string(),
     generic_args: None,
-};
+});
 
-pub const UNRESOLVED_U8_TYPE: UnresolvedType = UnresolvedType::TypeRef {
+pub const UNRESOLVED_U8_TYPE: Lazy<UnresolvedType> = Lazy::new(|| UnresolvedType::TypeRef {
     name: U8_TYPE_NAME.to_string(),
     generic_args: None,
-};
+});
 
-pub const UNRESOLVED_U32_TYPE: UnresolvedType = UnresolvedType::TypeRef {
+pub const UNRESOLVED_U32_TYPE: Lazy<UnresolvedType> = Lazy::new(|| UnresolvedType::TypeRef {
     name: U32_TYPE_NAME.to_string(),
     generic_args: None,
-};
+});
 
-pub const UNRESOLVED_I32_TYPE: UnresolvedType = UnresolvedType::TypeRef {
+pub const UNRESOLVED_I32_TYPE: Lazy<UnresolvedType> = Lazy::new(|| UnresolvedType::TypeRef {
     name: I32_TYPE_NAME.to_string(),
     generic_args: None,
-};
+});
 
-pub const UNRESOLVED_I64_TYPE: UnresolvedType = UnresolvedType::TypeRef {
+pub const UNRESOLVED_I64_TYPE: Lazy<UnresolvedType> = Lazy::new(|| UnresolvedType::TypeRef {
     name: I64_TYPE_NAME.to_string(),
     generic_args: None,
-};
+});
 
-pub const UNRESOLVED_U64_TYPE: UnresolvedType = UnresolvedType::TypeRef {
+pub const UNRESOLVED_U64_TYPE: Lazy<UnresolvedType> = Lazy::new(|| UnresolvedType::TypeRef {
     name: U64_TYPE_NAME.to_string(),
     generic_args: None,
-};
+});
 
-pub const UNRESOLVED_USIZE_TYPE: UnresolvedType = UnresolvedType::TypeRef {
+pub const UNRESOLVED_USIZE_TYPE: Lazy<UnresolvedType> = Lazy::new(|| UnresolvedType::TypeRef {
     name: USIZE_TYPE_NAME.to_string(),
     generic_args: None,
-};
+});
+
 
 impl LLVMCodegenerator<'_> {
     fn gen_printf(&self) {
@@ -92,7 +94,7 @@ impl LLVMCodegenerator<'_> {
                 params: vec![(
                     Located {
                         range: Range::default(),
-                        value: UNRESOLVED_U8_TYPE,
+                        value: UNRESOLVED_U8_TYPE.clone(),
                     },
                     "value".to_owned(),
                 )],
@@ -113,11 +115,11 @@ impl LLVMCodegenerator<'_> {
                             name: "instrinsic_print_u8".to_owned(),
                             args: vec![Located {
                                 range: Range::default(),
-                                value: Expression::VariableRef {
+                                value: Box::new(Expression::VariableRef {
                                     deref_count: 0,
                                     index_access: None,
                                     name: "value".to_owned(),
-                                },
+                                }),
                             }],
                         },
                     },
@@ -192,11 +194,11 @@ impl LLVMCodegenerator<'_> {
                             name: MALLOC_FUNCTION.to_string(),
                             args: vec![Located {
                                 range: Range::default(),
-                                value: Expression::VariableRef {
+                                value: Box::new(Expression::VariableRef {
                                     deref_count: 0,
                                     index_access: None,
                                     name: "size".to_owned(),
-                                },
+                                }),
                             }],
                         },
                     }),

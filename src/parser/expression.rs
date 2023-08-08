@@ -35,7 +35,7 @@ fn parse_variable_ref(input: Span) -> ParseResult<Box<Expression>> {
     ))(input)
 }
 
-fn parse_arguments(input: Span) -> NotLocatedParseResult<Vec<Located<Expression>>> {
+fn parse_arguments(input: Span) -> NotLocatedParseResult<Vec<Located<Box<Expression>>>> {
     let mut args = Vec::new();
     let mut s = input;
     loop {
@@ -44,7 +44,8 @@ fn parse_arguments(input: Span) -> NotLocatedParseResult<Vec<Located<Expression>
             break;
         }
         let (rest_s, v) = parse_expression(s)?;
-        args.push(v);
+        let located_boxed_expression = v.map(|x| Box::new(x));
+        args.push(located_boxed_expression);
         s = rest_s;
     }
     Ok((s, args))

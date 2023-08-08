@@ -35,7 +35,7 @@ pub struct Scope<'a> {
     registrations: HashMap<String, Registration<'a>>,
 }
 
-impl Scope<'_> {
+impl<'a> Scope<'a> {
     pub fn new(kind: ScopeKind) -> Self {
         Scope {
             kind,
@@ -45,7 +45,7 @@ impl Scope<'_> {
     pub fn find(&self, key: &str) -> Option<&Registration> {
         self.registrations.get(key)
     }
-    pub fn set(&mut self, key: String, reg: Registration) {
+    pub fn set(&mut self, key: String, reg: Registration<'a>) {
         self.registrations.insert(key, reg);
     }
 }
@@ -78,16 +78,6 @@ impl<'a> Context<'a> {
 
 impl Context<'_> {
     pub fn get_current_ns(&self) -> String {
-        todo!();
+        String::from("global")
     }
-}
-
-pub fn mangled_type_name(name: &str, types: &[ResolvedType]) -> String {
-    let mut mangled = name.to_string();
-    mangled.push_str("_");
-    for ty in types {
-        mangled.push_str(&ty.to_string());
-        mangled.push_str("_");
-    }
-    mangled
 }
