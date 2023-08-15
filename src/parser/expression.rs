@@ -3,16 +3,16 @@ use nom::{
     character::complete::digit1,
     combinator::{map, opt},
     error::context,
-    multi::many0,
-    sequence::{delimited, pair, preceded},
+    multi::{many0, separated_list1},
+    sequence::{delimited, pair, preceded, tuple},
 };
 
 use crate::{
-    ast::Expression,
+    ast::{Expression, UnresolvedType, CallExpr},
     util::{box_located_expression, unbox_located_expression},
 };
 
-use super::{token::*, util::*, *};
+use super::{token::*, ty::parse_type, util::*, *};
 
 fn parse_number_literal(input: Span) -> ParseResult<Box<Expression>> {
     located(map(digit1, |str: Span| {
@@ -75,13 +75,30 @@ pub(super) fn parse_intrinsic_op_expression(input: Span) -> ParseResult<Box<Expr
 }
 
 pub(super) fn parse_function_call_expression(input: Span) -> ParseResult<Box<Expression>> {
+    fn parse_generic_arguments(input: Span) -> NotLocatedParseResult<Vec<Located<UnresolvedType>>> {
+        delimited(
+            langlebracket,
+            separated_list1(skip1, parse_type),
+            ranglebracket,
+        )(input)
+    }
     located(map(
         delimited(
             lparen,
-            pair(parse_identifier, preceded(skip0, parse_arguments)),
+            tuple((
+                parse_identifier,
+                opt(preceded(skip0, parse_generic_arguments)),
+                preceded(skip0, parse_arguments),
+            )),
             rparen,
         ),
-        |(name, args)| Box::new(Expression::CallExpr { name, args }),
+        |(name, generic_args, args)| {
+            Box::new(Expression::CallExpr(CallExpr{
+                name,
+                generic_args,
+                args,
+            }))
+        },
     ))(input)
 }
 

@@ -30,7 +30,7 @@ pub enum CompileErrorKind {
     #[error("Function `{name:?}` is not found.")]
     FunctionNotFound { name: String },
     #[error("`{name:?}` is not a function")]
-    CallNotFunctionValue { name: String },
+    IsNotFunction { name: String },
     #[error("`{name:?}` is not a typename")]
     IsNotType { name: String },
     #[error("`{name:?}` is not a variable")]
@@ -52,6 +52,18 @@ pub enum CompileErrorKind {
     InvalidArrayIndex,
     #[error("Cannot find type name {name}")]
     TypeNotFound { name: String },
+    #[error("Too many generic args. Expected {expected:?}, but got {actual:?}")]
+    TooManyGenericArgs {
+        fn_name: String,
+        expected: u32,
+        actual: u32,
+    },
+    #[error("Too few generic args. Expected {expected:?}, but got {actual:?}")]
+    TooFewGenericArgs {
+        fn_name: String,
+        expected: u32,
+        actual: u32,
+    },
 }
 
 #[derive(Debug, Error)]

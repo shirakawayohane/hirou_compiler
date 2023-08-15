@@ -1,10 +1,11 @@
-use std::{fs::read_to_string, path::Path};
+use std::{fs::read_to_string, path::Path, cell::RefCell, rc::Rc};
 mod ast;
 mod llvm_codegen;
 mod parser;
 mod util;
 use clap::{command, Parser};
 use inkwell::context::Context as LLVMContext;
+use llvm_codegen::Context;
 use nom::{
     error::{convert_error, VerboseError},
     Finish,
@@ -42,7 +43,8 @@ fn main() {
 
     let llvm_context: LLVMContext = LLVMContext::create();
     let mut llvm_codegenerator = llvm_codegen::LLVMCodegenerator::new(&llvm_context);
-    match llvm_codegenerator.gen_module(module) {
+    let context = Context::new(); 
+    match llvm_codegenerator.gen_module(Rc::new(RefCell::new(context)), module) {
         Ok(module) => {
             module.print_to_file(Path::new("out.ll")).unwrap();
             let execution_engine = &module

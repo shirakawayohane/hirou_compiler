@@ -11,11 +11,12 @@ use crate::{ast::*, error_context};
 impl LLVMCodegenerator<'_> {
     fn gen_variable_decl(
         &mut self,
+        ctx: Rc<RefCell<Context>>,
         ty: UnresolvedType,
         name: String,
         value: Expression,
     ) -> Result<(), CompileError> {
-        let resolved_ty = self.resolve_type(&ty)?;
+        let resolved_ty = self.resolve_type(ctx.clone(), &ty)?;
         match &resolved_ty {
             ResolvedType::I32
             | ResolvedType::U8
@@ -36,17 +37,20 @@ impl LLVMCodegenerator<'_> {
                     &name,
                 );
 
-                let (_, evaluated_value) = self.eval_expression(&value, Some(&resolved_ty))?;
+                {
+                    let (_, evaluated_value) =
+                        self.eval_expression(ctx.clone(), &value, Some(&resolved_ty))?;
 
-                match evaluated_value {
-                    Value::I32Value(v) | Value::U64Value(v) | Value::U8Value(v) => {
-                        self.llvm_builder.build_store(variable_pointer, v)
-                    }
-                    _ => panic!(),
-                };
+                    match evaluated_value {
+                        Value::I32Value(v) | Value::U64Value(v) | Value::U8Value(v) => {
+                            self.llvm_builder.build_store(variable_pointer, v)
+                        }
+                        _ => panic!(),
+                    };
+                }
 
                 // Contextに登録
-                self.set_variable(name, ty, variable_pointer);
+                self.set_local_variable(ctx.clone(), name, resolved_ty, variable_pointer);
             }
             ResolvedType::Ptr(ptr_ty) => {
                 let variable_pointer = self.llvm_builder.build_alloca(
@@ -63,7 +67,8 @@ impl LLVMCodegenerator<'_> {
                     .ptr_type(AddressSpace::default()),
                     &name,
                 );
-                let (_, evaluated_value) = self.eval_expression(&value, Some(&resolved_ty))?;
+                let (_, evaluated_value) =
+                    self.eval_expression(ctx.clone(), &value, Some(&resolved_ty))?;
 
                 match evaluated_value {
                     Value::I32Value(v)
@@ -79,21 +84,25 @@ impl LLVMCodegenerator<'_> {
                     Value::Void => (),
                 };
                 // Contextに登録
-                self.set_variable(name, ty, variable_pointer);
+                self.set_local_variable(ctx.clone(), name, *ptr_ty.clone(), variable_pointer);
             }
             ResolvedType::Void => {
-                let _result = self.eval_expression(&value, Some(&resolved_ty));
+                let _result = self.eval_expression(ctx.clone(), &value, Some(&resolved_ty));
                 unsafe {
                     let null_pointer = 0 as *const PointerValue;
-                    self.set_variable(name, ty, *null_pointer)
+                    self.set_local_variable(ctx.clone(), name, resolved_ty, *null_pointer)
                 };
             }
         }
         Ok(())
     }
-    fn gen_return(&self, opt_expr: &Option<Located<Expression>>) -> Result<(), CompileError> {
+    fn gen_return(
+        &self,
+        ctx: Rc<RefCell<Context>>,
+        opt_expr: &Option<Located<Expression>>,
+    ) -> Result<(), CompileError> {
         if let Some(exp) = opt_expr {
-            let (_, value) = self.eval_expression(&exp.value, None)?;
+            let (_, value) = self.eval_expression(ctx.clone(), &exp.value, None)?;
             let return_value: Option<&dyn BasicValue> = match &value {
                 Value::U8Value(v) => Some(v),
                 Value::I32Value(v) => Some(v),
@@ -111,14 +120,15 @@ impl LLVMCodegenerator<'_> {
     }
     fn gen_asignment(
         &mut self,
+        ctx: Rc<RefCell<Context>>,
         deref_count: u32,
         index_access: &Option<Located<Expression>>,
         name: String,
         expression: Located<&Expression>,
     ) -> Result<(), CompileError> {
-        let (ty, ptr) = self.find_variable(&name)?;
+        let (ty, ptr) = ctx.borrow().find_variable(&name)?;
+        let mut asign_type = ty;
         let mut ptr_to_asign = ptr;
-        let mut asign_type = self.resolve_type(&ty)?;
 
         for _ in 0..deref_count {
             ptr_to_asign = match self.llvm_builder.build_load(ptr_to_asign, "deref") {
@@ -154,7 +164,7 @@ impl LLVMCodegenerator<'_> {
             };
 
             let (_, index_value) =
-                self.eval_expression(&index_expr.value, Some(&ResolvedType::USize))?;
+                self.eval_expression(ctx.clone(), &index_expr.value, Some(&ResolvedType::USize))?;
             // deref and move ptr by sizeof(T) * index
             ptr_to_asign = match self.llvm_builder.build_load(ptr_to_asign, "deref") {
                 inkwell::values::BasicValueEnum::PointerValue(ptr) => ptr,
@@ -173,7 +183,8 @@ impl LLVMCodegenerator<'_> {
             };
         }
 
-        let (_, value) = self.eval_expression(&expression.value, Some(&asign_type))?;
+        let (_, value) =
+            self.eval_expression(ctx.clone(), &expression.value, Some(&asign_type.clone()))?;
 
         let value_type = value.get_type();
 
@@ -198,11 +209,19 @@ impl LLVMCodegenerator<'_> {
         };
         Ok(())
     }
-    fn gen_discarded_expression(&mut self, expression: &Expression) -> Result<(), CompileError> {
-        self.eval_expression(expression, None)?;
+    fn gen_discarded_expression(
+        &mut self,
+        ctx: Rc<RefCell<Context>>,
+        expression: &Expression,
+    ) -> Result<(), CompileError> {
+        self.eval_expression(ctx.clone(), expression, None)?;
         Ok(())
     }
-    pub(super) fn gen_statement(&mut self, statement: &Statement) -> Result<(), CompileError> {
+    pub(super) fn gen_statement(
+        &mut self,
+        ctx: Rc<RefCell<Context>>,
+        statement: &Statement,
+    ) -> Result<(), CompileError> {
         match &statement {
             Statement::VariableDecl {
                 ty: loc_ty,
@@ -211,7 +230,12 @@ impl LLVMCodegenerator<'_> {
             } => {
                 error_context!(
                     ContextType::VariableDeclStatement,
-                    self.gen_variable_decl(loc_ty.value.clone(), name.clone(), loc_value.value.clone())
+                    self.gen_variable_decl(
+                        ctx.clone(),
+                        loc_ty.value.clone(),
+                        name.clone(),
+                        loc_value.value.clone()
+                    )
                 )
             }
             Statement::Return {
@@ -219,7 +243,7 @@ impl LLVMCodegenerator<'_> {
             } => {
                 error_context!(
                     ContextType::ReturnStatement,
-                    self.gen_return(loc_expr)
+                    self.gen_return(ctx.clone(), loc_expr)
                 )
             }
             Statement::Asignment {
@@ -229,13 +253,19 @@ impl LLVMCodegenerator<'_> {
                 expression,
             } => error_context!(
                 ContextType::AsignStatement,
-                self.gen_asignment(*deref_count, index_access, name.clone(), expression.as_inner_ref())
+                self.gen_asignment(
+                    ctx.clone(),
+                    *deref_count,
+                    index_access,
+                    name.clone(),
+                    expression.as_inner_ref()
+                )
             ),
             Statement::Effect {
                 expression: loc_expr,
             } => error_context!(
                 ContextType::DiscardedExpressionStatement,
-                self.gen_discarded_expression(&loc_expr.value)
+                self.gen_discarded_expression(ctx.clone(), &loc_expr.value)
             ),
         }?;
         Ok(())

@@ -8,7 +8,7 @@ use nom::{
 
 use crate::ast::*;
 
-use super::{token::*, util::located, ParseResult, Span};
+use super::{token::*, util::{located, skip0}, ParseResult, Span};
 
 fn parse_array(input: Span) -> ParseResult<UnresolvedType> {
     located(map(delimited(lsqrbracket, parse_type, rsqrbracket), |ty| {
@@ -26,11 +26,12 @@ fn parse_typeref(input: Span) -> ParseResult<UnresolvedType> {
                 rsqrbracket,
             )),
         ),
-        |(ident, generics_args)| UnresolvedType::TypeRef {
+        |(ident, generics_args)| UnresolvedType::TypeRef(TypeRef {
+            prefix: None, // TODO: impl namespace ref
             name: ident,
             generic_args: generics_args
                 .map(|args| args.into_iter().map(|arg| arg.value).collect::<Vec<_>>()),
-        },
+        }),
     ))(input)
 }
 

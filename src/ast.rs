@@ -42,6 +42,13 @@ pub enum BinaryOp {
 }
 
 #[derive(Debug, Clone)]
+pub struct CallExpr {
+    pub name: String,
+    pub generic_args: Option<Vec<Located<UnresolvedType>>>,
+    pub args: Vec<Located<Box<Expression>>>,
+}
+
+#[derive(Debug, Clone)]
 pub enum Expression {
     VariableRef {
         deref_count: u32,
@@ -55,10 +62,7 @@ pub enum Expression {
         op: BinaryOp,
         args: Vec<Located<Box<Expression>>>,
     },
-    CallExpr {
-        name: String,
-        args: Vec<Located<Box<Expression>>>,
-    },
+    CallExpr(CallExpr),
 }
 
 pub const VOID_TYPE_NAME: &str = "void";
@@ -81,12 +85,45 @@ pub enum ResolvedType {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub enum IdentifierPrefix {
+    Namespace(String),
+    Alias(String),
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct TypeRef {
+    pub prefix: Option<IdentifierPrefix>,
+    pub name: String,
+    pub generic_args: Option<Vec<UnresolvedType>>,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum UnresolvedType {
-    TypeRef {
-        name: String,
-        generic_args: Option<Vec<UnresolvedType>>,
-    },
+    TypeRef(TypeRef),
     Ptr(Box<UnresolvedType>),
+}
+
+#[derive(Debug, Clone)]
+pub struct GenericArgument {
+    pub name: String,
+    // TODO: impl bounds
+}
+
+#[derive(Debug)]
+pub struct StructTypeDef {
+    pub fields: Vec<(String, UnresolvedType)>
+}
+
+#[derive(Debug)]
+pub enum TypeDefKind {
+    Struct(StructTypeDef)
+}
+
+#[derive(Debug)]
+pub struct TypeRegistration {
+    pub ns: String,
+    pub name: String,
+    pub resolved_ty: ResolvedType
 }
 
 impl UnresolvedType {
@@ -101,9 +138,9 @@ impl UnresolvedType {
 impl Display for UnresolvedType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            UnresolvedType::TypeRef { name, generic_args } => {
-                f.write_str(name)?;
-                if let Some(args) = generic_args {
+            UnresolvedType::TypeRef(typeref) => {
+                f.write_str(&typeref.name)?;
+                if let Some(args) = &typeref.generic_args {
                     f.write_char('<')?;
                     for arg in args {
                         write!(f, "{}", arg)?;
@@ -193,12 +230,6 @@ pub enum Statement {
     Effect {
         expression: Located<Expression>,
     },
-}
-
-#[derive(Debug, Clone)]
-pub struct GenericArgument {
-    pub name: String,
-    // TODO: impl bounds
 }
 
 #[derive(Debug, Clone)]

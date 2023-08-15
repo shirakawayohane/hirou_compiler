@@ -2,7 +2,7 @@ use crate::ast::{Expression, Located, Position, Range};
 
 use super::{
     expression::parse_expression,
-    token::{lsqrbracket, rsqrbracket},
+    token::{comma, lsqrbracket, rsqrbracket},
     *,
 };
 use nom::{
@@ -27,7 +27,17 @@ fn comment<'a>(s: Span<'a>) -> IResult<Span<'a>, (), VerboseError<Span<'a>>> {
 }
 
 pub(super) fn skip0<'a>(input: Span<'a>) -> IResult<Span<'a>, (), VerboseError<Span<'a>>> {
-    map(many0(alt((comment, map(multispace1, |_| ())))), |_| ())(input)
+    map(
+        many0(alt((comment, map(comma, |_| ()), map(multispace1, |_| ())))),
+        |_| (),
+    )(input)
+}
+
+pub(super) fn skip1<'a>(input: Span<'a>) -> IResult<Span<'a>, (), VerboseError<Span<'a>>> {
+    map(
+        many1(alt((comment, map(comma, |_| ()), map(multispace1, |_| ())))),
+        |_| (),
+    )(input)
 }
 
 pub(super) fn located<'a, O>(

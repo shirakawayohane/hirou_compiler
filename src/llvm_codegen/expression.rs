@@ -1,7 +1,6 @@
 use super::error::{CompileErrorKind, ContextType};
 use super::*;
 use super::{error::CompileError, result_value::Value};
-use crate::util::unbox_located_expression;
 use crate::{ast::*, error_context};
 use clap::error::Result;
 use inkwell::values::{BasicMetadataValueEnum, BasicValueEnum};
@@ -57,29 +56,33 @@ impl<'a> LLVMCodegenerator<'a> {
         }
     }
     fn eval_variable_ref(
-        &self,
+        &'a self,
+        ctx: Rc<RefCell<Context<'a>>>,
         deref_count: u32,
         index_access: Option<Located<Box<Expression>>>,
         name: &str,
         _annotation: Option<&ResolvedType>,
-    ) -> Result<(ResolvedType, Value), CompileError> {
-        let (ty, ptr) = self.find_variable(name)?;
-        let mut result_ty = self.resolve_type(&ty)?;
-        let mut result_value = self.gen_load(&result_ty, ptr)?;
+    ) -> Result<(ResolvedType, Value<'a>), CompileError> {
+        let (ty, ptr) = ctx.borrow().find_variable(name)?;
+        let mut result_ty = ty.clone();
+        let mut result_value = self.gen_load(&ty, ptr)?;
 
         if let Some(index_expr) = index_access {
-            if !result_ty.is_pointer_type() {
+            if !ty.is_pointer_type() {
                 return Err(CompileError::from_error_kind(
                     CompileErrorKind::CannotIndexAccess {
                         name: name.to_string(),
-                        ty: self.resolve_type(&ty)?.clone(),
+                        ty,
                     },
                 ));
             }
             match result_value {
                 Value::PointerValue(pointer_of, first_elelement_ptr) => {
-                    let (_, index_value) =
-                        self.eval_expression(&index_expr.value, Some(&ResolvedType::USize))?;
+                    let (_, index_value) = self.eval_expression(
+                        ctx.clone(),
+                        &index_expr.value,
+                        Some(&ResolvedType::USize),
+                    )?;
                     let element_ptr = unsafe {
                         self.llvm_builder.build_gep(
                             first_elelement_ptr,
@@ -97,7 +100,8 @@ impl<'a> LLVMCodegenerator<'a> {
         for _ in 0..deref_count {
             match result_value {
                 Value::PointerValue(ty, ptr) => {
-                    result_value = self.gen_load(&ty, ptr)?;
+                    result_value = self.gen_load(&result_ty, ptr)?;
+                    result_ty = *ty;
                 }
                 _ => {
                     return Err(CompileError::from_error_kind(
@@ -110,7 +114,7 @@ impl<'a> LLVMCodegenerator<'a> {
             }
         }
 
-        Ok((result_ty, result_value))
+        Ok((ty, result_value))
     }
 
     fn eval_binary_expr<'ctx>(
@@ -126,32 +130,32 @@ impl<'a> LLVMCodegenerator<'a> {
             pointer_size: PointerSize,
             ty: &'a ResolvedType,
             other: &'a ResolvedType,
-        ) -> Option<ResolvedType> {
+        ) -> Option<&'a ResolvedType> {
             match ty {
                 ResolvedType::U8 => match other {
                     ResolvedType::U8 => None,
-                    ResolvedType::I32 => Some(ResolvedType::I32),
-                    ResolvedType::U32 => Some(ResolvedType::U32),
-                    ResolvedType::U64 => Some(ResolvedType::U64),
-                    ResolvedType::USize => Some(ResolvedType::USize),
+                    ResolvedType::I32 => Some(&ResolvedType::I32),
+                    ResolvedType::U32 => Some(&ResolvedType::U32),
+                    ResolvedType::U64 => Some(&ResolvedType::U64),
+                    ResolvedType::USize => Some(&ResolvedType::USize),
                     ResolvedType::Void => None,
                     ResolvedType::Ptr(_) => None,
                 },
                 ResolvedType::I32 => match other {
                     ResolvedType::U8 => None,
                     ResolvedType::I32 => None,
-                    ResolvedType::USize => Some(ResolvedType::USize),
-                    ResolvedType::U32 => Some(ResolvedType::U32),
-                    ResolvedType::U64 => Some(ResolvedType::U64),
+                    ResolvedType::USize => Some(&ResolvedType::USize),
+                    ResolvedType::U32 => Some(&ResolvedType::U32),
+                    ResolvedType::U64 => Some(&ResolvedType::U64),
                     ResolvedType::Ptr(_) => None,
                     ResolvedType::Void => None,
                 },
                 ResolvedType::U32 => match other {
                     ResolvedType::I32 => None,
                     ResolvedType::U32 => None,
-                    ResolvedType::U64 => Some(ResolvedType::U64),
+                    ResolvedType::U64 => Some(&ResolvedType::U64),
                     ResolvedType::USize => match pointer_size {
-                        PointerSize::SixteenFour => Some(ResolvedType::U64),
+                        PointerSize::SixteenFour => Some(&ResolvedType::U64),
                     },
                     ResolvedType::U8 => None,
                     ResolvedType::Ptr(_) => None,
@@ -161,10 +165,10 @@ impl<'a> LLVMCodegenerator<'a> {
                 ResolvedType::USize => match other {
                     ResolvedType::U8 => None,
                     ResolvedType::I32 => match pointer_size {
-                        PointerSize::SixteenFour => Some(ResolvedType::U64),
+                        PointerSize::SixteenFour => Some(&ResolvedType::U64),
                     },
                     ResolvedType::U32 => match pointer_size {
-                        PointerSize::SixteenFour => Some(ResolvedType::U64),
+                        PointerSize::SixteenFour => Some(&ResolvedType::U64),
                     },
                     ResolvedType::U64 => None,
                     ResolvedType::USize => None,
@@ -203,7 +207,7 @@ impl<'a> LLVMCodegenerator<'a> {
             let (rhs_integer_value, rhs_type) = if let Some(cast_type) = rhs_cast_type {
                 (self.gen_try_cast(rhs, &cast_type)?, Some(cast_type))
             } else {
-                (rhs, Some(rhs_type))
+                (rhs, Some(&rhs_type))
             };
             let result_type = lhs_type.unwrap_or(rhs_type.unwrap());
             let value = match op {
@@ -291,7 +295,9 @@ impl<'a> LLVMCodegenerator<'a> {
                 Value::U64Value(_) => Ok((ResolvedType::U64, value)),
                 Value::U32Value(_) => Ok((ResolvedType::U32, value)),
                 Value::USizeValue(_) => Ok((ResolvedType::USize, value)),
-                Value::PointerValue(pointer_of, _) => Ok((ResolvedType::Ptr(pointer_of.clone()), value)),
+                Value::PointerValue(pointer_of, _) => {
+                    Ok((ResolvedType::Ptr(pointer_of.clone()), value))
+                }
                 Value::Void => Ok((ResolvedType::Void, value)),
             }
         } else {
@@ -301,30 +307,30 @@ impl<'a> LLVMCodegenerator<'a> {
 
     fn eval_binary_exprs(
         &self,
+        ctx: Rc<RefCell<Context>>,
         op: BinaryOp,
         args: &[Located<Box<Expression>>],
     ) -> Result<(ResolvedType, Value), CompileError> {
         let mut lhs = &args[0];
         let mut rest = &args[1..];
-        let (mut lhs_ty, mut lhs_value) = self.eval_expression(&lhs.value, None)?;
+        let (mut lhs_ty, mut lhs_value) = self.eval_expression(ctx.clone(), &lhs.value, None)?;
         while !args.is_empty() {
             (lhs, rest) = rest.split_first().unwrap();
-            let (_rhs_ty, rhs_value) = self.eval_expression(&lhs.value, None)?;
+            let (_rhs_ty, rhs_value) = self.eval_expression(ctx.clone(), &lhs.value, None)?;
             (lhs_ty, lhs_value) = self.eval_binary_expr(op, lhs_value, rhs_value)?;
         }
         return Ok((lhs_ty, lhs_value));
     }
 
     fn eval_call_expr(
-        &self,
-        name: &str,
-        arg_exprs: &[Located<Box<Expression>>],
-        _annotation: Option<&ResolvedType>,
+        &'a self,
+        ctx: Rc<RefCell<Context<'a>>>,
+        call_expr: &CallExpr,
     ) -> Result<(ResolvedType, Value), CompileError> {
         let mut evaluated_args: Vec<BasicMetadataValueEnum> = Vec::new();
         let mut evaluated_arg_tys: Vec<ResolvedType> = Vec::new();
-        for (i, arg_expr) in arg_exprs.into_iter().enumerate() {
-            let (ty, evaluated_arg) = self.eval_expression(&arg_expr.value, None)?;
+        for (_, arg_expr) in call_expr.args.iter().enumerate() {
+            let (ty, evaluated_arg) = self.eval_expression(ctx.clone(), &arg_expr.value, None)?;
             let value_enum = match evaluated_arg {
                 Value::U8Value(v) => BasicMetadataValueEnum::IntValue(v),
                 Value::I32Value(v) => BasicMetadataValueEnum::IntValue(v),
@@ -343,11 +349,40 @@ impl<'a> LLVMCodegenerator<'a> {
             evaluated_args.push(value_enum);
             evaluated_arg_tys.push(ty);
         }
-        let func = self.find_function_impl(name, &evaluated_arg_tys)?;
+        let mut resolved_generic_args = Vec::new();
+        if let Some(generic_args) = &call_expr.generic_args {
+            for generic_arg in generic_args {
+                resolved_generic_args.push(self.resolve_type(ctx.clone(), &generic_arg.value)?);
+            }
+        }
+        let context = ctx.borrow();
+        // let fn_reg: &FunctionRegistration = ctx.find_function_registration(None, &call_expr.name)?;
+        let fn_reg: &FunctionRegistration = todo!();
+
+        let mut resolved_generic_args = Vec::new();
+        if let Some(generic_args) = &call_expr.generic_args {
+            for generic_arg in generic_args {
+                resolved_generic_args.push(self.resolve_type(ctx.clone(), &generic_arg.value)?);
+            }
+        }
+
+        let fn_impl = ctx
+            .borrow()
+            .find_function_impl(fn_reg, &evaluated_arg_tys)
+            .unwrap_or(
+                self.gen_function_impl(
+                    ctx.clone(),
+                    fn_reg,
+                    resolved_generic_args,
+                    evaluated_arg_tys,
+                )
+                .unwrap(),
+            );
+
         Ok(
             match self
                 .llvm_builder
-                .build_call(func.function_value, &evaluated_args, "function_call")
+                .build_call(fn_impl.function_value, &evaluated_args, "function_call")
                 .try_as_basic_value()
                 .left()
             {
@@ -358,7 +393,7 @@ impl<'a> LLVMCodegenerator<'a> {
                     }
                     BasicValueEnum::FloatValue(_) => todo!(),
                     BasicValueEnum::PointerValue(pointer_value) => {
-                        let pointer_of = match &func.return_type {
+                        let pointer_of = match &fn_impl.return_type {
                             ResolvedType::Ptr(pointer_of) => pointer_of,
                             _ => unreachable!(),
                         };
@@ -375,7 +410,8 @@ impl<'a> LLVMCodegenerator<'a> {
         )
     }
     pub(super) fn eval_expression(
-        &self,
+        &'a self,
+        ctx: Rc<RefCell<Context<'a>>>,
         expr: &Expression,
         annotation: Option<&ResolvedType>,
     ) -> Result<(ResolvedType, Value), CompileError> {
@@ -387,6 +423,7 @@ impl<'a> LLVMCodegenerator<'a> {
             } => {
                 error_context!(ContextType::VariableRefExpression, {
                     self.eval_variable_ref(
+                        ctx.clone(),
                         *deref_count,
                         index_access.clone(),
                         &name,
@@ -400,12 +437,14 @@ impl<'a> LLVMCodegenerator<'a> {
             ),
             Expression::BinaryExpr { op, args } => error_context!(
                 ContextType::BinaryExpression,
-                self.eval_binary_exprs(*op, args)
+                self.eval_binary_exprs(ctx.clone(), *op, args)
             ),
-            Expression::CallExpr { name, args } => error_context!(
-                ContextType::CallExpression,
-                self.eval_call_expr(&name, args, annotation)
-            ),
+            Expression::CallExpr(call_expr) => {
+                error_context!(
+                    ContextType::CallExpression,
+                    self.eval_call_expr(ctx.clone(), call_expr)
+                )
+            }
         }
     }
 }
