@@ -110,6 +110,11 @@ pub struct NumberLiteral {
 }
 
 #[derive(Debug, Clone)]
+pub struct StringLiteral {
+    pub value: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct BinaryExpr {
     pub op: BinaryOp,
     pub lhs: Box<ResolvedExpression>,
@@ -131,6 +136,7 @@ pub struct IndexAccessExor {
 pub enum ExpressionKind {
     VariableRef(VariableRefExpr),
     NumberLiteral(NumberLiteral),
+    StringLiteral(StringLiteral),
     BinaryExpr(BinaryExpr),
     CallExpr(CallExpr),
     Deref(DerefExpr),

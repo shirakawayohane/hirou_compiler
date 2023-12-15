@@ -75,6 +75,11 @@ pub struct NumberLiteralExpr {
     pub value: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct StringLiteralExpr {
+    pub value: String,
+}
+
 pub type LocatedExpr = Located<Box<Expression>>;
 
 #[derive(Debug, Clone)]
@@ -90,16 +95,20 @@ pub struct DerefExpr {
 }
 
 #[derive(Debug, Clone)]
-pub struct IndexAccessExor {
+pub struct IndexAccessExpr {
     pub target: LocatedExpr,
     pub index: LocatedExpr,
 }
+
 #[derive(Debug, Clone)]
 pub enum Expression {
     VariableRef(VariableRefExpr),
     NumberLiteral(NumberLiteralExpr),
+    StringLiteral(StringLiteralExpr),
     BinaryExpr(BinaryExpr),
     Call(CallExpr),
+    DerefExpr(DerefExpr),
+    IndexAccess(IndexAccessExpr)
 }
 
 

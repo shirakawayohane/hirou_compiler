@@ -52,6 +52,13 @@ impl LLVMCodeGenerator<'_> {
             self.eval_i32(value_str)
         }
     }
+    fn eval_string_literal(&self, string_literal: &StringLiteral) -> BasicValueEnum {
+        let value = string_literal.value.as_str();
+        let string = self
+            .llvm_builder
+            .build_global_string_ptr(value, "string_literal");
+        string.as_basic_value_enum()
+    }
     fn eval_variable_ref(&self, variable_ref: &VariableRefExpr) -> BasicValueEnum {
         let ptr = self.get_variable(&variable_ref.name);
         let value = self.llvm_builder.build_load(ptr, "load");
@@ -137,6 +144,9 @@ impl LLVMCodeGenerator<'_> {
             ExpressionKind::Deref(deref) => Some(self.eval_deref(deref)),
             ExpressionKind::BinaryExpr(binary_expr) => Some(self.eval_binary_expr(binary_expr)),
             ExpressionKind::CallExpr(call_expr) => self.gen_call_expr(call_expr),
+            ExpressionKind::StringLiteral(string_literal) => {
+                Some(self.eval_string_literal(string_literal))
+            }
         }
     }
 }

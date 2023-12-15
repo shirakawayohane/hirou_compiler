@@ -1,21 +1,17 @@
 mod error;
+mod intrinsic;
 
-use std::{
-    cell::RefCell,
-    collections::{HashMap},
-    ops::Deref,
-    rc::Rc,
-};
-
-
-
+use std::{cell::RefCell, clone, collections::HashMap, ops::Deref, rc::Rc};
 
 use crate::{
     ast::{self},
-    resolved_ast::{self, ResolvedExpression, ResolvedType, VariableRefExpr},
+    resolved_ast::{self, ResolvedExpression, ResolvedType, VariableRefExpr, USIZE_TYPE_NAME},
 };
 
-use self::error::{CompileError, FaitalError};
+use self::{
+    error::{CompileError, FaitalError},
+    intrinsic::register_intrinsic_functions,
+};
 
 type Result<T, E = FaitalError> = std::result::Result<T, E>;
 
@@ -41,10 +37,14 @@ fn resolve_type<'a>(
 ) -> Result<ResolvedType> {
     match ty {
         UnresolvedType::TypeRef(typ_ref) => {
-            let resolved_type: &ResolvedType = *types
-                .borrow()
-                .get(&typ_ref.name)
-                .ok_or_else(|| FaitalError(format!("No type named {}", typ_ref.name)))?;
+            let resolved_type = *types.borrow().get(&typ_ref.name).unwrap_or({
+                errors.push(CompileError::from_error_kind(
+                    error::CompileErrorKind::TypeNotFound {
+                        name: typ_ref.name.clone(),
+                    },
+                ));
+                &&ResolvedType::Unknown
+            });
             Ok(resolved_type.clone())
         }
         UnresolvedType::Ptr(inner_type) => {
@@ -54,11 +54,11 @@ fn resolve_type<'a>(
     }
 }
 
-struct Scopes<'a> {
-    scopes: Vec<HashMap<String, &'a ResolvedType>>,
+struct Scopes {
+    scopes: Vec<HashMap<String, ResolvedType>>,
 }
 
-impl<'a> Scopes<'a> {
+impl<'a> Scopes {
     fn new() -> Self {
         Self { scopes: Vec::new() }
     }
@@ -71,11 +71,11 @@ impl<'a> Scopes<'a> {
         self.scopes.pop();
     }
 
-    fn insert(&mut self, name: String, ty: &'a ResolvedType) {
+    fn insert(&mut self, name: String, ty: ResolvedType) {
         self.scopes.last_mut().unwrap().insert(name, ty);
     }
 
-    fn get(&self, name: &str) -> Option<&'a ResolvedType> {
+    fn get(&'a self, name: &str) -> Option<&'a ResolvedType> {
         for scope in self.scopes.iter().rev() {
             if let Some(ty) = scope.get(name) {
                 return Some(ty);
@@ -88,7 +88,7 @@ impl<'a> Scopes<'a> {
 fn gen_function_impls_recursively<'a>(
     errors: &mut Vec<CompileError>,
     types: Rc<RefCell<HashMap<String, &'a ResolvedType>>>,
-    scopes: Rc<RefCell<Scopes<'a>>>,
+    scopes: Rc<RefCell<Scopes>>,
     function_by_name: &HashMap<String, ast::Function>,
     resolved_functions: Rc<RefCell<Vec<resolved_ast::Function>>>,
     current_fn: &ast::Function,
@@ -96,7 +96,7 @@ fn gen_function_impls_recursively<'a>(
     fn gen_function_impls_from_expression_recursively<'a>(
         errors: &mut Vec<CompileError>,
         types: Rc<RefCell<HashMap<String, &'a ResolvedType>>>,
-        scopes: Rc<RefCell<Scopes<'a>>>,
+        scopes: Rc<RefCell<Scopes>>,
         function_by_name: &HashMap<String, ast::Function>,
         resolved_functions: Rc<RefCell<Vec<resolved_ast::Function>>>,
         expr: &ast::Expression,
@@ -211,6 +211,18 @@ fn gen_function_impls_recursively<'a>(
                     ty: resolved_return_ty,
                 });
             }
+            Expression::DerefExpr(_) => todo!(),
+            Expression::IndexAccess(_) => todo!(),
+            Expression::StringLiteral(str_literal) => {
+                return Ok(resolved_ast::ResolvedExpression {
+                    kind: resolved_ast::ExpressionKind::StringLiteral(
+                        resolved_ast::StringLiteral {
+                            value: str_literal.value.clone(),
+                        },
+                    ),
+                    ty: ResolvedType::Ptr(Box::new(ResolvedType::Ptr(Box::new(ResolvedType::U8)))),
+                });
+            }
         };
     }
 
@@ -308,14 +320,17 @@ pub(crate) fn resolve_module<'a>(
     types: Rc<RefCell<HashMap<String, &'a ResolvedType>>>,
     module: &'a crate::ast::Module,
 ) -> Result<crate::resolved_ast::Module, FaitalError> {
-    let function_by_name: HashMap<String, ast::Function> = module
-        .toplevels
-        .iter()
-        .filter_map(|toplevel| match toplevel.deref() {
-            crate::ast::TopLevel::Function(func) => Some((func.decl.name.clone(), func.clone())),
-        })
-        .collect();
-
+    let mut function_by_name = HashMap::new();
+    // 組み込み関数の型を登録する
+    register_intrinsic_functions(&mut function_by_name);
+    dbg!(&function_by_name);
+    for toplevel in &module.toplevels {
+        match &toplevel.value {
+            TopLevel::Function(func) => {
+                function_by_name.insert(func.decl.name.clone(), func.clone());
+            }
+        }
+    }
     let main_fn = function_by_name
         .get("main")
         .ok_or_else(|| FaitalError("No main function found".into()))?;
@@ -323,6 +338,7 @@ pub(crate) fn resolve_module<'a>(
     let resolved_toplevels = RefCell::new(Vec::new());
     let resolved_functions = Rc::new(RefCell::new(Vec::new()));
     let scopes = Rc::new(RefCell::new(Scopes::new()));
+
     // main関数から辿れる関数を全て解決する
     gen_function_impls_recursively(
         errors,
@@ -340,8 +356,15 @@ pub(crate) fn resolve_module<'a>(
 
     // 以下はmain関数から辿れない関数を解決する
     for toplevel in &module.toplevels {
+        scopes.borrow_mut().push_scope();
         match &toplevel.value {
             TopLevel::Function(unresolved_function) => {
+                for (arg_ty, arg_name) in &unresolved_function.decl.args {
+                    let arg_type = resolve_type(errors, types.clone(), &arg_ty)?;
+                    scopes
+                        .borrow_mut()
+                        .insert(arg_name.clone(), arg_type.clone());
+                }
                 gen_function_impls_recursively(
                     errors,
                     types.clone(),
@@ -358,6 +381,7 @@ pub(crate) fn resolve_module<'a>(
                 resolved_functions.borrow_mut().clear();
             }
         }
+        scopes.borrow_mut().pop_scope();
     }
 
     Ok(resolved_ast::Module {

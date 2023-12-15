@@ -15,7 +15,7 @@ use nom::{
 
 use nom_locate::{position, LocatedSpan};
 
-use crate::ast::{FunctionDecl, Located, Module, Statement, TopLevel};
+use crate::ast::{FunctionDecl, Located, Module, Statement, TopLevel, Function};
 
 use self::{toplevel::parse_toplevel, util::skip0};
 

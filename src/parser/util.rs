@@ -6,18 +6,18 @@ use super::{
     *,
 };
 use nom::{
-    branch::{alt, permutation},
+    branch::alt,
     bytes::complete::{tag, take_till},
     character::complete::{line_ending, multispace1},
     combinator::{eof, map},
     error::VerboseError,
     multi::many0,
-    Parser,
+    Parser, sequence::tuple,
 };
 
 fn comment<'a>(s: Span<'a>) -> IResult<Span<'a>, (), VerboseError<Span<'a>>> {
     map(
-        permutation((
+        tuple((
             tag("//"),
             take_till(|c: char| c == '\r' || c == '\n'),
             alt((line_ending::<Span, VerboseError<Span>>, eof)),

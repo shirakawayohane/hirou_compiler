@@ -112,6 +112,11 @@ pub(super) fn return_token(input: Span) -> NotLocatedParseResult<Span> {
 }
 
 #[inline(always)]
+pub(super) fn doublequote(input: Span) -> NotLocatedParseResult<Span> {
+    tag("\"")(input)
+}
+
+#[inline(always)]
 pub(super) fn parse_identifier(input: Span) -> NotLocatedParseResult<String> {
     let (s, _) = not(digit1)(input)?;
     map(
@@ -122,6 +127,8 @@ pub(super) fn parse_identifier(input: Span) -> NotLocatedParseResult<String> {
 
 #[test]
 fn parse_identifier_test() {
+    assert!(parse_identifier("print-i32".into()).is_ok());
+    assert!(parse_identifier("buf[i]".into()).is_ok());
     assert!(parse_identifier("}".into()).is_err());
     assert!(parse_identifier("{".into()).is_err());
     assert!(parse_identifier("(".into()).is_err());
