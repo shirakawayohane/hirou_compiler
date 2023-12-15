@@ -70,7 +70,7 @@ fn parse_function_decl(input: Span) -> ParseResult<FunctionDecl> {
             |(_, name, generic_args, params, ty)| FunctionDecl {
                 name,
                 generic_args,
-                params,
+                args: params,
                 return_type: ty,
             },
         )),

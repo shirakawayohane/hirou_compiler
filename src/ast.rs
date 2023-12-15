@@ -1,4 +1,7 @@
-use std::fmt::{Display, Write};
+use std::{
+    fmt::{Display, Write},
+    ops::Deref,
+};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
 pub struct Position {
@@ -18,6 +21,13 @@ pub struct Located<T> {
     pub value: T,
 }
 
+impl Deref for Range {
+    type Target = Position;
+    fn deref(&self) -> &Self::Target {
+        &self.from
+    }
+}
+
 impl<T> Located<T> {
     pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Located<U> {
         Located {
@@ -25,11 +35,18 @@ impl<T> Located<T> {
             value: f(self.value),
         }
     }
-    pub fn as_inner_ref(&self) -> Located<&T> {
+    pub fn default(value: T) -> Self {
         Located {
-            range: self.range,
-            value: &self.value,
+            range: Range::default(),
+            value,
         }
+    }
+}
+
+impl<T> Deref for Located<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.value
     }
 }
 
@@ -45,54 +62,49 @@ pub enum BinaryOp {
 pub struct CallExpr {
     pub name: String,
     pub generic_args: Option<Vec<Located<UnresolvedType>>>,
-    pub args: Vec<Located<Box<Expression>>>,
+    pub args: Vec<LocatedExpr>,
 }
 
 #[derive(Debug, Clone)]
+pub struct VariableRefExpr {
+    pub name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct NumberLiteralExpr {
+    pub value: String,
+}
+
+pub type LocatedExpr = Located<Box<Expression>>;
+
+#[derive(Debug, Clone)]
+pub struct BinaryExpr {
+    pub op: BinaryOp,
+    pub lhs: LocatedExpr,
+    pub rhs: LocatedExpr,
+}
+
+#[derive(Debug, Clone)]
+pub struct DerefExpr {
+    pub target: LocatedExpr,
+}
+
+#[derive(Debug, Clone)]
+pub struct IndexAccessExor {
+    pub target: LocatedExpr,
+    pub index: LocatedExpr,
+}
+#[derive(Debug, Clone)]
 pub enum Expression {
-    VariableRef {
-        deref_count: u32,
-        index_access: Option<Located<Box<Expression>>>,
-        name: String,
-    },
-    NumberLiteral {
-        value: String,
-    },
-    BinaryExpr {
-        op: BinaryOp,
-        args: Vec<Located<Box<Expression>>>,
-    },
-    CallExpr(CallExpr),
+    VariableRef(VariableRefExpr),
+    NumberLiteral(NumberLiteralExpr),
+    BinaryExpr(BinaryExpr),
+    Call(CallExpr),
 }
 
-pub const VOID_TYPE_NAME: &str = "void";
-pub const U8_TYPE_NAME: &str = "u8";
-pub const U32_TYPE_NAME: &str = "u32";
-pub const U64_TYPE_NAME: &str = "u64";
-pub const I32_TYPE_NAME: &str = "i32";
-pub const I64_TYPE_NAME: &str = "i64";
-pub const USIZE_TYPE_NAME: &str = "usize";
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum ResolvedType {
-    I32,
-    U32,
-    U64,
-    USize,
-    U8,
-    Ptr(Box<ResolvedType>),
-    Void,
-}
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub enum IdentifierPrefix {
-    Namespace(String),
-    Alias(String),
-}
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct TypeRef {
-    pub prefix: Option<IdentifierPrefix>,
     pub name: String,
     pub generic_args: Option<Vec<UnresolvedType>>,
 }
@@ -103,36 +115,14 @@ pub enum UnresolvedType {
     Ptr(Box<UnresolvedType>),
 }
 
-#[derive(Debug, Clone)]
-pub struct GenericArgument {
-    pub name: String,
-    // TODO: impl bounds
-}
-
 #[derive(Debug)]
 pub struct StructTypeDef {
-    pub fields: Vec<(String, UnresolvedType)>
+    pub fields: Vec<(String, UnresolvedType)>,
 }
 
 #[derive(Debug)]
 pub enum TypeDefKind {
-    Struct(StructTypeDef)
-}
-
-#[derive(Debug)]
-pub struct TypeRegistration {
-    pub ns: String,
-    pub name: String,
-    pub resolved_ty: ResolvedType
-}
-
-impl UnresolvedType {
-    pub fn is_ptr_type(&self) -> bool {
-        match self {
-            UnresolvedType::Ptr(_) => true,
-            _ => false,
-        }
-    }
+    Struct(StructTypeDef),
 }
 
 impl Display for UnresolvedType {
@@ -158,85 +148,49 @@ impl Display for UnresolvedType {
     }
 }
 
-impl ResolvedType {
-    pub fn is_integer_type(&self) -> bool {
-        match self {
-            ResolvedType::I32 => true,
-            ResolvedType::USize => true,
-            ResolvedType::U8 => true,
-            ResolvedType::U32 => true,
-            ResolvedType::U64 => true,
-            ResolvedType::Ptr(_) => false,
-            ResolvedType::Void => false,
-        }
-    }
-    pub fn is_valid_as_operand(&self) -> bool {
-        match self {
-            ResolvedType::I32 => true,
-            ResolvedType::U32 => true,
-            ResolvedType::U64 => true,
-            ResolvedType::USize => true,
-            ResolvedType::U8 => true,
-            ResolvedType::Ptr(_) => false,
-            ResolvedType::Void => false,
-        }
-    }
-    pub fn is_pointer_type(&self) -> bool {
-        if let ResolvedType::Ptr(_) = self {
-            true
-        } else {
-            false
-        }
-    }
+#[derive(Debug, Clone)]
+pub struct AssignmentStatement {
+    pub deref_count: u32,
+    pub index_access: Option<Located<Expression>>,
+    pub name: String,
+    pub expression: Located<Expression>,
 }
 
-impl Display for ResolvedType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let ResolvedType::Ptr(inner_type) = self {
-            return write!(f, "[{}]", inner_type);
-        }
-        write!(
-            f,
-            "{}",
-            match self {
-                ResolvedType::I32 => I32_TYPE_NAME,
-                ResolvedType::U32 => U32_TYPE_NAME,
-                ResolvedType::U64 => U64_TYPE_NAME,
-                ResolvedType::USize => USIZE_TYPE_NAME,
-                ResolvedType::U8 => U8_TYPE_NAME,
-                ResolvedType::Ptr(_) => unreachable!(),
-                ResolvedType::Void => VOID_TYPE_NAME,
-            }
-        )
-    }
+#[derive(Debug, Clone)]
+pub struct VariableDeclStatement {
+    pub ty: Located<UnresolvedType>,
+    pub name: String,
+    pub value: Located<Expression>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ReturnStatement {
+    pub expression: Option<Located<Expression>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct EffectStatement {
+    pub expression: Located<Expression>,
 }
 
 #[derive(Debug, Clone)]
 pub enum Statement {
-    Asignment {
-        deref_count: u32,
-        index_access: Option<Located<Expression>>,
-        name: String,
-        expression: Located<Expression>,
-    },
-    VariableDecl {
-        ty: Located<UnresolvedType>,
-        name: String,
-        value: Located<Expression>,
-    },
-    Return {
-        expression: Option<Located<Expression>>,
-    },
-    Effect {
-        expression: Located<Expression>,
-    },
+    Assignment(AssignmentStatement),
+    VariableDecl(VariableDeclStatement),
+    Return(ReturnStatement),
+    Effect(EffectStatement),
+}
+
+#[derive(Debug, Clone)]
+pub struct GenericArgument {
+    pub name: String,
 }
 
 #[derive(Debug, Clone)]
 pub struct FunctionDecl {
     pub name: String,
     pub generic_args: Option<Vec<Located<GenericArgument>>>,
-    pub params: Vec<(Located<UnresolvedType>, String)>,
+    pub args: Vec<(Located<UnresolvedType>, String)>,
     pub return_type: Located<UnresolvedType>,
 }
 

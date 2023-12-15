@@ -7,13 +7,12 @@ use nom::{
     sequence::preceded,
 };
 
-use crate::{ast::Statement, util::unbox_located_expression};
+use crate::ast::{
+    AssignmentStatement, EffectStatement, ReturnStatement, Statement, VariableDeclStatement,
+};
 
 use super::{
-    expression::{parse_expression, parse_function_call_expression},
-    token::*,
-    ty::parse_type,
-    util::*,
+    expression::{parse_function_call_expression, parse_expression}, token::*, ty::parse_type, util::*,
     NotLocatedParseResult, ParseResult, Span,
 };
 
@@ -23,18 +22,20 @@ fn parse_asignment(input: Span) -> NotLocatedParseResult<Statement> {
             many0(asterisk),
             parse_identifier,
             skip0,
-            opt(index_access),
+            opt(located(index_access)),
             skip0,
             multispace0,
             equals,
             multispace0,
-            parse_expression,
+            located(parse_expression),
         )),
-        |(asterisks, name, _, index_access, _, _, _, _, value_expr)| Statement::Asignment {
-            deref_count: asterisks.len() as u32,
-            index_access,
-            name,
-            expression: value_expr,
+        |(asterisks, name, _, index_access, _, _, _, _, value_expr)| {
+            Statement::Assignment(AssignmentStatement {
+                deref_count: asterisks.len() as u32,
+                index_access,
+                name,
+                expression: value_expr,
+            })
         },
     )(input)
 }
@@ -52,27 +53,33 @@ fn parse_variable_decl(input: Span) -> NotLocatedParseResult<Statement> {
                 ),
             ),
             preceded(skip0, equals),
-            preceded(skip0, parse_expression),
+            preceded(skip0, located(parse_expression)),
         )),
-        |(_, name, ty, _, expression)| Statement::VariableDecl {
-            ty,
-            name,
-            value: expression,
+        |(_, name, ty, _, expression)| {
+            Statement::VariableDecl(VariableDeclStatement {
+                ty,
+                name,
+                value: expression,
+            })
         },
     )(input)
 }
 
 fn parse_function_call_statement(input: Span) -> NotLocatedParseResult<Statement> {
-    map(parse_function_call_expression, |expr| Statement::Effect {
-        expression: unbox_located_expression(expr),
+    map(located(parse_function_call_expression), |loc_expr| {
+        Statement::Effect(EffectStatement {
+            expression: loc_expr,
+        })
     })(input)
 }
 
 fn parse_return_statement(input: Span) -> NotLocatedParseResult<Statement> {
     map(
-        permutation((return_token, multispace1, opt(parse_expression))),
-        |(_, _, opt_expr)| Statement::Return {
-            expression: opt_expr,
+        permutation((return_token, multispace1, opt(located(parse_expression)))),
+        |(_, _, opt_expr)| {
+            Statement::Return(ReturnStatement {
+                expression: opt_expr,
+            })
         },
     )(input)
 }

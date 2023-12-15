@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use thiserror::Error;
 
-use crate::ast::ResolvedType;
+use crate::resolved_ast::ResolvedType;
 
 #[derive(Debug)]
 pub enum ContextType {
@@ -36,18 +36,15 @@ pub enum CompileErrorKind {
     #[error("`{name:?}` is not a variable")]
     IsNotVariable { name: String },
     #[error("Invalid operand.")]
-    InvalidOperand(Box<ResolvedType>),
+    InvalidOperand(String),
     #[error("Invalid operand.")]
     InvalidArgument,
     #[error("Asign value does not match")]
-    TypeMismatch {
-        expected: ResolvedType,
-        actual: ResolvedType,
-    },
+    TypeMismatch { expected: String, actual: String },
     #[error("Cannot deref {name} for {deref_count:?} times.")]
     CannotDeref { name: String, deref_count: u32 },
     #[error("Cannot access {name} by index.")]
-    CannotIndexAccess { name: String, ty: ResolvedType },
+    CannotIndexAccess { name: String, ty: String },
     #[error("Array index must be an integer value")]
     InvalidArrayIndex,
     #[error("Cannot find type name {name}")]
@@ -70,6 +67,9 @@ pub enum CompileErrorKind {
 pub struct CompileError {
     errors: Vec<CompileErrorKind>,
 }
+
+#[derive(Debug)]
+pub struct FaitalError(pub String);
 
 impl CompileError {
     pub fn from_error_kind(kind: CompileErrorKind) -> Self {
@@ -95,8 +95,8 @@ macro_rules! error_context {
     ( $context_type:expr, $generator_block:expr ) => {
         match $generator_block {
             Ok(ret) => Ok(ret),
-            Err(compile_error) => Err(crate::llvm_codegen::error::CompileError::append(
-                crate::llvm_codegen::error::CompileErrorKind::Context($context_type),
+            Err(compile_error) => Err(self::error::CompileError::append(
+                self::error::CompileErrorKind::Context($context_type),
                 compile_error,
             )),
         }

@@ -1,11 +1,14 @@
-use std::{fs::read_to_string, path::Path, cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::{HashSet, HashMap}, fs::read_to_string, path::Path, rc::Rc};
 mod ast;
-mod llvm_codegen;
+mod builder;
 mod parser;
+mod resolved_ast;
+mod resolver;
 mod util;
+
+use builder::TargetPlatform;
 use clap::{command, Parser};
-use inkwell::context::Context as LLVMContext;
-use llvm_codegen::Context;
+use inkwell::{context::Context as LLVMContext, OptimizationLevel};
 use nom::{
     error::{convert_error, VerboseError},
     Finish,
@@ -42,23 +45,31 @@ fn main() {
     };
 
     let llvm_context: LLVMContext = LLVMContext::create();
-    let mut llvm_codegenerator = llvm_codegen::LLVMCodegenerator::new(&llvm_context);
-    let context = Context::new(); 
-    match llvm_codegenerator.gen_module(Rc::new(RefCell::new(context)), module) {
-        Ok(module) => {
-            module.print_to_file(Path::new("out.ll")).unwrap();
-            let execution_engine = &module
-                .create_jit_execution_engine(inkwell::OptimizationLevel::None)
-                .unwrap();
-            unsafe {
-                execution_engine
-                    .get_function::<unsafe extern "C" fn()>("main")
-                    .unwrap()
-                    .call();
-            }
-        }
+    let resolved_types = HashMap::new();
+    let resolved_types_cell = Rc::new(RefCell::new(resolved_types));
+    let mut errors = Vec::new();
+    let resolved_module = match resolver::resolve_module(&mut errors, resolved_types_cell, &module) {
+        Ok(module) => module,
         Err(err) => {
             dbg!(err);
+            return;
         }
     };
+    let mut llvm_codegenerator = builder::LLVMCodeGenerator::new(
+        &llvm_context,
+        TargetPlatform::DarwinArm64,
+        OptimizationLevel::None,
+    );
+    let module = llvm_codegenerator.gen_module(&resolved_module);
+
+    module.print_to_file(Path::new("out.ll")).unwrap();
+    let execution_engine = &module
+        .create_jit_execution_engine(inkwell::OptimizationLevel::None)
+        .unwrap();
+    unsafe {
+        execution_engine
+            .get_function::<unsafe extern "C" fn()>("main")
+            .unwrap()
+            .call();
+    }
 }

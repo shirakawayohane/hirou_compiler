@@ -69,7 +69,7 @@ pub(super) fn located<'a, O>(
     }
 }
 
-pub(super) fn index_access<'a>(input: Span<'a>) -> NotLocatedParseResult<Located<Expression>> {
+pub(super) fn index_access<'a>(input: Span<'a>) -> NotLocatedParseResult<Expression> {
     delimited(
         lsqrbracket,
         delimited(skip0, parse_expression, skip0),

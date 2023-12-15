@@ -7,35 +7,26 @@ use nom::{
     sequence::{delimited, pair, preceded, tuple},
 };
 
-use crate::{
-    ast::{Expression, UnresolvedType, CallExpr},
-    util::{box_located_expression, unbox_located_expression},
-};
+use crate::{ast::*, parser::ty::parse_type_not_located, util::unbox_located_expression};
 
 use super::{token::*, ty::parse_type, util::*, *};
 
-fn parse_number_literal(input: Span) -> ParseResult<Box<Expression>> {
-    located(map(digit1, |str: Span| {
-        Box::new(Expression::NumberLiteral {
+fn parse_number_literal(input: Span) -> NotLocatedParseResult<Expression> {
+    map(digit1, |str: Span| {
+        Expression::NumberLiteral(NumberLiteralExpr {
             value: str.to_string(),
         })
-    }))(input)
+    })(input)
 }
 
-fn parse_variable_ref(input: Span) -> ParseResult<Box<Expression>> {
-    located(map(
-        permutation((many0(asterisk), parse_identifier, skip0, opt(index_access))),
-        |(asterisks, name, _, index_access)| {
-            Box::new(Expression::VariableRef {
-                deref_count: asterisks.len() as u32,
-                index_access: index_access.map(box_located_expression),
-                name,
-            })
-        },
-    ))(input)
+fn parse_variable_ref(input: Span) -> NotLocatedParseResult<Expression> {
+    map(
+        permutation((parse_identifier, skip0, opt(index_access))),
+        |(name, _, index_access)| Expression::VariableRef(VariableRefExpr { name }),
+    )(input)
 }
 
-fn parse_arguments(input: Span) -> NotLocatedParseResult<Vec<Located<Box<Expression>>>> {
+fn parse_arguments(input: Span) -> NotLocatedParseResult<Vec<LocatedExpr>> {
     let mut args = Vec::new();
     let mut s = input;
     loop {
@@ -43,38 +34,44 @@ fn parse_arguments(input: Span) -> NotLocatedParseResult<Vec<Located<Box<Express
         if rparen(s).is_ok() {
             break;
         }
-        let (rest_s, v) = parse_expression(s)?;
-        let located_boxed_expression = v.map(|x| Box::new(x));
-        args.push(located_boxed_expression);
+        let (rest_s, expr) = parse_boxed_expression(s)?;
+        args.push(expr);
         s = rest_s;
     }
     Ok((s, args))
 }
 
-pub(super) fn parse_intrinsic_op_expression(input: Span) -> ParseResult<Box<Expression>> {
-    located(map(
+pub(super) fn parse_intrinsic_op_expression(input: Span) -> NotLocatedParseResult<Expression> {
+    map(
         delimited(
             lparen,
             delimited(
                 skip0,
-                pair(
+                tuple((
                     alt((
                         map(plus, |_| BinaryOp::Add),
                         map(minus, |_| BinaryOp::Sub),
                         map(asterisk, |_| BinaryOp::Mul),
                         map(slash, |_| BinaryOp::Div),
                     )),
-                    preceded(skip0, parse_arguments),
-                ),
+                    parse_boxed_expression,
+                    parse_boxed_expression,
+                )),
                 skip0,
             ),
-            rparen,
+            preceded(skip0, rparen),
         ),
-        |(binop, args)| Box::new(Expression::BinaryExpr { op: binop, args }),
-    ))(input)
+        |(binop, lhs, rhs)| {
+            Expression::BinaryExpr(BinaryExpr {
+                op: binop,
+                lhs: lhs,
+                rhs,
+            })
+        },
+    )(input)
 }
 
-pub(super) fn parse_function_call_expression(input: Span) -> ParseResult<Box<Expression>> {
+pub(super) fn parse_function_call_expression(input: Span) -> NotLocatedParseResult<Expression> {
     fn parse_generic_arguments(input: Span) -> NotLocatedParseResult<Vec<Located<UnresolvedType>>> {
         delimited(
             langlebracket,
@@ -82,7 +79,7 @@ pub(super) fn parse_function_call_expression(input: Span) -> ParseResult<Box<Exp
             ranglebracket,
         )(input)
     }
-    located(map(
+    map(
         delimited(
             lparen,
             tuple((
@@ -93,28 +90,32 @@ pub(super) fn parse_function_call_expression(input: Span) -> ParseResult<Box<Exp
             rparen,
         ),
         |(name, generic_args, args)| {
-            Box::new(Expression::CallExpr(CallExpr{
+            Expression::Call(CallExpr {
                 name,
                 generic_args,
                 args,
-            }))
+            })
         },
-    ))(input)
+    )(input)
 }
 
-fn parse_boxed_expression(input: Span) -> ParseResult<Box<Expression>> {
-    context(
-        "expression",
+pub(super) fn parse_boxed_expression(input: Span) -> ParseResult<Box<Expression>> {
+    located(map(
         alt((
             parse_number_literal,
             parse_function_call_expression,
             parse_intrinsic_op_expression,
             parse_variable_ref,
         )),
-    )(input)
+        |x| Box::new(x),
+    ))(input)
 }
 
-pub(super) fn parse_expression(input: Span) -> ParseResult<Expression> {
-    let (s, loc_expr) = parse_boxed_expression(input)?;
-    Ok((s, unbox_located_expression(loc_expr)))
+pub(super) fn parse_expression(input: Span) -> NotLocatedParseResult<Expression> {
+    alt((
+        parse_number_literal,
+        parse_function_call_expression,
+        parse_intrinsic_op_expression,
+        parse_variable_ref,
+    ))(input)
 }
