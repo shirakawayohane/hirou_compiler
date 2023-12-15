@@ -1,6 +1,5 @@
 use inkwell::{
-    types::{BasicTypeEnum, IntType},
-    values::{BasicValue, BasicValueEnum, IntValue, PointerValue},
+    values::{BasicValue, BasicValueEnum, PointerValue},
 };
 
 use crate::resolved_ast::ResolvedType;

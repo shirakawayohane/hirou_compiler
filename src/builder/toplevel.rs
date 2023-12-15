@@ -32,7 +32,7 @@ impl<'a> LLVMCodeGenerator<'a> {
 
             // Set parameters in function body
             // Generate function body
-            for (i, (ty, name)) in function.decl.args.iter().enumerate() {
+            for (i, (_ty, name)) in function.decl.args.iter().enumerate() {
                 let parameter = function_value.get_nth_param(i as u32).unwrap();
                 parameter.set_name(name.as_str());
                 let allocated_pointer = self.llvm_builder.build_alloca(parameter.get_type(), &name);

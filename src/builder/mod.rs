@@ -9,14 +9,14 @@ use inkwell::OptimizationLevel;
 use inkwell::types::IntType;
 pub use target::TargetPlatform;
 
-use self::target::TargetMetrics;
+
 use crate::resolved_ast::*;
 use inkwell::builder::Builder as LLVMBuilder;
 use inkwell::context::Context as LLVMContext;
 use inkwell::module::Module as LLVMModule;
 use inkwell::targets::{CodeModel, RelocMode, Target, TargetMachine, TargetTriple};
-use inkwell::values::{IntValue, PointerValue};
-use std::collections::{HashMap, HashSet};
+use inkwell::values::{PointerValue};
+use std::collections::{HashMap};
 
 type MangledName = String;
 

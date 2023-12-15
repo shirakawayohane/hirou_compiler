@@ -1,10 +1,9 @@
-use std::{cell::RefCell, collections::{HashSet, HashMap}, fs::read_to_string, path::Path, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, fs::read_to_string, path::Path, rc::Rc};
 mod ast;
 mod builder;
 mod parser;
 mod resolved_ast;
 mod resolver;
-mod util;
 
 use builder::TargetPlatform;
 use clap::{command, Parser};

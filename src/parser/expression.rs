@@ -2,12 +2,11 @@ use nom::{
     branch::{alt, permutation},
     character::complete::digit1,
     combinator::{map, opt},
-    error::context,
-    multi::{many0, separated_list1},
-    sequence::{delimited, pair, preceded, tuple},
+    multi::{separated_list1},
+    sequence::{delimited, preceded, tuple},
 };
 
-use crate::{ast::*, parser::ty::parse_type_not_located, util::unbox_located_expression};
+use crate::{ast::*};
 
 use super::{token::*, ty::parse_type, util::*, *};
 
@@ -22,7 +21,7 @@ fn parse_number_literal(input: Span) -> NotLocatedParseResult<Expression> {
 fn parse_variable_ref(input: Span) -> NotLocatedParseResult<Expression> {
     map(
         permutation((parse_identifier, skip0, opt(index_access))),
-        |(name, _, index_access)| Expression::VariableRef(VariableRefExpr { name }),
+        |(name, _, _index_access)| Expression::VariableRef(VariableRefExpr { name }),
     )(input)
 }
 

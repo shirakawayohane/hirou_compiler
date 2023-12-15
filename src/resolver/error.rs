@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use thiserror::Error;
 
-use crate::resolved_ast::ResolvedType;
+
 
 #[derive(Debug)]
 pub enum ContextType {

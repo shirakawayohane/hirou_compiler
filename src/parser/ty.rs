@@ -8,7 +8,7 @@ use nom::{
 
 use crate::ast::*;
 
-use super::{token::*, util::{located, skip0}, ParseResult, Span, NotLocatedParseResult};
+use super::{token::*, util::{located}, ParseResult, Span, NotLocatedParseResult};
 
 fn parse_array(input: Span) -> ParseResult<UnresolvedType> {
     located(map(delimited(lsqrbracket, parse_type, rsqrbracket), |ty| {
@@ -36,8 +36,4 @@ fn parse_typeref(input: Span) -> ParseResult<UnresolvedType> {
 
 pub(super) fn parse_type(input: Span) -> ParseResult<UnresolvedType> {
     context("type", alt((parse_array, parse_typeref)))(input)
-}
-
-pub(super) fn parse_type_not_located(input: Span) -> NotLocatedParseResult<UnresolvedType> {
-    context("type", map(alt((parse_array, parse_typeref)), |loc_ty| loc_ty.value))(input)
 }

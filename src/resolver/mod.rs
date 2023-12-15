@@ -2,17 +2,17 @@ mod error;
 
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::{HashMap},
     ops::Deref,
     rc::Rc,
 };
 
-use nom::number;
-use thiserror::Error;
+
+
 
 use crate::{
     ast::{self},
-    resolved_ast::{self, NumberLiteral, ResolvedExpression, ResolvedType, VariableRefExpr},
+    resolved_ast::{self, ResolvedExpression, ResolvedType, VariableRefExpr},
 };
 
 use self::error::{CompileError, FaitalError};
@@ -134,21 +134,6 @@ fn gen_function_impls_recursively<'a>(
                     });
                 let ty = if let Some(annotation) = annotation {
                     annotation
-                    // match annotation {
-                    //     ResolvedType::I32 => ResolvedType::I32,
-                    //     ResolvedType::I64 => ResolvedType::I64,
-                    //     ResolvedType::U64 => ResolvedType::U64,
-                    //     ResolvedType::U8 => ResolvedType::U8,
-                    //     ResolvedType::U32 => ResolvedType::U32,
-                    //     ResolvedType::U64 => Re
-                    //     ResolvedType::USize => USIZE_TYPE,
-                    //     _ => {
-                    //         return Err(FaitalError(format!(
-                    //             "Invalid annotation for number literal: {}",
-                    //             annotation
-                    //         )))
-                    //     }
-                    // }
                 } else {
                     if number_literal.value.parse::<i32>().is_ok() {
                         ResolvedType::I32
