@@ -12,7 +12,8 @@ use nom::{
     combinator::{eof, map},
     error::VerboseError,
     multi::many0,
-    Parser, sequence::tuple,
+    sequence::tuple,
+    Parser,
 };
 
 fn comment<'a>(s: Span<'a>) -> IResult<Span<'a>, (), VerboseError<Span<'a>>> {
@@ -28,7 +29,11 @@ fn comment<'a>(s: Span<'a>) -> IResult<Span<'a>, (), VerboseError<Span<'a>>> {
 
 pub(super) fn skip0<'a>(input: Span<'a>) -> IResult<Span<'a>, (), VerboseError<Span<'a>>> {
     map(
-        many0(alt((comment, map(comma, |_| ()), map(multispace1, |_| ())))),
+        many0(alt((
+            comment,
+            map(tag(","), |_| ()),
+            map(multispace1, |_| ()),
+        ))),
         |_| (),
     )(input)
 }
@@ -70,9 +75,5 @@ pub(super) fn located<'a, O>(
 }
 
 pub(super) fn index_access<'a>(input: Span<'a>) -> NotLocatedParseResult<Expression> {
-    delimited(
-        lsqrbracket,
-        delimited(skip0, parse_expression, skip0),
-        rsqrbracket,
-    )(input)
+    delimited(lsqrbracket, parse_expression, rsqrbracket)(input)
 }

@@ -55,7 +55,7 @@ fn parse_variable_decl(input: Span) -> NotLocatedParseResult<Statement> {
                     |(_, _, _, ty)| ty,
                 ),
             ),
-            preceded(skip0, equals),
+            equals,
             preceded(skip0, located(parse_expression)),
         )),
         |(_, name, ty, _, expression)| {

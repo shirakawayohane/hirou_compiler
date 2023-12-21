@@ -4,117 +4,62 @@ use nom::{
     bytes::complete::{tag, take_till1},
     character::complete::{char, digit1},
     combinator::not,
+    sequence::preceded,
 };
 
-#[inline(always)]
-pub(super) fn lparen(input: Span) -> NotLocatedParseResult<char> {
-    char('(')(input)
+// トークン間の空白をスキップし、本筋に集中するためのコンビネーター
+fn token<'a, F, O>(f: F) -> impl FnMut(Span<'a>) -> NotLocatedParseResult<()>
+where
+    F: FnMut(Span<'a>) -> NotLocatedParseResult<O>,
+{
+    map(preceded(skip0, f), |_| ())
 }
 
-#[inline(always)]
-pub(super) fn rparen(input: Span) -> NotLocatedParseResult<char> {
-    char(')')(input)
+macro_rules! token_char {
+    ($name:ident, $arg:expr) => {
+        #[inline(always)]
+        pub(super) fn $name(input: Span) -> NotLocatedParseResult<()> {
+            token(char($arg))(input)
+        }
+    };
 }
 
-#[inline(always)]
-pub(super) fn lbracket(input: Span) -> NotLocatedParseResult<char> {
-    char('{')(input)
+macro_rules! token_tag {
+    ($name:ident, $arg:expr) => {
+        #[inline(always)]
+        pub(super) fn $name(input: Span) -> NotLocatedParseResult<()> {
+            token(tag($arg))(input)
+        }
+    };
 }
 
-#[inline(always)]
-pub(super) fn rbracket(input: Span) -> NotLocatedParseResult<char> {
-    char('}')(input)
+#[test]
+fn test_token_char() {
+    assert!(lparen("(".into()).is_ok());
 }
 
-#[inline(always)]
-pub(super) fn lsqrbracket(input: Span) -> NotLocatedParseResult<char> {
-    char('[')(input)
-}
-
-#[inline(always)]
-pub(super) fn rsqrbracket(input: Span) -> NotLocatedParseResult<char> {
-    char(']')(input)
-}
-
-#[inline(always)]
-pub(super) fn langlebracket(input: Span) -> NotLocatedParseResult<char> {
-    char('<')(input)
-}
-
-#[inline(always)]
-pub(super) fn ranglebracket(input: Span) -> NotLocatedParseResult<char> {
-    char('>')(input)
-}
-
-#[inline(always)]
-pub(super) fn comma(input: Span) -> NotLocatedParseResult<char> {
-    char(',')(input)
-}
-
-#[inline(always)]
-pub(super) fn colon(input: Span) -> NotLocatedParseResult<char> {
-    char(':')(input)
-}
-
-#[inline(always)]
-pub(super) fn equals(input: Span) -> NotLocatedParseResult<char> {
-    char('=')(input)
-}
-
-#[inline(always)]
-pub(super) fn plus(input: Span) -> NotLocatedParseResult<char> {
-    char('+')(input)
-}
-
-#[inline(always)]
-pub(super) fn minus(input: Span) -> NotLocatedParseResult<char> {
-    char('-')(input)
-}
-
-#[inline(always)]
-pub(super) fn asterisk(input: Span) -> NotLocatedParseResult<char> {
-    char('*')(input)
-}
-
-#[inline(always)]
-pub(super) fn slash(input: Span) -> NotLocatedParseResult<char> {
-    char('/')(input)
-}
-
-#[inline(always)]
-pub(super) fn fn_token(input: Span) -> NotLocatedParseResult<Span> {
-    tag("fn")(input)
-}
-
-#[inline(always)]
-pub(super) fn let_token(input: Span) -> NotLocatedParseResult<Span> {
-    tag("let")(input)
-}
-
-#[inline(always)]
-pub(super) fn i32(input: Span) -> NotLocatedParseResult<Span> {
-    tag("i32")(input)
-}
-
-#[inline(always)]
-pub(super) fn usize(input: Span) -> NotLocatedParseResult<Span> {
-    tag("usize")(input)
-}
-
-#[inline(always)]
-pub(super) fn u8(input: Span) -> NotLocatedParseResult<Span> {
-    tag("u8")(input)
-}
-
-#[inline(always)]
-pub(super) fn return_token(input: Span) -> NotLocatedParseResult<Span> {
-    tag("return")(input)
-}
-
-#[inline(always)]
-pub(super) fn doublequote(input: Span) -> NotLocatedParseResult<Span> {
-    tag("\"")(input)
-}
+token_char!(lparen, '(');
+token_char!(rparen, ')');
+token_char!(lbracket, '{');
+token_char!(rbracket, '}');
+token_char!(lsqrbracket, '[');
+token_char!(rsqrbracket, ']');
+token_char!(langlebracket, '<');
+token_char!(ranglebracket, '>');
+token_char!(comma, ',');
+token_char!(colon, ':');
+token_char!(equals, '=');
+token_char!(plus, '+');
+token_char!(minus, '-');
+token_char!(asterisk, '*');
+token_char!(slash, '/');
+token_tag!(fn_token, "fn");
+token_tag!(let_token, "let");
+token_tag!(i32, "i32");
+token_tag!(usize, "usize");
+token_tag!(u8, "u8");
+token_tag!(return_token, "return");
+token_tag!(doublequote, "\"");
 
 #[inline(always)]
 pub(super) fn parse_identifier(input: Span) -> NotLocatedParseResult<String> {

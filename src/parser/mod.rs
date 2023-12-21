@@ -28,7 +28,7 @@ pub fn parse_module<'a>(input: Span<'a>) -> IResult<Span, Module, VerboseError<S
     context(
         "module",
         map(
-            many1(delimited(skip0, parse_toplevel, skip0)),
+            many1(parse_toplevel),
             |toplevels| Module { toplevels },
         ),
     )(input)

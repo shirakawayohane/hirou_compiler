@@ -1,9 +1,10 @@
 use nom::{
     branch::alt,
+    bytes::complete::tag,
     character::complete::{digit1, none_of},
     combinator::{map, opt},
-    multi::{separated_list1, many0},
-    sequence::{delimited, pair, preceded, tuple}, bytes::complete::tag,
+    multi::{many0, separated_list1},
+    sequence::{delimited, pair, preceded, tuple},
 };
 
 use crate::ast::*;
@@ -58,7 +59,7 @@ pub(super) fn parse_intrinsic_op_expression(input: Span) -> NotLocatedParseResul
                 )),
                 skip0,
             ),
-            preceded(skip0, rparen),
+            rparen,
         ),
         |(binop, lhs, rhs)| {
             Expression::BinaryExpr(BinaryExpr {
@@ -83,8 +84,8 @@ pub(super) fn parse_function_call_expression(input: Span) -> NotLocatedParseResu
             lparen,
             tuple((
                 parse_identifier,
-                opt(preceded(skip0, parse_generic_arguments)),
-                delimited(skip0, parse_arguments, skip0),
+                opt(parse_generic_arguments),
+                parse_arguments,
             )),
             rparen,
         ),
@@ -99,20 +100,15 @@ pub(super) fn parse_function_call_expression(input: Span) -> NotLocatedParseResu
 }
 
 fn parse_deref_expression(input: Span) -> NotLocatedParseResult<Expression> {
-    map(
-        delimited(skip0, preceded(asterisk, parse_boxed_expression), skip0),
-        |expr| Expression::DerefExpr(DerefExpr { target: expr }),
-    )(input)
+    map(preceded(asterisk, parse_boxed_expression), |expr| {
+        Expression::DerefExpr(DerefExpr { target: expr })
+    })(input)
 }
 
 fn parse_index_access(input: Span) -> NotLocatedParseResult<Expression> {
     map(
         pair(
-            delimited(
-                preceded(skip0, lsqrbracket),
-                delimited(skip0, parse_boxed_expression, skip0),
-                rsqrbracket,
-            ),
+            delimited(lsqrbracket, parse_boxed_expression, rsqrbracket),
             parse_boxed_expression,
         ),
         |(index, target)| Expression::IndexAccess(IndexAccessExpr { target, index }),
@@ -143,13 +139,13 @@ fn parse_string_literal(input: Span) -> NotLocatedParseResult<Expression> {
 #[test]
 fn test_parse_index_access() {
     let result = parse_index_access(Span::new("[1]hoge aa"));
-    dbg!(&result);
     assert!(result.is_ok());
     let (rest, _expr) = result.unwrap();
     assert_eq!(rest.fragment(), &"aa");
 }
 
 pub(super) fn parse_boxed_expression(input: Span) -> ParseResult<Box<Expression>> {
+    dbg!(input);
     located(map(
         alt((
             parse_deref_expression,

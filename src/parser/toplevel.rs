@@ -42,7 +42,7 @@ fn parse_arguments(input: Span) -> NotLocatedParseResult<Vec<(Located<Unresolved
         alt((
             map(skip0, |(..)| vec![]),
             map(parse_argument, |arg| vec![arg]),
-            separated_list1(delimited(skip0, comma, skip0), parse_argument),
+            separated_list1(comma, parse_argument),
         )),
         rparen,
     )(input)
