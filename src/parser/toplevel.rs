@@ -3,11 +3,12 @@ use crate::{ast::*, parser::ty::parse_type};
 use super::{statement::parse_statement, token::*, util::*, *};
 
 use nom::{
+    branch::alt,
     character::complete::{multispace0, space0},
     combinator::{cut, map, opt},
     error::context,
     multi::separated_list0,
-    sequence::{delimited, tuple},
+    sequence::{delimited, pair, tuple},
 };
 
 fn parse_generic_argument(input: Span) -> ParseResult<GenericArgument> {
@@ -26,14 +27,17 @@ fn parse_generic_arguments<'a>(
     )(input)
 }
 
-fn parse_argument(input: Span) -> NotLocatedParseResult<(Located<UnresolvedType>, String)> {
-    let (input, name) = nom::character::complete::alpha1(input)?;
-    let (input, _) = nom::character::complete::char(':')(input)?;
-    let (input, ty) = cut(parse_type)(input)?;
-    Ok((input, (ty, name.fragment().to_string())))
+fn parse_argument(input: Span) -> NotLocatedParseResult<Argument> {
+    alt((
+        map(threedots, |_| Argument::VarArgs),
+        map(
+            tuple((parse_identifier, colon, parse_type)),
+            |(name, _, ty)| Argument::Normal(ty, name),
+        ),
+    ))(input)
 }
 
-fn parse_arguments(input: Span) -> NotLocatedParseResult<Vec<(Located<UnresolvedType>, String)>> {
+fn parse_arguments(input: Span) -> NotLocatedParseResult<Vec<Argument>> {
     let mut args = Vec::new();
     let (mut rest, _) = lparen(input)?;
     loop {
@@ -54,8 +58,12 @@ fn test_parse_single_argument() {
     let input = "x:i32,".into();
     let result = parse_argument(input);
     assert!(result.is_ok());
-    let (rest, (ty, name)) = result.unwrap();
+    let (rest, arg) = result.unwrap();
     assert_eq!(rest.to_string().as_str(), ",");
+    let (ty, name) = match arg {
+        Argument::Normal(ty, name) => (ty, name),
+        _ => panic!("unexpected argument type"),
+    };
     assert_eq!(name, "x");
     assert_eq!(
         ty.value,
@@ -73,17 +81,25 @@ fn test_parse_multiple_arguments() {
     assert!(result.is_ok());
     let (_, args) = result.unwrap();
     assert_eq!(args.len(), 2);
-    assert_eq!(args[0].1, "x");
+    let (ty, name) = match &args[0] {
+        Argument::Normal(ty, name) => (ty, name),
+        _ => panic!("unexpected argument type"),
+    };
+    assert_eq!(name, "x");
     assert_eq!(
-        args[0].0.value,
+        ty.value,
         UnresolvedType::TypeRef(TypeRef {
             name: "i32".into(),
             generic_args: None
         })
     );
-    assert_eq!(args[1].1, "y");
+    let (ty, name) = match &args[1] {
+        Argument::Normal(ty, name) => (ty, name),
+        _ => panic!("unexpected argument type"),
+    };
+    assert_eq!(name, "y");
     assert_eq!(
-        args[1].0.value,
+        ty.value,
         UnresolvedType::TypeRef(TypeRef {
             name: "f64".into(),
             generic_args: None
@@ -154,13 +170,18 @@ fn parse_function(input: Span) -> ParseResult<TopLevel> {
 }
 
 pub(crate) fn parse_toplevel(input: Span) -> ParseResult<TopLevel> {
-    dbg!(input);
     context("toplevel", parse_function)(input)
 }
 
 #[test]
 fn test_parse_toplevel() {
-    let result = parse_toplevel("fn printf<T>(format: *u8, v: T): void {}".into());
-    dbg!(&result);
+    let result = parse_toplevel(
+        "
+fn print-i32(s: *u8, n: i32): void {
+    (printf 1, n)
+}
+"
+        .into(),
+    );
     assert!(result.is_ok());
 }

@@ -1,23 +1,29 @@
 mod error;
+mod expression;
 mod intrinsic;
 
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, ops::DerefMut, rc::Rc, thread::scope};
 
 use crate::{
     ast::{self},
-    resolved_ast::{self, ResolvedExpression, ResolvedType, VariableRefExpr},
+    resolved_ast::{self, ResolvedType},
 };
 
 use self::{
     error::{CompileError, FaitalError},
-    intrinsic::register_intrinsic_functions,
+    expression::resolve_expression,
+    intrinsic::{register_intrinsic_functions, register_intrinsic_types},
 };
 
 type Result<T, E = FaitalError> = std::result::Result<T, E>;
 
 use crate::ast::*;
 
-fn mangle_fn_name(name: &str, arg_types: &[&ResolvedType], ret: &ResolvedType) -> String {
+pub(crate) fn mangle_fn_name(
+    name: &str,
+    arg_types: &[&ResolvedType],
+    ret: &ResolvedType,
+) -> String {
     let mut mangled_name = name.to_owned();
     mangled_name.push_str("(");
     for arg in arg_types {
@@ -32,29 +38,32 @@ fn mangle_fn_name(name: &str, arg_types: &[&ResolvedType], ret: &ResolvedType) -
 
 fn resolve_type<'a>(
     errors: &mut Vec<CompileError>,
-    types: Rc<RefCell<HashMap<String, &'a ResolvedType>>>,
+    scopes: Rc<RefCell<Scopes>>,
     ty: &ast::UnresolvedType,
 ) -> Result<ResolvedType> {
     match ty {
         UnresolvedType::TypeRef(typ_ref) => {
-            let resolved_type = *types.borrow().get(&typ_ref.name).unwrap_or({
+            let scopes = scopes.borrow();
+            let resolved_type = scopes.get(&typ_ref.name).unwrap_or_else(|| {
                 errors.push(CompileError::from_error_kind(
                     error::CompileErrorKind::TypeNotFound {
                         name: typ_ref.name.clone(),
                     },
                 ));
-                &&ResolvedType::Unknown
+                &ResolvedType::Unknown
             });
+            // let resolved_type = *types.borrow().get(&typ_ref.name).unwrap();
             Ok(resolved_type.clone())
         }
         UnresolvedType::Ptr(inner_type) => {
-            let inner_type: ResolvedType = resolve_type(errors, types.clone(), inner_type)?;
+            let inner_type: ResolvedType = resolve_type(errors, scopes.clone(), inner_type)?;
             Ok(ResolvedType::Ptr(Box::new(inner_type)))
         }
     }
 }
 
-struct Scopes {
+#[derive(Debug, Clone)]
+pub struct Scopes {
     scopes: Vec<HashMap<String, ResolvedType>>,
 }
 
@@ -75,7 +84,7 @@ impl<'a> Scopes {
         self.scopes.last_mut().unwrap().insert(name, ty);
     }
 
-    fn get(&'a self, name: &str) -> Option<&'a ResolvedType> {
+    fn get(&'a self, name: &str) -> Option<&ResolvedType> {
         for scope in self.scopes.iter().rev() {
             if let Some(ty) = scope.get(name) {
                 return Some(ty);
@@ -85,174 +94,58 @@ impl<'a> Scopes {
     }
 }
 
+// ジェネリック関数の場合は事前に型を登録しておく必要がある
 fn gen_function_impls_recursively<'a>(
     errors: &mut Vec<CompileError>,
     types: Rc<RefCell<HashMap<String, &'a ResolvedType>>>,
     scopes: Rc<RefCell<Scopes>>,
     function_by_name: &HashMap<String, ast::Function>,
-    resolved_functions: Rc<RefCell<Vec<resolved_ast::Function>>>,
+    resolved_functions: &mut HashMap<String, resolved_ast::Function>,
     current_fn: &ast::Function,
 ) -> Result<(), FaitalError> {
-    fn gen_function_impls_from_expression_recursively<'a>(
-        errors: &mut Vec<CompileError>,
-        types: Rc<RefCell<HashMap<String, &'a ResolvedType>>>,
-        scopes: Rc<RefCell<Scopes>>,
-        function_by_name: &HashMap<String, ast::Function>,
-        resolved_functions: Rc<RefCell<Vec<resolved_ast::Function>>>,
-        expr: &ast::Expression,
-        annotation: Option<ResolvedType>,
-    ) -> Result<resolved_ast::ResolvedExpression, FaitalError> {
-        match expr {
-            Expression::VariableRef(variable_ref) => {
-                let expr_kind = resolved_ast::ExpressionKind::VariableRef(VariableRefExpr {
-                    name: variable_ref.name.clone(),
-                });
-
-                if let Some(ty) = scopes.borrow().get(&variable_ref.name) {
-                    let resolved_type = if let Some(annotation) = annotation {
-                        annotation
-                    } else {
-                        ty.clone()
-                    };
-
-                    return Ok(ResolvedExpression {
-                        ty: resolved_type,
-                        kind: expr_kind,
-                    });
-                } else {
-                    return Ok(ResolvedExpression {
-                        ty: ResolvedType::I32,
-                        kind: expr_kind,
-                    });
-                }
+    let mut resolved_args: Vec<resolved_ast::Argument> = Vec::new();
+    for arg in &current_fn.decl.args {
+        match arg {
+            Argument::VarArgs => {
+                resolved_args.push(resolved_ast::Argument::VarArgs);
             }
-            Expression::NumberLiteral(number_literal) => {
-                let kind =
-                    resolved_ast::ExpressionKind::NumberLiteral(resolved_ast::NumberLiteral {
-                        value: number_literal.value.clone(),
-                        annotation: None,
-                    });
-                let ty = if let Some(annotation) = annotation {
-                    annotation
-                } else {
-                    if number_literal.value.parse::<i32>().is_ok() {
-                        ResolvedType::I32
-                    } else if number_literal.value.parse::<i64>().is_ok() {
-                        ResolvedType::I64
-                    } else if number_literal.value.parse::<u64>().is_ok() {
-                        ResolvedType::U64
-                    } else {
-                        unreachable!()
-                    }
-                };
-
-                return Ok(ResolvedExpression { ty, kind });
+            Argument::Normal(arg_ty, arg_name) => {
+                let arg_type = resolve_type(errors, scopes.clone(), &arg_ty)?;
+                resolved_args.push(resolved_ast::Argument::Normal(arg_type, arg_name.clone()));
             }
-            Expression::BinaryExpr(bin_expr) => {
-                let lhs = gen_function_impls_from_expression_recursively(
-                    errors,
-                    types.clone(),
-                    scopes.clone(),
-                    function_by_name,
-                    resolved_functions.clone(),
-                    &bin_expr.lhs,
-                    None,
-                )?;
-                let rhs = gen_function_impls_from_expression_recursively(
-                    errors,
-                    types.clone(),
-                    scopes.clone(),
-                    function_by_name,
-                    resolved_functions.clone(),
-                    &bin_expr.rhs,
-                    None,
-                )?;
-                return Ok(resolved_ast::ResolvedExpression {
-                    kind: resolved_ast::ExpressionKind::BinaryExpr(resolved_ast::BinaryExpr {
-                        op: bin_expr.op,
-                        lhs: Box::new(lhs),
-                        rhs: Box::new(rhs),
-                    }),
-                    ty: ResolvedType::I32,
-                });
-            }
-            Expression::Call(call_expr) => {
-                let callee = function_by_name
-                    .get(&call_expr.name)
-                    .ok_or_else(|| FaitalError(format!("No function named {}", call_expr.name)))?;
-                gen_function_impls_recursively(
-                    errors,
-                    types.clone(),
-                    scopes.clone(),
-                    function_by_name,
-                    resolved_functions.clone(),
-                    callee,
-                )?;
-
-                let resolved_return_ty =
-                    resolve_type(errors, types.clone(), &callee.decl.return_type.value)?;
-                let mut resolved_args = Vec::new();
-                for arg in &call_expr.args {
-                    resolved_args.push(gen_function_impls_from_expression_recursively(
-                        errors,
-                        types.clone(),
-                        scopes.clone(),
-                        function_by_name,
-                        resolved_functions.clone(),
-                        arg,
-                        annotation.clone(),
-                    )?);
-                }
-                return Ok(resolved_ast::ResolvedExpression {
-                    kind: resolved_ast::ExpressionKind::CallExpr(resolved_ast::CallExpr {
-                        name: call_expr.name.clone(),
-                        args: resolved_args,
-                    }),
-                    ty: resolved_return_ty,
-                });
-            }
-            Expression::DerefExpr(_) => todo!(),
-            Expression::IndexAccess(_) => todo!(),
-            Expression::StringLiteral(str_literal) => {
-                return Ok(resolved_ast::ResolvedExpression {
-                    kind: resolved_ast::ExpressionKind::StringLiteral(
-                        resolved_ast::StringLiteral {
-                            value: str_literal.value.clone(),
-                        },
-                    ),
-                    ty: ResolvedType::Ptr(Box::new(ResolvedType::Ptr(Box::new(ResolvedType::U8)))),
-                });
-            }
-        };
+        }
     }
 
-    let mut resolved_args: Vec<(ResolvedType, String)> = Vec::new();
-    for i in 0..current_fn.decl.args.len() {
-        let (arg_ty, arg_name) = &current_fn.decl.args[i];
-        let arg_type = resolve_type(errors, types.clone(), &arg_ty)?;
-        resolved_args.push((arg_type, arg_name.clone()));
-    }
-
-    let result_type = resolve_type(errors, types.clone(), &current_fn.decl.return_type)?;
+    let result_type = resolve_type(errors, scopes.clone(), &current_fn.decl.return_type)?;
 
     let name = if current_fn.decl.generic_args.is_some() {
-        let arg_types = resolved_args.iter().map(|x| &x.0).collect::<Vec<_>>();
+        let arg_types = resolved_args
+            .iter()
+            .map(|x| match x {
+                resolved_ast::Argument::Normal(ty, _) => ty,
+                _ => panic!("unexpected argument type"),
+            })
+            .collect::<Vec<_>>();
         mangle_fn_name(&current_fn.decl.name, &arg_types, &result_type)
     } else {
         current_fn.decl.name.clone()
     };
 
+    if resolved_functions.contains_key(&name) {
+        return Ok(());
+    }
+
     let mut resolved_statements = Vec::new();
     for statement in &current_fn.body {
         match &statement.value {
             Statement::VariableDecl(decl) => {
-                let annotation = Some(resolve_type(errors, types.clone(), &decl.ty)?);
-                let resolved_expr = gen_function_impls_from_expression_recursively(
+                let annotation = Some(resolve_type(errors, scopes.clone(), &decl.ty)?);
+                let resolved_expr = resolve_expression(
                     errors,
                     types.clone(),
                     scopes.clone(),
                     function_by_name,
-                    resolved_functions.clone(),
+                    resolved_functions,
                     &decl.value,
                     annotation,
                 )?;
@@ -265,35 +158,35 @@ fn gen_function_impls_recursively<'a>(
             }
             Statement::Return(ret) => {
                 if let Some(expr) = &ret.expression {
-                    gen_function_impls_from_expression_recursively(
+                    resolve_expression(
                         errors,
                         types.clone(),
                         scopes.clone(),
                         function_by_name,
-                        resolved_functions.clone(),
+                        resolved_functions,
                         expr,
                         None,
                     )?;
                 }
             }
             Statement::Effect(effect) => {
-                gen_function_impls_from_expression_recursively(
+                resolve_expression(
                     errors,
                     types.clone(),
                     scopes.clone(),
                     function_by_name,
-                    resolved_functions.clone(),
+                    resolved_functions,
                     &effect.expression,
                     None,
                 )?;
             }
             Statement::Assignment(assignment) => {
-                gen_function_impls_from_expression_recursively(
+                resolve_expression(
                     errors,
                     types.clone(),
                     scopes.clone(),
                     function_by_name,
-                    resolved_functions.clone(),
+                    resolved_functions,
                     &assignment.expression,
                     None,
                 )?;
@@ -301,29 +194,36 @@ fn gen_function_impls_recursively<'a>(
         }
     }
 
-    resolved_functions
-        .borrow_mut()
-        .push(resolved_ast::Function {
-            decl: resolved_ast::FunctionDecl {
-                name,
-                args: resolved_args,
-                return_type: result_type,
-            },
-            body: resolved_statements,
-        });
+    let resolved_function = resolved_ast::Function {
+        decl: resolved_ast::FunctionDecl {
+            name: name.clone(),
+            args: resolved_args,
+            return_type: result_type,
+        },
+        body: resolved_statements,
+    };
+
+    resolved_functions.insert(name, resolved_function);
 
     Ok(())
 }
 
-pub(crate) fn resolve_module<'a>(
+pub(crate) fn resolve_module(
     errors: &mut Vec<CompileError>,
-    types: Rc<RefCell<HashMap<String, &'a ResolvedType>>>,
-    module: &'a crate::ast::Module,
+    resolved_functions: &mut HashMap<String, resolved_ast::Function>,
+    types: Rc<RefCell<HashMap<String, &ResolvedType>>>,
+    module: &crate::ast::Module,
+    is_build_only: bool,
 ) -> Result<crate::resolved_ast::Module, FaitalError> {
     let mut function_by_name = HashMap::new();
+    let scopes = Rc::new(RefCell::new(Scopes::new()));
+    scopes.borrow_mut().push_scope();
     // 組み込み関数の型を登録する
     register_intrinsic_functions(&mut function_by_name);
-    dbg!(&function_by_name);
+    register_intrinsic_types(
+        scopes.borrow_mut().deref_mut(),
+        types.borrow_mut().deref_mut(),
+    );
     for toplevel in &module.toplevels {
         match &toplevel.value {
             TopLevel::Function(func) => {
@@ -336,8 +236,6 @@ pub(crate) fn resolve_module<'a>(
         .ok_or_else(|| FaitalError("No main function found".into()))?;
 
     let resolved_toplevels = RefCell::new(Vec::new());
-    let resolved_functions = Rc::new(RefCell::new(Vec::new()));
-    let scopes = Rc::new(RefCell::new(Scopes::new()));
 
     // main関数から辿れる関数を全て解決する
     gen_function_impls_recursively(
@@ -345,44 +243,42 @@ pub(crate) fn resolve_module<'a>(
         types.clone(),
         scopes.clone(),
         &function_by_name,
-        resolved_functions.clone(),
+        resolved_functions,
         main_fn,
     )?;
-    for resolved_function in resolved_functions.borrow().iter() {
+
+    for resolved_function in resolved_functions.values() {
         resolved_toplevels
             .borrow_mut()
             .push(resolved_ast::TopLevel::Function(resolved_function.clone()));
     }
 
-    // 以下はmain関数から辿れない関数を解決する
-    for toplevel in &module.toplevels {
-        scopes.borrow_mut().push_scope();
-        match &toplevel.value {
-            TopLevel::Function(unresolved_function) => {
-                for (arg_ty, arg_name) in &unresolved_function.decl.args {
-                    let arg_type = resolve_type(errors, types.clone(), &arg_ty)?;
-                    scopes
-                        .borrow_mut()
-                        .insert(arg_name.clone(), arg_type.clone());
+    if !is_build_only {
+        // 以下はmain関数から辿れない関数を解決する
+        for toplevel in &module.toplevels {
+            scopes.borrow_mut().push_scope();
+            match &toplevel.value {
+                TopLevel::Function(unresolved_function) => {
+                    gen_function_impls_recursively(
+                        errors,
+                        types.clone(),
+                        scopes.clone(),
+                        &function_by_name,
+                        resolved_functions,
+                        unresolved_function,
+                    )?;
+                    for resolved_function in resolved_functions.values() {
+                        resolved_toplevels
+                            .borrow_mut()
+                            .push(resolved_ast::TopLevel::Function(resolved_function.clone()));
+                    }
                 }
-                gen_function_impls_recursively(
-                    errors,
-                    types.clone(),
-                    scopes.clone(),
-                    &function_by_name,
-                    resolved_functions.clone(),
-                    unresolved_function,
-                )?;
-                for resolved_function in resolved_functions.borrow().iter() {
-                    resolved_toplevels
-                        .borrow_mut()
-                        .push(resolved_ast::TopLevel::Function(resolved_function.clone()));
-                }
-                resolved_functions.borrow_mut().clear();
             }
+            scopes.borrow_mut().pop_scope();
         }
-        scopes.borrow_mut().pop_scope();
     }
+
+    scopes.borrow_mut().pop_scope();
 
     Ok(resolved_ast::Module {
         toplevels: resolved_toplevels.into_inner(),

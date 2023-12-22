@@ -3,6 +3,7 @@ use nom::{
     bytes::complete::tag,
     character::complete::{digit1, none_of},
     combinator::{map, opt},
+    error::context,
     multi::{many0, separated_list1},
     sequence::{delimited, preceded, tuple},
 };
@@ -99,6 +100,35 @@ pub(super) fn parse_function_call_expression(input: Span) -> NotLocatedParseResu
     )(input)
 }
 
+#[test]
+fn test_parse_function_call_expression() {
+    // write test
+    let result = parse_function_call_expression(Span::new("(write \"%d\", x)"));
+    assert!(result.is_ok());
+    let (rest, expr) = result.unwrap();
+    assert_eq!(rest.to_string().as_str(), "");
+    match expr {
+        Expression::Call(call_expr) => {
+            assert_eq!(call_expr.name, "write");
+            assert!(call_expr.generic_args.is_none());
+            assert_eq!(call_expr.args.len(), 2);
+            assert_eq!(
+                *call_expr.args[0].value,
+                Expression::StringLiteral(StringLiteralExpr {
+                    value: "%d".to_string()
+                })
+            );
+            assert_eq!(
+                *call_expr.args[1].value,
+                Expression::VariableRef(VariableRefExpr {
+                    name: "x".to_string()
+                })
+            );
+        }
+        _ => panic!("unexpected expression type"),
+    }
+}
+
 fn parse_deref_expression(input: Span) -> NotLocatedParseResult<Expression> {
     map(preceded(asterisk, parse_boxed_expression), |expr| {
         Expression::DerefExpr(DerefExpr { target: expr })
@@ -126,18 +156,47 @@ fn parse_string_literal(input: Span) -> NotLocatedParseResult<Expression> {
     )(input)
 }
 
+#[test]
+fn test_parse_string_literal() {
+    let result = parse_string_literal(Span::new("\"%d\""));
+    assert!(result.is_ok());
+    let (rest, expr) = result.unwrap();
+    assert_eq!(rest.to_string().as_str(), "");
+    assert_eq!(
+        expr,
+        Expression::StringLiteral(StringLiteralExpr {
+            value: "%d".to_string()
+        })
+    );
+}
+
 pub(super) fn parse_boxed_expression(input: Span) -> ParseResult<Box<Expression>> {
-    let (_rest, _expr) = located(map(
+    let (rest, expr) = located(map(
         alt((
-            parse_deref_expression,
-            parse_string_literal,
-            parse_number_literal,
-            parse_function_call_expression,
-            parse_intrinsic_op_expression,
-            parse_variable_ref,
+            context("deref", parse_deref_expression),
+            context("string_literal", parse_string_literal),
+            context("number_literal", parse_number_literal),
+            context("call", parse_function_call_expression),
+            context("binop", parse_intrinsic_op_expression),
+            context("variable_ref", parse_variable_ref),
         )),
         |x| Box::new(x),
     ))(input)?;
 
-    todo!();
+    let (rest, opt_index_expr) = opt(located(index_access))(rest)?;
+
+    if let Some(index_expr) = opt_index_expr {
+        Ok((
+            rest,
+            Located {
+                range: index_expr.range,
+                value: Box::new(Expression::IndexAccess(IndexAccessExpr {
+                    target: expr,
+                    index: index_expr.value,
+                })),
+            },
+        ))
+    } else {
+        Ok((rest, expr))
+    }
 }

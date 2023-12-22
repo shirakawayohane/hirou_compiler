@@ -124,10 +124,13 @@ impl LLVMCodeGenerator<'_> {
             .iter()
             .map(|arg| self.gen_expression(&arg).unwrap().into())
             .collect::<Vec<BasicMetadataValueEnum>>();
-        let func = self.llvm_module.get_function(&call_expr.name).unwrap();
-        let value =
-            self.llvm_builder
-                .build_call(func, &args, format!("call {}", call_expr.name).as_str());
+        let function = *self.function_by_name.get(&call_expr.callee).unwrap();
+        let func = self.gen_or_get_function(function);
+        let value = self.llvm_builder.build_call(
+            func,
+            &args,
+            format!("call {}", function.decl.name).as_str(),
+        );
 
         match value.try_as_basic_value().left() {
             Some(value) => Some(value),

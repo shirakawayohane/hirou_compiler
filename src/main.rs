@@ -47,17 +47,29 @@ fn main() {
     let resolved_types = HashMap::new();
     let resolved_types_cell = Rc::new(RefCell::new(resolved_types));
     let mut errors = Vec::new();
-    let resolved_module = match resolver::resolve_module(&mut errors, resolved_types_cell, &module) {
+    let mut resolved_functions = HashMap::new();
+    let resolved_module = match resolver::resolve_module(
+        &mut errors,
+        &mut resolved_functions,
+        resolved_types_cell,
+        &module,
+        true,
+    ) {
         Ok(module) => module,
         Err(err) => {
             dbg!(err);
             return;
         }
     };
+    if !errors.is_empty() {
+        dbg!(errors);
+        return;
+    }
     let mut llvm_codegenerator = builder::LLVMCodeGenerator::new(
         &llvm_context,
         TargetPlatform::DarwinArm64,
         OptimizationLevel::None,
+        &resolved_module,
     );
     let module = llvm_codegenerator.gen_module(&resolved_module);
 

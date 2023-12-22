@@ -3,19 +3,19 @@ use std::{
     ops::Deref,
 };
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Hash, Default)]
 pub struct Position {
     pub line: u32,
     pub col: usize,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Hash, Default)]
 pub struct Range {
     pub from: Position,
     pub to: Position,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub struct Located<T> {
     pub range: Range,
     pub value: T,
@@ -59,7 +59,7 @@ impl<T> Located<Box<T>> {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum BinaryOp {
     Add,
     Sub,
@@ -67,49 +67,49 @@ pub enum BinaryOp {
     Div,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CallExpr {
     pub name: String,
     pub generic_args: Option<Vec<Located<UnresolvedType>>>,
     pub args: Vec<LocatedExpr>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct VariableRefExpr {
     pub name: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct NumberLiteralExpr {
     pub value: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct StringLiteralExpr {
     pub value: String,
 }
 
 pub type LocatedExpr = Located<Box<Expression>>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BinaryExpr {
     pub op: BinaryOp,
     pub lhs: LocatedExpr,
     pub rhs: LocatedExpr,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DerefExpr {
     pub target: LocatedExpr,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct IndexAccessExpr {
     pub target: LocatedExpr,
     pub index: LocatedExpr,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
     VariableRef(VariableRefExpr),
     NumberLiteral(NumberLiteralExpr),
@@ -165,7 +165,7 @@ impl Display for UnresolvedType {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AssignmentStatement {
     pub deref_count: u32,
     pub index_access: Option<Located<Expression>>,
@@ -173,24 +173,24 @@ pub struct AssignmentStatement {
     pub expression: Located<Expression>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct VariableDeclStatement {
     pub ty: Located<UnresolvedType>,
     pub name: String,
     pub value: Located<Expression>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ReturnStatement {
     pub expression: Option<Located<Expression>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct EffectStatement {
     pub expression: Located<Expression>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
     Assignment(AssignmentStatement),
     VariableDecl(VariableDeclStatement),
@@ -198,26 +198,32 @@ pub enum Statement {
     Effect(EffectStatement),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct GenericArgument {
     pub name: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
+pub enum Argument {
+    VarArgs,
+    Normal(Located<UnresolvedType>, String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct FunctionDecl {
     pub name: String,
     pub generic_args: Option<Vec<Located<GenericArgument>>>,
-    pub args: Vec<(Located<UnresolvedType>, String)>,
+    pub args: Vec<Argument>,
     pub return_type: Located<UnresolvedType>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Function {
     pub decl: FunctionDecl,
     pub body: Vec<Located<Statement>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TopLevel {
     Function(Function),
 }

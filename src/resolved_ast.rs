@@ -94,7 +94,7 @@ impl Display for ResolvedType {
 
 #[derive(Debug, Clone)]
 pub struct CallExpr {
-    pub name: String,
+    pub callee: String,
     pub args: Vec<ResolvedExpression>,
 }
 
@@ -103,6 +103,7 @@ pub struct VariableRefExpr {
     pub name: String,
 }
 
+// TODO: type毎に細かく分ける
 #[derive(Debug, Clone)]
 pub struct NumberLiteral {
     pub value: String,
@@ -182,9 +183,15 @@ pub enum Statement {
 }
 
 #[derive(Debug, Clone)]
+pub enum Argument {
+    VarArgs,
+    Normal(ResolvedType, String),
+}
+
+#[derive(Debug, Clone)]
 pub struct FunctionDecl {
     pub name: String,
-    pub args: Vec<(ResolvedType, String)>,
+    pub args: Vec<Argument>,
     pub return_type: ResolvedType,
 }
 

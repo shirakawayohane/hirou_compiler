@@ -3,6 +3,8 @@ use std::fmt::Display;
 
 use thiserror::Error;
 
+use crate::{ast::UnresolvedType, resolved_ast::ResolvedType};
+
 #[derive(Debug)]
 pub enum ContextType {
     // expressions
@@ -41,25 +43,21 @@ pub enum CompileErrorKind {
     #[error("Asign value does not match")]
     TypeMismatch { expected: String, actual: String },
     #[error("Cannot deref {name} for {deref_count:?} times.")]
-    CannotDeref { name: String, deref_count: u32 },
-    #[error("Cannot access {name} by index.")]
-    CannotIndexAccess { name: String, ty: String },
+    InvalidDeref { name: String, deref_count: u32 },
+    #[error("Cannot access {ty} by index.")]
+    InvalidIndexAccess { ty: ResolvedType },
     #[error("Array index must be an integer value")]
     InvalidArrayIndex,
     #[error("Cannot find type name {name}")]
     TypeNotFound { name: String },
-    #[error("Too many generic args. Expected {expected:?}, but got {actual:?}")]
-    TooManyGenericArgs {
+    #[error("Mismatch generic args privided. `{fn_name}` requires {expected} generic arguments, but got {actual}")]
+    MismatchGenericArgCount {
         fn_name: String,
         expected: u32,
         actual: u32,
     },
-    #[error("Too few generic args. Expected {expected:?}, but got {actual:?}")]
-    TooFewGenericArgs {
-        fn_name: String,
-        expected: u32,
-        actual: u32,
-    },
+    #[error("`{fn_name}` requires {expected:?} generic arguments. Currently, type inference is not supported.")]
+    NoGenericArgs { fn_name: String, expected: u32 },
 }
 
 #[derive(Debug, Error)]

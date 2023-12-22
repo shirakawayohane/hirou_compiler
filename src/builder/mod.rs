@@ -7,13 +7,16 @@ mod util;
 
 use inkwell::types::IntType;
 use inkwell::OptimizationLevel;
+use llvm_sys::target::LLVM_InitializeAllTargetInfos;
 pub use target::TargetPlatform;
 
 use crate::resolved_ast::*;
 use inkwell::builder::Builder as LLVMBuilder;
 use inkwell::context::Context as LLVMContext;
 use inkwell::module::Module as LLVMModule;
-use inkwell::targets::{CodeModel, RelocMode, Target, TargetMachine, TargetTriple};
+use inkwell::targets::{
+    CodeModel, InitializationConfig, RelocMode, Target, TargetMachine, TargetTriple,
+};
 use inkwell::values::PointerValue;
 use std::collections::HashMap;
 
@@ -60,6 +63,7 @@ pub struct LLVMCodeGenerator<'a> {
     llvm_context: &'a LLVMContext,
     ptr_sized_int_type: IntType<'a>,
     scopes: Vec<Scope<'a>>,
+    function_by_name: HashMap<String, &'a Function>,
 }
 
 impl<'a> LLVMCodeGenerator<'a> {
@@ -67,9 +71,19 @@ impl<'a> LLVMCodeGenerator<'a> {
         llvm_context: &'a LLVMContext,
         target: TargetPlatform,
         optimization_level: OptimizationLevel,
+        module: &'a Module,
     ) -> Self {
         let llvm_module = llvm_context.create_module("main");
         let llvm_builder = llvm_context.create_builder();
+
+        Target::initialize_all(&InitializationConfig {
+            asm_parser: false,
+            asm_printer: false,
+            base: true,
+            disassembler: false,
+            info: true,
+            machine_code: true,
+        });
 
         let triple = TargetTriple::create(target.metrics().target_triplet);
         let target = Target::from_triple(&triple).unwrap();
@@ -86,6 +100,15 @@ impl<'a> LLVMCodeGenerator<'a> {
             )
             .unwrap();
 
+        let mut function_by_name = HashMap::new();
+        for toplevel in &module.toplevels {
+            match &toplevel {
+                TopLevel::Function(func) => {
+                    function_by_name.insert(func.decl.name.clone(), func);
+                }
+            }
+        }
+
         Self {
             llvm_module,
             llvm_builder,
@@ -93,6 +116,7 @@ impl<'a> LLVMCodeGenerator<'a> {
             ptr_sized_int_type: llvm_context
                 .ptr_sized_int_type(&target_machine.get_target_data(), None),
             scopes: Vec::new(),
+            function_by_name,
         }
     }
     pub fn gen_module(&mut self, module: &'a Module) -> LLVMModule<'a> {

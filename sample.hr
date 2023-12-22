@@ -1,13 +1,13 @@
 fn main(): i32 {
   let size: i32 = 4
-  let buf: *i32 = (malloc size)
+  let buf: *i32 = (malloc<i32> size)
   buf[0] = 1
   buf[1] = 2
   buf[2] = 3
   buf[3] = 4
   (print-i32 *buf)   // 1
-  (print-i32 [1]buf) // 2
-  (print-i32 [2]buf) // 3
-  (print-i32 [3]buf) // 4
+  (print-i32 buf[1]) // 2
+  (print-i32 buf[2]) // 3
+  (print-i32 buf[3]) // 4
   return 0
 }
