@@ -8,7 +8,7 @@ use super::{statement::parse_statement, token::*, util::*, *};
 use nom::{
     branch::alt,
     character::complete::{multispace0, space0},
-    combinator::{map, opt},
+    combinator::{cut, map, opt},
     error::context,
     multi::{separated_list0, separated_list1},
     sequence::{delimited, preceded, tuple},
@@ -29,31 +29,37 @@ fn parse_generic_arguments<'a>(
         ranglebracket,
     )(input)
 }
+
 fn parse_argument(input: Span) -> NotLocatedParseResult<(Located<UnresolvedType>, String)> {
-    map(
-        tuple((parse_identifier, skip0, colon, skip0, parse_type)),
-        |(name, _, _, _, ty)| (ty, name),
-    )(input)
+    let (input, name) = nom::character::complete::alpha1(input)?;
+    let (input, _) = nom::character::complete::char(':')(input)?;
+    let (input, ty) = cut(parse_type)(input)?;
+    Ok((input, (ty, name.fragment().to_string())))
 }
 
 fn parse_arguments(input: Span) -> NotLocatedParseResult<Vec<(Located<UnresolvedType>, String)>> {
-    delimited(
-        lparen,
-        alt((
-            map(skip0, |(..)| vec![]),
-            map(parse_argument, |arg| vec![arg]),
-            separated_list1(comma, parse_argument),
-        )),
-        rparen,
-    )(input)
+    let mut args = Vec::new();
+    let (mut rest, _) = lparen(input)?;
+    loop {
+        (rest, _) = skip0(rest)?;
+        if rest.starts_with(")") {
+            break;
+        }
+        let arg;
+        (rest, arg) = parse_argument(rest)?;
+        args.push(arg);
+    }
+    let (rest, _) = rparen(rest)?;
+    Ok((rest, args))
 }
 
 #[test]
 fn test_parse_single_argument() {
-    let input = "x:i32".into();
+    let input = "x:i32,".into();
     let result = parse_argument(input);
     assert!(result.is_ok());
-    let (_, (ty, name)) = result.unwrap();
+    let (rest, (ty, name)) = result.unwrap();
+    assert_eq!(rest.to_string().as_str(), ",");
     assert_eq!(name, "x");
     assert_eq!(
         ty.value,
@@ -68,7 +74,6 @@ fn test_parse_single_argument() {
 fn test_parse_multiple_arguments() {
     let input = "(x:i32,y:f64)".into();
     let result = parse_arguments(input);
-    dbg!(&result);
     assert!(result.is_ok());
     let (_, args) = result.unwrap();
     assert_eq!(args.len(), 2);

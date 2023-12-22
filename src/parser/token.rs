@@ -78,4 +78,8 @@ fn parse_identifier_test() {
     assert!(parse_identifier("{".into()).is_err());
     assert!(parse_identifier("(".into()).is_err());
     assert!(parse_identifier(")".into()).is_err());
+
+    let (rest, ident) = parse_identifier("hoge,".into()).unwrap();
+    assert_eq!(ident, "hoge");
+    assert_eq!(rest.to_string().as_str(), ",");
 }
