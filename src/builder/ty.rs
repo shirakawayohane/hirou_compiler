@@ -1,4 +1,7 @@
-use inkwell::types::{BasicMetadataTypeEnum, BasicTypeEnum};
+use inkwell::{
+    types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum},
+    AddressSpace,
+};
 
 use crate::resolved_ast::ResolvedType;
 
@@ -13,9 +16,10 @@ impl<'a> LLVMCodeGenerator<'a> {
             ResolvedType::U64 => BasicTypeEnum::IntType(self.llvm_context.i64_type()),
             ResolvedType::I64 => BasicTypeEnum::IntType(self.llvm_context.i64_type()),
             ResolvedType::USize => BasicTypeEnum::IntType(self.llvm_context.i64_type()),
-            ResolvedType::Ptr(inner) => {
-                BasicTypeEnum::PointerType(self.type_to_basic_type_enum(inner)?.into_pointer_type())
-            }
+            ResolvedType::Ptr(inner) => BasicTypeEnum::PointerType(
+                self.type_to_basic_type_enum(inner)?
+                    .ptr_type(AddressSpace::default()),
+            ),
             ResolvedType::Void => return None,
             ResolvedType::Unknown => unreachable!(),
         })
@@ -32,7 +36,8 @@ impl<'a> LLVMCodeGenerator<'a> {
             ResolvedType::I64 => BasicMetadataTypeEnum::IntType(self.llvm_context.i64_type()),
             ResolvedType::USize => BasicMetadataTypeEnum::IntType(self.llvm_context.i64_type()),
             ResolvedType::Ptr(inner) => BasicMetadataTypeEnum::PointerType(
-                self.type_to_basic_type_enum(inner)?.into_pointer_type(),
+                self.type_to_basic_type_enum(inner)?
+                    .ptr_type(AddressSpace::default()),
             ),
             ResolvedType::Void => return None,
             ResolvedType::Unknown => unimplemented!(),

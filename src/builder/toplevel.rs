@@ -16,17 +16,23 @@ impl<'a> LLVMCodeGenerator<'a> {
             .decl
             .args
             .iter()
-            .map(|x| match x {
-                Argument::VarArgs => unimplemented!(),
-                Argument::Normal(ty, _) => self.type_to_basic_metadata_type_enum(ty).unwrap(),
+            .filter_map(|x| match x {
+                Argument::VarArgs => None,
+                Argument::Normal(ty, _) => self.type_to_basic_metadata_type_enum(ty),
             })
             .collect::<Vec<_>>();
+
+        let has_var_args = function
+            .decl
+            .args
+            .iter()
+            .any(|x| matches!(x, Argument::VarArgs));
 
         self.llvm_module.add_function(
             &function.decl.name,
             if let Some(return_type) = self.type_to_basic_type_enum(&function.decl.return_type) {
                 let basic_type = BasicTypeEnum::try_from(return_type).unwrap();
-                basic_type.fn_type(&param_types, false)
+                basic_type.fn_type(&param_types, has_var_args)
             } else {
                 self.llvm_context.void_type().fn_type(&param_types, false)
             },
