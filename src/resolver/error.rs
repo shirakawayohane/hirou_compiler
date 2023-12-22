@@ -1,8 +1,7 @@
+#![allow(unused)]
 use std::fmt::Display;
 
 use thiserror::Error;
-
-
 
 #[derive(Debug)]
 pub enum ContextType {

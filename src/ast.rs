@@ -50,6 +50,15 @@ impl<T> Deref for Located<T> {
     }
 }
 
+impl<T> Located<Box<T>> {
+    pub fn unbox(self) -> Located<T> {
+        Located {
+            range: self.range,
+            value: *self.value,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum BinaryOp {
     Add,
@@ -108,9 +117,8 @@ pub enum Expression {
     BinaryExpr(BinaryExpr),
     Call(CallExpr),
     DerefExpr(DerefExpr),
-    IndexAccess(IndexAccessExpr)
+    IndexAccess(IndexAccessExpr),
 }
-
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct TypeRef {

@@ -5,18 +5,17 @@ mod toplevel;
 mod ty;
 mod util;
 
-use inkwell::OptimizationLevel;
 use inkwell::types::IntType;
+use inkwell::OptimizationLevel;
 pub use target::TargetPlatform;
-
 
 use crate::resolved_ast::*;
 use inkwell::builder::Builder as LLVMBuilder;
 use inkwell::context::Context as LLVMContext;
 use inkwell::module::Module as LLVMModule;
 use inkwell::targets::{CodeModel, RelocMode, Target, TargetMachine, TargetTriple};
-use inkwell::values::{PointerValue};
-use std::collections::{HashMap};
+use inkwell::values::PointerValue;
+use std::collections::HashMap;
 
 type MangledName = String;
 
@@ -50,14 +49,9 @@ impl Scope<'_> {
     pub fn new(kind: ScopeKind) -> Self {
         Self {
             kind,
-            values: todo!(),
+            values: HashMap::new(),
         }
     }
-}
-
-pub struct GenericFunctionImpl {
-    pub generic_args: Vec<ResolvedType>,
-    pub arg_types: Vec<ResolvedType>,
 }
 
 pub struct LLVMCodeGenerator<'a> {
@@ -68,9 +62,12 @@ pub struct LLVMCodeGenerator<'a> {
     scopes: Vec<Scope<'a>>,
 }
 
-
 impl<'a> LLVMCodeGenerator<'a> {
-    pub fn new(llvm_context: &'a LLVMContext, target: TargetPlatform, optimization_level: OptimizationLevel) -> Self {
+    pub fn new(
+        llvm_context: &'a LLVMContext,
+        target: TargetPlatform,
+        optimization_level: OptimizationLevel,
+    ) -> Self {
         let llvm_module = llvm_context.create_module("main");
         let llvm_builder = llvm_context.create_builder();
 

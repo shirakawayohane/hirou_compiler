@@ -55,9 +55,6 @@ token_char!(asterisk, '*');
 token_char!(slash, '/');
 token_tag!(fn_token, "fn");
 token_tag!(let_token, "let");
-token_tag!(i32, "i32");
-token_tag!(usize, "usize");
-token_tag!(u8, "u8");
 token_tag!(return_token, "return");
 token_tag!(doublequote, "\"");
 

@@ -12,7 +12,7 @@ use crate::ast::{
 };
 
 use super::{
-    expression::{parse_expression, parse_function_call_expression},
+    expression::{parse_boxed_expression, parse_function_call_expression},
     token::*,
     ty::parse_type,
     util::*,
@@ -25,19 +25,19 @@ fn parse_asignment(input: Span) -> NotLocatedParseResult<Statement> {
             many0(asterisk),
             parse_identifier,
             skip0,
-            opt(located(index_access)),
+            opt(index_access),
             skip0,
             multispace0,
             equals,
             multispace0,
-            located(parse_expression),
+            parse_boxed_expression,
         )),
         |(asterisks, name, _, index_access, _, _, _, _, value_expr)| {
             Statement::Assignment(AssignmentStatement {
                 deref_count: asterisks.len() as u32,
-                index_access,
+                index_access: index_access.map(|expr| expr.unbox()),
                 name,
-                expression: value_expr,
+                expression: value_expr.unbox(),
             })
         },
     )(input)
@@ -56,13 +56,13 @@ fn parse_variable_decl(input: Span) -> NotLocatedParseResult<Statement> {
                 ),
             ),
             equals,
-            preceded(skip0, located(parse_expression)),
+            preceded(skip0, parse_boxed_expression),
         )),
         |(_, name, ty, _, expression)| {
             Statement::VariableDecl(VariableDeclStatement {
                 ty,
                 name,
-                value: expression,
+                value: expression.unbox(),
             })
         },
     )(input)
@@ -78,17 +78,17 @@ fn parse_function_call_statement(input: Span) -> NotLocatedParseResult<Statement
 
 fn parse_return_statement(input: Span) -> NotLocatedParseResult<Statement> {
     map(
-        tuple((return_token, multispace1, opt(located(parse_expression)))),
+        tuple((return_token, multispace1, opt(parse_boxed_expression))),
         |(_, _, opt_expr)| {
             Statement::Return(ReturnStatement {
-                expression: opt_expr,
+                expression: opt_expr.map(|expr| expr.unbox()),
             })
         },
     )(input)
 }
 
 fn parse_effect_statement(input: Span) -> NotLocatedParseResult<Statement> {
-    map(located(parse_expression), |loc_expr| {
+    map(map(parse_boxed_expression, |x| x.unbox()), |loc_expr| {
         Statement::Effect(EffectStatement {
             expression: loc_expr,
         })

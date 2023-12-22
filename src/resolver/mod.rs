@@ -1,11 +1,11 @@
 mod error;
 mod intrinsic;
 
-use std::{cell::RefCell, clone, collections::HashMap, ops::Deref, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
     ast::{self},
-    resolved_ast::{self, ResolvedExpression, ResolvedType, VariableRefExpr, USIZE_TYPE_NAME},
+    resolved_ast::{self, ResolvedExpression, ResolvedType, VariableRefExpr},
 };
 
 use self::{

@@ -5,11 +5,13 @@ pub enum TargetPlatform {
     #[allow(unused)]
     Windows386,
 
+    #[allow(unused)]
     WindowsAmd64,
 
     #[allow(unused)]
     Linux386,
 
+    #[allow(unused)]
     LinuxAmd64,
 
     #[allow(unused)]
@@ -197,6 +199,7 @@ impl TargetPlatform {
         }
     }
 
+    #[allow(unused)]
     pub fn current() -> Result<Self, &'static str> {
         match env::consts::OS {
             "linux" => Ok(Self::LinuxAmd64),
@@ -256,6 +259,7 @@ pub enum Arch {
 }
 
 impl Arch {
+    #[allow(unused)]
     pub fn name(&self) -> &'static str {
         match self {
             Arch::Amd64 => "amd64",

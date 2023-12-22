@@ -1,17 +1,13 @@
-use crate::{
-    ast::{Function, GenericArgument, TypeRef, UnresolvedType},
-    parser::ty::parse_type,
-};
+use crate::{ast::*, parser::ty::parse_type};
 
 use super::{statement::parse_statement, token::*, util::*, *};
 
 use nom::{
-    branch::alt,
     character::complete::{multispace0, space0},
     combinator::{cut, map, opt},
     error::context,
-    multi::{separated_list0, separated_list1},
-    sequence::{delimited, preceded, tuple},
+    multi::separated_list0,
+    sequence::{delimited, tuple},
 };
 
 fn parse_generic_argument(input: Span) -> ParseResult<GenericArgument> {

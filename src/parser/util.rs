@@ -1,7 +1,7 @@
 use crate::ast::{Expression, Located, Position, Range};
 
 use super::{
-    expression::parse_expression,
+    expression::parse_boxed_expression,
     token::{comma, lsqrbracket, rsqrbracket},
     *,
 };
@@ -74,6 +74,6 @@ pub(super) fn located<'a, O>(
     }
 }
 
-pub(super) fn index_access<'a>(input: Span<'a>) -> NotLocatedParseResult<Expression> {
-    delimited(lsqrbracket, parse_expression, rsqrbracket)(input)
+pub(super) fn index_access<'a>(input: Span<'a>) -> ParseResult<Box<Expression>> {
+    delimited(lsqrbracket, parse_boxed_expression, rsqrbracket)(input)
 }

@@ -4,7 +4,7 @@ use nom::{
     character::complete::{digit1, none_of},
     combinator::{map, opt},
     multi::{many0, separated_list1},
-    sequence::{delimited, pair, preceded, tuple},
+    sequence::{delimited, preceded, tuple},
 };
 
 use crate::ast::*;
@@ -105,16 +105,6 @@ fn parse_deref_expression(input: Span) -> NotLocatedParseResult<Expression> {
     })(input)
 }
 
-fn parse_index_access(input: Span) -> NotLocatedParseResult<Expression> {
-    map(
-        pair(
-            delimited(lsqrbracket, parse_boxed_expression, rsqrbracket),
-            parse_boxed_expression,
-        ),
-        |(index, target)| Expression::IndexAccess(IndexAccessExpr { target, index }),
-    )(input)
-}
-
 fn parse_string_literal(input: Span) -> NotLocatedParseResult<Expression> {
     map(
         delimited(
@@ -136,36 +126,18 @@ fn parse_string_literal(input: Span) -> NotLocatedParseResult<Expression> {
     )(input)
 }
 
-#[test]
-fn test_parse_index_access() {
-    let result = parse_index_access(Span::new("[1]hoge aa"));
-    assert!(result.is_ok());
-    let (rest, _expr) = result.unwrap();
-    assert_eq!(rest.fragment(), &"aa");
-}
-
 pub(super) fn parse_boxed_expression(input: Span) -> ParseResult<Box<Expression>> {
-    dbg!(input);
-    located(map(
+    let (_rest, _expr) = located(map(
         alt((
             parse_deref_expression,
-            parse_index_access,
+            parse_string_literal,
             parse_number_literal,
             parse_function_call_expression,
             parse_intrinsic_op_expression,
             parse_variable_ref,
         )),
         |x| Box::new(x),
-    ))(input)
-}
+    ))(input)?;
 
-pub(super) fn parse_expression(input: Span) -> NotLocatedParseResult<Expression> {
-    alt((
-        parse_deref_expression,
-        parse_index_access,
-        parse_number_literal,
-        parse_function_call_expression,
-        parse_intrinsic_op_expression,
-        parse_variable_ref,
-    ))(input)
+    todo!();
 }
