@@ -14,7 +14,7 @@ use crate::{
 use super::Scopes;
 
 const INTRINSIC_DECLS: &'static str = r#"
-fn malloc<T>(size: usize, v: T) : *T {}
+fn malloc<T>(size: usize) : *T {}
 fn free<T>(ptr: *T) : void {}
 fn memcpy<T>(dst: *T, src: *T, size: usize) : void {}
 fn memset<T>(dst: *T, value: T, size: usize) : void {}
@@ -45,7 +45,7 @@ pub(super) fn register_intrinsic_functions(function_by_name: &mut HashMap<String
         return;
     }
     let (_, intrinsic_module) = result.unwrap();
-    dbg!(&intrinsic_module);
+
     for toplevel in intrinsic_module.toplevels {
         match toplevel.value {
             ast::TopLevel::Function(function) => {
@@ -86,12 +86,4 @@ pub(super) fn register_intrinsic_types(
     types.insert("usize".into(), &USIZE_TYPE);
     types.insert("u8".into(), &U8_TYPE);
     types.insert("void".into(), &VOID_TYPE);
-
-    scopes.insert("i32".into(), I32_TYPE);
-    scopes.insert("i64".into(), I64_TYPE);
-    scopes.insert("u32".into(), U32_TYPE);
-    scopes.insert("u64".into(), U64_TYPE);
-    scopes.insert("usize".into(), USIZE_TYPE);
-    scopes.insert("u8".into(), U8_TYPE);
-    scopes.insert("void".into(), VOID_TYPE);
 }

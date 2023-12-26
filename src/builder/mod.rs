@@ -127,6 +127,12 @@ impl<'a> LLVMCodeGenerator<'a> {
             self.gen_toplevel(top);
         }
 
+        for top in &module.toplevels {
+            match top {
+                TopLevel::Function(func) => self.gen_function_body(func),
+            }
+        }
+
         self.scopes.pop();
 
         self.llvm_module.clone()

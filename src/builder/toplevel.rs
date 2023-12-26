@@ -41,13 +41,17 @@ impl<'a> LLVMCodeGenerator<'a> {
     }
 
     pub(super) fn gen_function_body(&mut self, function: &'a Function) {
+        if function.body.len() == 0 {
+            return;
+        }
+
         let function_value = self.llvm_module.get_function(&function.decl.name).unwrap();
         let entry_basic_block = self
             .llvm_context
             .append_basic_block(function_value, "entry");
 
         let scope = Scope::new(ScopeKind::Function);
-        self.scopes.push(scope);
+        self.push_scope(scope);
         {
             self.llvm_builder.position_at_end(entry_basic_block);
 
@@ -67,11 +71,7 @@ impl<'a> LLVMCodeGenerator<'a> {
                 parameter.set_name(name.as_str());
                 let allocated_pointer = self.llvm_builder.build_alloca(parameter.get_type(), &name);
                 self.llvm_builder.build_store(allocated_pointer, parameter);
-                self.scopes
-                    .last_mut()
-                    .unwrap()
-                    .values
-                    .insert(name.into(), allocated_pointer);
+                self.add_variable(name, allocated_pointer);
             }
 
             // Generate function body
@@ -79,7 +79,7 @@ impl<'a> LLVMCodeGenerator<'a> {
                 self.gen_statement(&statement);
             }
         }
-        self.scopes.pop();
+        self.pop_scope();
     }
 
     pub(super) fn gen_toplevel(&mut self, top: &'a TopLevel) {

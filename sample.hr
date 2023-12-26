@@ -1,5 +1,5 @@
-fn main(): i32 {
-  let size: i32 = 4
+fn main(): void {
+  let size: usize = 4
   let buf: *i32 = (malloc<i32> size)
   buf[0] = 1
   buf[1] = 2

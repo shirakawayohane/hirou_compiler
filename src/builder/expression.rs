@@ -34,22 +34,22 @@ impl LLVMCodeGenerator<'_> {
         let int_value = self.ptr_sized_int_type.const_int(n as u64, true);
         int_value.into()
     }
-    fn eval_number_literal(&self, integer_literal: &NumberLiteral) -> BasicValueEnum {
+    fn eval_number_literal(
+        &self,
+        integer_literal: &NumberLiteral,
+        ty: &ResolvedType,
+    ) -> BasicValueEnum {
         let value_str = &integer_literal.value;
-        if let Some(annotation) = &integer_literal.annotation {
-            match annotation {
-                ResolvedType::U8 => self.eval_u8(value_str),
-                ResolvedType::U32 => self.eval_u32(value_str),
-                ResolvedType::I32 => self.eval_i32(value_str),
-                ResolvedType::I64 => self.eval_i64(value_str),
-                ResolvedType::U64 => self.eval_u64(value_str),
-                ResolvedType::USize => self.eval_usize(value_str),
-                ResolvedType::Ptr(_) => unreachable!(),
-                ResolvedType::Void => unreachable!(),
-                ResolvedType::Unknown => unreachable!(),
-            }
-        } else {
-            self.eval_i32(value_str)
+        match ty {
+            ResolvedType::U8 => self.eval_u8(value_str),
+            ResolvedType::U32 => self.eval_u32(value_str),
+            ResolvedType::I32 => self.eval_i32(value_str),
+            ResolvedType::I64 => self.eval_i64(value_str),
+            ResolvedType::U64 => self.eval_u64(value_str),
+            ResolvedType::USize => self.eval_usize(value_str),
+            ResolvedType::Ptr(_) => unreachable!(),
+            ResolvedType::Void => unreachable!(),
+            ResolvedType::Unknown => unreachable!(),
         }
     }
     fn eval_string_literal(&self, string_literal: &StringLiteral) -> BasicValueEnum {
@@ -140,7 +140,7 @@ impl LLVMCodeGenerator<'_> {
     pub(super) fn gen_expression(&self, expr: &ResolvedExpression) -> Option<BasicValueEnum> {
         match &expr.kind {
             ExpressionKind::NumberLiteral(number_literal) => {
-                Some(self.eval_number_literal(number_literal))
+                Some(self.eval_number_literal(number_literal, &expr.ty))
             }
             ExpressionKind::VariableRef(variable_ref) => Some(self.eval_variable_ref(variable_ref)),
             ExpressionKind::IndexAccess(index_access) => Some(self.eval_index_access(index_access)),

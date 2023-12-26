@@ -2,9 +2,12 @@ use super::*;
 use crate::resolved_ast::*;
 
 impl LLVMCodeGenerator<'_> {
-    pub(super) fn gen_variable_decl(&self, decl: &VariableDecl) {
+    pub(super) fn gen_variable_decl(&mut self, decl: &VariableDecl) {
         let ty = self.type_to_basic_type_enum(&decl.value.ty).unwrap();
         let ptr = self.llvm_builder.build_alloca(ty, &decl.name);
+
+        self.add_variable(&decl.name, ptr.clone());
+
         let value = self.gen_expression(&decl.value).unwrap();
         self.llvm_builder.build_store(ptr, value);
     }

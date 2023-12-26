@@ -107,7 +107,6 @@ pub struct VariableRefExpr {
 #[derive(Debug, Clone)]
 pub struct NumberLiteral {
     pub value: String,
-    pub annotation: Option<ResolvedType>,
 }
 
 #[derive(Debug, Clone)]

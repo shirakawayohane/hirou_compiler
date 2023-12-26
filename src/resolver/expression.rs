@@ -4,7 +4,7 @@ use crate::ast::Expression;
 use crate::resolved_ast::{ExpressionKind, ResolvedExpression, ResolvedType};
 use crate::{ast, resolved_ast};
 
-use super::{error::*, gen_function_impls_recursively, resolve_type, Scopes};
+use super::{error::*, gen_function_impls_recursively, mangle_fn_name, resolve_type, Scopes};
 
 pub(crate) fn resolve_expression(
     errors: &mut Vec<CompileError>,
@@ -22,10 +22,19 @@ pub(crate) fn resolve_expression(
                     name: variable_ref.name.clone(),
                 });
 
+            if variable_ref.name == "size" {
+                dbg!(scopes.clone());
+            }
             if let Some(ty) = scopes.borrow().get(&variable_ref.name) {
                 let resolved_type = if let Some(annotation) = annotation {
+                    if variable_ref.name == "size" {
+                        dbg!(annotation.clone());
+                    }
                     annotation
                 } else {
+                    if variable_ref.name == "size" {
+                        dbg!(ty);
+                    }
                     ty.clone()
                 };
 
@@ -34,8 +43,13 @@ pub(crate) fn resolve_expression(
                     kind: expr_kind,
                 });
             } else {
+                errors.push(CompileError::from_error_kind(
+                    CompileErrorKind::VariableNotFound {
+                        name: variable_ref.name.to_owned(),
+                    },
+                ));
                 return Ok(ResolvedExpression {
-                    ty: ResolvedType::I32,
+                    ty: ResolvedType::Unknown,
                     kind: expr_kind,
                 });
             }
@@ -43,7 +57,6 @@ pub(crate) fn resolve_expression(
         Expression::NumberLiteral(number_literal) => {
             let kind = resolved_ast::ExpressionKind::NumberLiteral(resolved_ast::NumberLiteral {
                 value: number_literal.value.clone(),
-                annotation: None,
             });
             let ty = if let Some(annotation) = annotation {
                 annotation
@@ -114,6 +127,7 @@ pub(crate) fn resolve_expression(
                             resolved_functions,
                             callee,
                         )?;
+                        // ジェネリック引数の数が合わない場合はUnknown扱いにして継続する
                         return Ok(ResolvedExpression {
                             kind: ExpressionKind::CallExpr(resolved_ast::CallExpr {
                                 callee: call_expr.name.clone(),
@@ -126,11 +140,10 @@ pub(crate) fn resolve_expression(
                     for i in 0..generic_args.len() {
                         let generic_arg = &generic_args[i];
                         let actual_arg = &actual_generic_args[i];
-                        let resolved_type = resolve_type(errors, scopes.clone(), &actual_arg)?;
+                        let resolved_type = resolve_type(errors, types.clone(), &actual_arg)?;
                         scopes
                             .borrow_mut()
                             .insert(generic_arg.value.name.clone(), resolved_type);
-                        dbg!(&scopes);
                     }
                 } else {
                     errors.push(CompileError::from_error_kind(
@@ -158,7 +171,6 @@ pub(crate) fn resolve_expression(
             };
             // 上記でスコープに実際の型が登録されているはず。
             // 未生成であれば関数の実装を生成する
-            dbg!(scopes.clone());
             gen_function_impls_recursively(
                 errors,
                 types.clone(),
@@ -169,25 +181,58 @@ pub(crate) fn resolve_expression(
             )?;
 
             let resolved_return_ty =
-                resolve_type(errors, scopes.clone(), &callee.decl.return_type.value)?;
+                resolve_type(errors, types.clone(), &callee.decl.return_type.value)?;
             let mut resolved_args = Vec::new();
-            for arg in &call_expr.args {
-                resolved_args.push(resolve_expression(
-                    errors,
-                    types.clone(),
-                    scopes.clone(),
-                    function_by_name,
-                    resolved_functions,
-                    arg,
-                    annotation.clone(),
-                )?);
+            for (i, arg) in call_expr.args.iter().enumerate() {
+                let calee_arg = &callee.decl.args[i];
+                match calee_arg {
+                    ast::Argument::VarArgs => {
+                        resolved_args.push(resolve_expression(
+                            errors,
+                            types.clone(),
+                            scopes.clone(),
+                            function_by_name,
+                            resolved_functions,
+                            arg,
+                            None,
+                        )?);
+                    }
+                    ast::Argument::Normal(ty, _name) => {
+                        let resolved_ty = resolve_type(errors, types.clone(), ty)?;
+
+                        if (callee.decl.name == "malloc") {
+                            dbg!(resolved_ty.clone(), arg);
+                        }
+                        resolved_args.push(resolve_expression(
+                            errors,
+                            types.clone(),
+                            scopes.clone(),
+                            function_by_name,
+                            resolved_functions,
+                            arg,
+                            Some(resolved_ty),
+                        )?);
+                    }
+                }
+            }
+
+            if (callee.decl.name == "malloc") {
+                dbg!(resolved_args.clone());
             }
 
             scopes.borrow_mut().pop_scope();
 
             return Ok(resolved_ast::ResolvedExpression {
                 kind: resolved_ast::ExpressionKind::CallExpr(resolved_ast::CallExpr {
-                    callee: call_expr.name.clone(),
+                    callee: mangle_fn_name(
+                        &call_expr.name,
+                        resolved_args
+                            .iter()
+                            .map(|x| &x.ty)
+                            .collect::<Vec<_>>()
+                            .as_slice(),
+                        &resolved_return_ty,
+                    ),
                     args: resolved_args,
                 }),
                 ty: resolved_return_ty,

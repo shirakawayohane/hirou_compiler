@@ -77,6 +77,10 @@ fn main() {
     let execution_engine = &module
         .create_jit_execution_engine(inkwell::OptimizationLevel::None)
         .unwrap();
+    for func in module.get_functions() {
+        dbg!(func);
+    }
+    let main_fn = module.get_function("main").unwrap();
     unsafe {
         execution_engine
             .get_function::<unsafe extern "C" fn()>("main")

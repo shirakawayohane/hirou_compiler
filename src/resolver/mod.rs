@@ -26,10 +26,17 @@ pub(crate) fn mangle_fn_name(
 ) -> String {
     let mut mangled_name = name.to_owned();
     mangled_name.push_str("(");
-    for arg in arg_types {
-        mangled_name.push_str(&arg.to_string());
-        mangled_name.push_str(",");
-    }
+    // for arg in arg_types {
+    //     mangled_name.push_str(&arg.to_string());
+    //     mangled_name.push_str(",");
+    // }
+    mangled_name.push_str(
+        &arg_types
+            .iter()
+            .map(|arg| arg.to_string())
+            .collect::<Vec<_>>()
+            .join(","),
+    );
     mangled_name.push_str(")");
     mangled_name.push_str("->");
     mangled_name.push_str(&ret.to_string());
@@ -38,25 +45,24 @@ pub(crate) fn mangle_fn_name(
 
 fn resolve_type<'a>(
     errors: &mut Vec<CompileError>,
-    scopes: Rc<RefCell<Scopes>>,
+    types: Rc<RefCell<HashMap<String, &ResolvedType>>>,
     ty: &ast::UnresolvedType,
 ) -> Result<ResolvedType> {
     match ty {
         UnresolvedType::TypeRef(typ_ref) => {
-            let scopes = scopes.borrow();
-            let resolved_type = scopes.get(&typ_ref.name).unwrap_or_else(|| {
+            let resolved_type = *types.borrow_mut().get(&typ_ref.name).unwrap_or_else(|| {
                 errors.push(CompileError::from_error_kind(
                     error::CompileErrorKind::TypeNotFound {
                         name: typ_ref.name.clone(),
                     },
                 ));
-                &ResolvedType::Unknown
+                &&ResolvedType::Unknown
             });
             // let resolved_type = *types.borrow().get(&typ_ref.name).unwrap();
             Ok(resolved_type.clone())
         }
         UnresolvedType::Ptr(inner_type) => {
-            let inner_type: ResolvedType = resolve_type(errors, scopes.clone(), inner_type)?;
+            let inner_type: ResolvedType = resolve_type(errors, types.clone(), inner_type)?;
             Ok(ResolvedType::Ptr(Box::new(inner_type)))
         }
     }
@@ -64,28 +70,30 @@ fn resolve_type<'a>(
 
 #[derive(Debug, Clone)]
 pub struct Scopes {
-    scopes: Vec<HashMap<String, ResolvedType>>,
+    variable_scopes: Vec<HashMap<String, ResolvedType>>,
 }
 
 impl<'a> Scopes {
     fn new() -> Self {
-        Self { scopes: Vec::new() }
+        Self {
+            variable_scopes: Vec::new(),
+        }
     }
 
     fn push_scope(&mut self) {
-        self.scopes.push(HashMap::new());
+        self.variable_scopes.push(HashMap::new());
     }
 
     fn pop_scope(&mut self) {
-        self.scopes.pop();
+        self.variable_scopes.pop();
     }
 
     fn insert(&mut self, name: String, ty: ResolvedType) {
-        self.scopes.last_mut().unwrap().insert(name, ty);
+        self.variable_scopes.last_mut().unwrap().insert(name, ty);
     }
 
     fn get(&'a self, name: &str) -> Option<&ResolvedType> {
-        for scope in self.scopes.iter().rev() {
+        for scope in self.variable_scopes.iter().rev() {
             if let Some(ty) = scope.get(name) {
                 return Some(ty);
             }
@@ -110,13 +118,13 @@ fn gen_function_impls_recursively<'a>(
                 resolved_args.push(resolved_ast::Argument::VarArgs);
             }
             Argument::Normal(arg_ty, arg_name) => {
-                let arg_type = resolve_type(errors, scopes.clone(), &arg_ty)?;
+                let arg_type = resolve_type(errors, types.clone(), &arg_ty)?;
                 resolved_args.push(resolved_ast::Argument::Normal(arg_type, arg_name.clone()));
             }
         }
     }
 
-    let result_type = resolve_type(errors, scopes.clone(), &current_fn.decl.return_type)?;
+    let result_type = resolve_type(errors, types.clone(), &current_fn.decl.return_type)?;
 
     let name = if current_fn.decl.generic_args.is_some() {
         let arg_types = resolved_args
@@ -139,7 +147,9 @@ fn gen_function_impls_recursively<'a>(
     for statement in &current_fn.body {
         match &statement.value {
             Statement::VariableDecl(decl) => {
-                let annotation = Some(resolve_type(errors, scopes.clone(), &decl.ty)?);
+                dbg!(decl);
+                let annotation = Some(resolve_type(errors, types.clone(), &decl.ty)?);
+                dbg!(annotation.clone());
                 let resolved_expr = resolve_expression(
                     errors,
                     types.clone(),
@@ -149,6 +159,9 @@ fn gen_function_impls_recursively<'a>(
                     &decl.value,
                     annotation,
                 )?;
+                scopes
+                    .borrow_mut()
+                    .insert(decl.name.clone(), resolved_expr.ty.clone());
                 resolved_statements.push(resolved_ast::Statement::VariableDecl(
                     resolved_ast::VariableDecl {
                         name: decl.name.clone(),
