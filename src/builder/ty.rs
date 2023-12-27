@@ -16,10 +16,16 @@ impl<'a> LLVMCodeGenerator<'a> {
             ResolvedType::U64 => BasicTypeEnum::IntType(self.llvm_context.i64_type()),
             ResolvedType::I64 => BasicTypeEnum::IntType(self.llvm_context.i64_type()),
             ResolvedType::USize => BasicTypeEnum::IntType(self.llvm_context.i64_type()),
-            ResolvedType::Ptr(inner) => BasicTypeEnum::PointerType(
-                self.type_to_basic_type_enum(inner)?
-                    .ptr_type(AddressSpace::default()),
-            ),
+            ResolvedType::Ptr(inner) => {
+                BasicTypeEnum::PointerType(if let Some(t) = self.type_to_basic_type_enum(inner) {
+                    t.ptr_type(AddressSpace::default())
+                } else {
+                    // Void Pointer Type
+                    self.llvm_context
+                        .i8_type()
+                        .ptr_type(AddressSpace::default())
+                })
+            }
             ResolvedType::Void => return None,
             ResolvedType::Unknown => unreachable!(),
         })
@@ -36,8 +42,14 @@ impl<'a> LLVMCodeGenerator<'a> {
             ResolvedType::I64 => BasicMetadataTypeEnum::IntType(self.llvm_context.i64_type()),
             ResolvedType::USize => BasicMetadataTypeEnum::IntType(self.llvm_context.i64_type()),
             ResolvedType::Ptr(inner) => BasicMetadataTypeEnum::PointerType(
-                self.type_to_basic_type_enum(inner)?
-                    .ptr_type(AddressSpace::default()),
+                if let Some(t) = self.type_to_basic_type_enum(inner) {
+                    t.ptr_type(AddressSpace::default())
+                } else {
+                    // Void Pointer Type
+                    self.llvm_context
+                        .i8_type()
+                        .ptr_type(AddressSpace::default())
+                },
             ),
             ResolvedType::Void => return None,
             ResolvedType::Unknown => unimplemented!(),

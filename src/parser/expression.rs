@@ -21,10 +21,9 @@ fn parse_number_literal(input: Span) -> NotLocatedParseResult<Expression> {
 }
 
 fn parse_variable_ref(input: Span) -> NotLocatedParseResult<Expression> {
-    map(
-        tuple((parse_identifier, skip0, opt(index_access))),
-        |(name, _, _index_access)| Expression::VariableRef(VariableRefExpr { name }),
-    )(input)
+    map(parse_identifier, |name| {
+        Expression::VariableRef(VariableRefExpr { name })
+    })(input)
 }
 
 fn parse_arguments(input: Span) -> NotLocatedParseResult<Vec<LocatedExpr>> {
@@ -143,8 +142,11 @@ fn parse_string_literal(input: Span) -> NotLocatedParseResult<Expression> {
                 doublequote,
                 map(
                     many0(alt((
-                        map(none_of("\""), |c| c.to_string()),
                         map(tag("\\\""), |_| "\"".to_string()),
+                        map(tag("\\r"), |_| "\r".to_string()),
+                        map(tag("\\n"), |_| "\n".to_string()),
+                        map(tag("\\t"), |_| "\t".to_string()),
+                        map(none_of("\""), |c| c.to_string()),
                     ))),
                     |chars| chars.join(""),
                 ),

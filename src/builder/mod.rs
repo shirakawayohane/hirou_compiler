@@ -7,7 +7,6 @@ mod util;
 
 use inkwell::types::IntType;
 use inkwell::OptimizationLevel;
-use llvm_sys::target::LLVM_InitializeAllTargetInfos;
 pub use target::TargetPlatform;
 
 use crate::resolved_ast::*;
@@ -119,7 +118,7 @@ impl<'a> LLVMCodeGenerator<'a> {
             function_by_name,
         }
     }
-    pub fn gen_module(&mut self, module: &'a Module) -> LLVMModule<'a> {
+    pub fn gen_module(&mut self, module: &'a Module) {
         self.scopes.push(Scope::new(ScopeKind::Global));
 
         // self.gen_intrinsic_functions_on_llvm();
@@ -134,8 +133,9 @@ impl<'a> LLVMCodeGenerator<'a> {
         }
 
         self.scopes.pop();
-
-        self.llvm_module.clone()
+    }
+    pub fn get_module(self) -> LLVMModule<'a> {
+        self.llvm_module
     }
     fn add_variable(&mut self, name: &str, value: PointerValue<'a>) {
         self.scopes

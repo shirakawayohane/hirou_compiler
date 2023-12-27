@@ -40,8 +40,10 @@ pub enum CompileErrorKind {
     InvalidOperand(String),
     #[error("Invalid operand.")]
     InvalidArgument,
-    #[error("Asign value does not match")]
+    #[error("Asign value does not match. expected `{expected}`, but got `{actual}`")]
     TypeMismatch { expected: String, actual: String },
+    #[error("Return value does not match. expected `{expected}`, but got `{actual}`")]
+    ReturnTypeMismatch { expected: String, actual: String },
     #[error("Cannot deref {name} for {deref_count:?} times.")]
     InvalidDeref { name: String, deref_count: u32 },
     #[error("Cannot access {ty} by index.")]

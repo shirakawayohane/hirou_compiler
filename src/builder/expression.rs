@@ -1,4 +1,7 @@
-use inkwell::values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum};
+use inkwell::{
+    values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum},
+    AddressSpace,
+};
 
 use super::*;
 use crate::{ast::BinaryOp, resolved_ast::*};
@@ -56,32 +59,51 @@ impl LLVMCodeGenerator<'_> {
         let value = string_literal.value.as_str();
         let string = self
             .llvm_builder
-            .build_global_string_ptr(value, "string_literal");
+            .build_global_string_ptr(value, "string_literal")
+            .unwrap();
         string.as_basic_value_enum()
     }
-    fn eval_variable_ref(&self, variable_ref: &VariableRefExpr) -> BasicValueEnum {
+    fn eval_variable_ref(
+        &self,
+        variable_ref: &VariableRefExpr,
+        ty: &ResolvedType,
+    ) -> BasicValueEnum {
         let ptr = self.get_variable(&variable_ref.name);
-        let value = self.llvm_builder.build_load(ptr, "load");
-        value
+        let pointee_ty = self.type_to_basic_type_enum(ty).unwrap();
+        self.llvm_builder.build_load(pointee_ty, ptr, "").unwrap()
     }
-    fn eval_index_access(&self, index_access: &IndexAccessExor) -> BasicValueEnum {
+    fn eval_index_access(
+        &self,
+        index_access: &IndexAccessExor,
+        ty: &ResolvedType,
+    ) -> BasicValueEnum {
         let ptr = self.gen_expression(&index_access.target).unwrap();
+        let pointee_ty = self
+            .type_to_basic_type_enum(ty)
+            .unwrap_or(self.type_to_basic_type_enum(&ResolvedType::U8).unwrap());
         let index = self.gen_expression(&index_access.index).unwrap();
         let ptr = unsafe {
-            self.llvm_builder.build_gep(
-                ptr.into_pointer_value(),
-                &[index.into_int_value()],
-                "index_access",
-            )
+            self.llvm_builder
+                .build_in_bounds_gep(
+                    pointee_ty,
+                    ptr.into_pointer_value(),
+                    &[index.into_int_value()],
+                    "index_access",
+                )
+                .unwrap()
         };
-        let value = self.llvm_builder.build_load(ptr, "load");
+        let value = self.llvm_builder.build_load(pointee_ty, ptr, "").unwrap();
         value
     }
-    fn eval_deref(&self, deref: &DerefExpr) -> BasicValueEnum {
+    fn eval_deref(&self, deref: &DerefExpr, ty: &ResolvedType) -> BasicValueEnum {
         let ptr = self.gen_expression(&deref.target).unwrap();
+        let pointee_ty = self
+            .type_to_basic_type_enum(ty)
+            .unwrap_or(self.type_to_basic_type_enum(&ResolvedType::U8).unwrap());
         let value = self
             .llvm_builder
-            .build_load(ptr.into_pointer_value(), "load");
+            .build_load(pointee_ty, ptr.into_pointer_value(), "")
+            .unwrap();
         value
     }
     fn eval_binary_expr(&self, binary_expr: &BinaryExpr) -> BasicValueEnum {
@@ -104,11 +126,9 @@ impl LLVMCodeGenerator<'_> {
         let value = match binary_expr.op {
             BinaryOp::Add => {
                 if result_type.is_integer_type() {
-                    self.llvm_builder.build_int_add(
-                        left.into_int_value(),
-                        right.into_int_value(),
-                        "int+int",
-                    )
+                    self.llvm_builder
+                        .build_int_add(left.into_int_value(), right.into_int_value(), "")
+                        .unwrap()
                 } else {
                     unimplemented!()
                 }
@@ -126,12 +146,7 @@ impl LLVMCodeGenerator<'_> {
             .collect::<Vec<BasicMetadataValueEnum>>();
         let function = *self.function_by_name.get(&call_expr.callee).unwrap();
         let func = self.gen_or_get_function(function);
-        let value = self.llvm_builder.build_call(
-            func,
-            &args,
-            format!("call {}", function.decl.name).as_str(),
-        );
-
+        let value = self.llvm_builder.build_call(func, &args, "").unwrap();
         match value.try_as_basic_value().left() {
             Some(value) => Some(value),
             None => None,
@@ -142,9 +157,13 @@ impl LLVMCodeGenerator<'_> {
             ExpressionKind::NumberLiteral(number_literal) => {
                 Some(self.eval_number_literal(number_literal, &expr.ty))
             }
-            ExpressionKind::VariableRef(variable_ref) => Some(self.eval_variable_ref(variable_ref)),
-            ExpressionKind::IndexAccess(index_access) => Some(self.eval_index_access(index_access)),
-            ExpressionKind::Deref(deref) => Some(self.eval_deref(deref)),
+            ExpressionKind::VariableRef(variable_ref) => {
+                Some(self.eval_variable_ref(variable_ref, &expr.ty))
+            }
+            ExpressionKind::IndexAccess(index_access) => {
+                Some(self.eval_index_access(index_access, &expr.ty))
+            }
+            ExpressionKind::Deref(deref) => Some(self.eval_deref(deref, &expr.ty)),
             ExpressionKind::BinaryExpr(binary_expr) => Some(self.eval_binary_expr(binary_expr)),
             ExpressionKind::CallExpr(call_expr) => self.gen_call_expr(call_expr),
             ExpressionKind::StringLiteral(string_literal) => {

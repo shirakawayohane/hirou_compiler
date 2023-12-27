@@ -12,6 +12,7 @@ use nom::{
     error::{convert_error, VerboseError},
     Finish,
 };
+use resolver::TypeScopes;
 
 #[derive(clap::Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -44,23 +45,16 @@ fn main() {
     };
 
     let llvm_context: LLVMContext = LLVMContext::create();
-    let resolved_types = HashMap::new();
-    let resolved_types_cell = Rc::new(RefCell::new(resolved_types));
     let mut errors = Vec::new();
     let mut resolved_functions = HashMap::new();
-    let resolved_module = match resolver::resolve_module(
-        &mut errors,
-        &mut resolved_functions,
-        resolved_types_cell,
-        &module,
-        true,
-    ) {
-        Ok(module) => module,
-        Err(err) => {
-            dbg!(err);
-            return;
-        }
-    };
+    let resolved_module =
+        match resolver::resolve_module(&mut errors, &mut resolved_functions, &module, true) {
+            Ok(module) => module,
+            Err(err) => {
+                dbg!(err);
+                return;
+            }
+        };
     if !errors.is_empty() {
         dbg!(errors);
         return;
@@ -71,16 +65,13 @@ fn main() {
         OptimizationLevel::None,
         &resolved_module,
     );
-    let module = llvm_codegenerator.gen_module(&resolved_module);
+    llvm_codegenerator.gen_module(&resolved_module);
+    let module = llvm_codegenerator.get_module();
 
     module.print_to_file(Path::new("out.ll")).unwrap();
     let execution_engine = &module
         .create_jit_execution_engine(inkwell::OptimizationLevel::None)
         .unwrap();
-    for func in module.get_functions() {
-        dbg!(func);
-    }
-    let main_fn = module.get_function("main").unwrap();
     unsafe {
         execution_engine
             .get_function::<unsafe extern "C" fn()>("main")

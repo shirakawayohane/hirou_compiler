@@ -1,13 +1,10 @@
-use inkwell::values::{BasicValue, BasicValueEnum, PointerValue};
+use inkwell::values::{BasicValue, BasicValueEnum};
 
 use crate::resolved_ast::ResolvedType;
 
 use super::LLVMCodeGenerator;
 
 impl LLVMCodeGenerator<'_> {
-    pub(super) fn build_store(&self, ptr: PointerValue, value: BasicValueEnum) {
-        self.llvm_builder.build_store(ptr, value);
-    }
     pub(super) fn get_cast_type<'a>(
         &self,
         lhs: &'a ResolvedType,
@@ -132,24 +129,28 @@ impl LLVMCodeGenerator<'_> {
             ResolvedType::I32 => self
                 .llvm_builder
                 .build_int_cast_sign_flag(value, self.llvm_context.i32_type(), true, "(i32)")
+                .unwrap()
                 .as_basic_value_enum(),
             ResolvedType::U32 => self
                 .llvm_builder
                 .build_int_cast_sign_flag(value, self.llvm_context.i32_type(), false, "(u32)")
+                .unwrap()
                 .as_basic_value_enum(),
             ResolvedType::U64 => self
                 .llvm_builder
                 .build_int_cast_sign_flag(value, self.llvm_context.i64_type(), false, "(u64)")
+                .unwrap()
                 .as_basic_value_enum(),
             ResolvedType::U8 => self
                 .llvm_builder
                 .build_int_cast_sign_flag(value, self.llvm_context.i8_type(), false, "(u8)")
+                .unwrap()
                 .as_basic_value_enum(),
-            ResolvedType::I64 => {
-                self.llvm_builder
-                    .build_int_cast(value, self.llvm_context.i64_type(), "(i64)")
-            }
-            .as_basic_value_enum(),
+            ResolvedType::I64 => self
+                .llvm_builder
+                .build_int_cast(value, self.llvm_context.i64_type(), "(i64)")
+                .unwrap()
+                .as_basic_value_enum(),
             ResolvedType::Ptr(_) => unreachable!(),
             ResolvedType::Void => unreachable!(),
             ResolvedType::USize => unreachable!(),

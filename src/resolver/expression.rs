@@ -1,15 +1,17 @@
+use std::ops::DerefMut;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::ast::Expression;
 use crate::resolved_ast::{ExpressionKind, ResolvedExpression, ResolvedType};
-use crate::{ast, resolved_ast};
+use crate::{ast, in_global_scope, resolved_ast};
 
-use super::{error::*, gen_function_impls_recursively, mangle_fn_name, resolve_type, Scopes};
+use super::{error::*, mangle_fn_name, resolve_function, resolve_type, TypeScopes, VariableScopes};
 
 pub(crate) fn resolve_expression(
     errors: &mut Vec<CompileError>,
-    types: Rc<RefCell<HashMap<String, &ResolvedType>>>,
-    scopes: Rc<RefCell<Scopes>>,
+    types: Rc<RefCell<TypeScopes>>,
+    scopes: Rc<RefCell<VariableScopes>>,
+    type_defs: &HashMap<String, ast::TypeDef>,
     function_by_name: &HashMap<String, ast::Function>,
     resolved_functions: &mut HashMap<String, resolved_ast::Function>,
     expr: &ast::Expression,
@@ -22,19 +24,10 @@ pub(crate) fn resolve_expression(
                     name: variable_ref.name.clone(),
                 });
 
-            if variable_ref.name == "size" {
-                dbg!(scopes.clone());
-            }
             if let Some(ty) = scopes.borrow().get(&variable_ref.name) {
                 let resolved_type = if let Some(annotation) = annotation {
-                    if variable_ref.name == "size" {
-                        dbg!(annotation.clone());
-                    }
                     annotation
                 } else {
-                    if variable_ref.name == "size" {
-                        dbg!(ty);
-                    }
                     ty.clone()
                 };
 
@@ -43,6 +36,8 @@ pub(crate) fn resolve_expression(
                     kind: expr_kind,
                 });
             } else {
+                dbg!(scopes.borrow());
+                println!("variable {} not found", variable_ref.name);
                 errors.push(CompileError::from_error_kind(
                     CompileErrorKind::VariableNotFound {
                         name: variable_ref.name.to_owned(),
@@ -79,6 +74,7 @@ pub(crate) fn resolve_expression(
                 errors,
                 types.clone(),
                 scopes.clone(),
+                type_defs,
                 function_by_name,
                 resolved_functions,
                 &bin_expr.lhs,
@@ -88,6 +84,7 @@ pub(crate) fn resolve_expression(
                 errors,
                 types.clone(),
                 scopes.clone(),
+                type_defs,
                 function_by_name,
                 resolved_functions,
                 &bin_expr.rhs,
@@ -107,7 +104,6 @@ pub(crate) fn resolve_expression(
                 .get(&call_expr.name)
                 .ok_or_else(|| FaitalError(format!("No function named {}", call_expr.name)))?;
 
-            scopes.borrow_mut().push_scope();
             if let Some(generic_args) = &callee.decl.generic_args {
                 // スコープに解決したジェネリックの型を追加する
                 if let Some(actual_generic_args) = &call_expr.generic_args {
@@ -119,14 +115,6 @@ pub(crate) fn resolve_expression(
                                 actual: actual_generic_args.len() as u32,
                             },
                         ));
-                        gen_function_impls_recursively(
-                            errors,
-                            types.clone(),
-                            scopes.clone(),
-                            function_by_name,
-                            resolved_functions,
-                            callee,
-                        )?;
                         // ジェネリック引数の数が合わない場合はUnknown扱いにして継続する
                         return Ok(ResolvedExpression {
                             kind: ExpressionKind::CallExpr(resolved_ast::CallExpr {
@@ -137,14 +125,32 @@ pub(crate) fn resolve_expression(
                         });
                     };
 
-                    for i in 0..generic_args.len() {
-                        let generic_arg = &generic_args[i];
-                        let actual_arg = &actual_generic_args[i];
-                        let resolved_type = resolve_type(errors, types.clone(), &actual_arg)?;
-                        scopes
-                            .borrow_mut()
-                            .insert(generic_arg.value.name.clone(), resolved_type);
-                    }
+                    in_global_scope!(scopes, {
+                        in_global_scope!(types, {
+                            // 正常系
+                            for i in 0..generic_args.len() {
+                                let generic_arg = &generic_args[i];
+                                let actual_arg = &actual_generic_args[i];
+                                let resolved_type = resolve_type(
+                                    errors,
+                                    types.borrow_mut().deref_mut(),
+                                    &actual_arg,
+                                )?;
+                                types
+                                    .borrow_mut()
+                                    .add(generic_arg.name.clone(), resolved_type);
+                            }
+                            resolve_function(
+                                errors,
+                                types.clone(),
+                                scopes.clone(),
+                                type_defs,
+                                function_by_name,
+                                resolved_functions,
+                                callee,
+                            )?
+                        });
+                    });
                 } else {
                     errors.push(CompileError::from_error_kind(
                         CompileErrorKind::NoGenericArgs {
@@ -152,14 +158,6 @@ pub(crate) fn resolve_expression(
                             expected: generic_args.len() as u32,
                         },
                     ));
-                    gen_function_impls_recursively(
-                        errors,
-                        types.clone(),
-                        scopes.clone(),
-                        function_by_name,
-                        resolved_functions,
-                        callee,
-                    )?;
                     return Ok(ResolvedExpression {
                         kind: ExpressionKind::CallExpr(resolved_ast::CallExpr {
                             callee: call_expr.name.clone(),
@@ -168,20 +166,26 @@ pub(crate) fn resolve_expression(
                         ty: ResolvedType::Unknown,
                     });
                 };
+            } else {
+                in_global_scope!(scopes, {
+                    in_global_scope!(types, {
+                        resolve_function(
+                            errors,
+                            types.clone(),
+                            scopes.clone(),
+                            type_defs,
+                            function_by_name,
+                            resolved_functions,
+                            callee,
+                        )?
+                    });
+                });
             };
-            // 上記でスコープに実際の型が登録されているはず。
-            // 未生成であれば関数の実装を生成する
-            gen_function_impls_recursively(
+            let resolved_return_ty = resolve_type(
                 errors,
-                types.clone(),
-                scopes.clone(),
-                function_by_name,
-                resolved_functions,
-                callee,
+                types.borrow_mut().deref_mut(),
+                &callee.decl.return_type.value,
             )?;
-
-            let resolved_return_ty =
-                resolve_type(errors, types.clone(), &callee.decl.return_type.value)?;
             let mut resolved_args = Vec::new();
             for (i, arg) in call_expr.args.iter().enumerate() {
                 let calee_arg = &callee.decl.args[i];
@@ -191,6 +195,7 @@ pub(crate) fn resolve_expression(
                             errors,
                             types.clone(),
                             scopes.clone(),
+                            type_defs,
                             function_by_name,
                             resolved_functions,
                             arg,
@@ -198,15 +203,13 @@ pub(crate) fn resolve_expression(
                         )?);
                     }
                     ast::Argument::Normal(ty, _name) => {
-                        let resolved_ty = resolve_type(errors, types.clone(), ty)?;
+                        let resolved_ty = resolve_type(errors, types.borrow_mut().deref_mut(), ty)?;
 
-                        if (callee.decl.name == "malloc") {
-                            dbg!(resolved_ty.clone(), arg);
-                        }
                         resolved_args.push(resolve_expression(
                             errors,
                             types.clone(),
                             scopes.clone(),
+                            type_defs,
                             function_by_name,
                             resolved_functions,
                             arg,
@@ -216,23 +219,21 @@ pub(crate) fn resolve_expression(
                 }
             }
 
-            if (callee.decl.name == "malloc") {
-                dbg!(resolved_args.clone());
-            }
-
-            scopes.borrow_mut().pop_scope();
-
             return Ok(resolved_ast::ResolvedExpression {
                 kind: resolved_ast::ExpressionKind::CallExpr(resolved_ast::CallExpr {
-                    callee: mangle_fn_name(
-                        &call_expr.name,
-                        resolved_args
-                            .iter()
-                            .map(|x| &x.ty)
-                            .collect::<Vec<_>>()
-                            .as_slice(),
-                        &resolved_return_ty,
-                    ),
+                    callee: if callee.decl.generic_args.is_some() {
+                        mangle_fn_name(
+                            &call_expr.name,
+                            resolved_args
+                                .iter()
+                                .map(|x| &x.ty)
+                                .collect::<Vec<_>>()
+                                .as_slice(),
+                            &resolved_return_ty,
+                        )
+                    } else {
+                        call_expr.name.clone()
+                    },
                     args: resolved_args,
                 }),
                 ty: resolved_return_ty,
@@ -243,6 +244,7 @@ pub(crate) fn resolve_expression(
                 errors,
                 types.clone(),
                 scopes.clone(),
+                type_defs,
                 function_by_name,
                 resolved_functions,
                 &deref_expr.target,
@@ -260,6 +262,7 @@ pub(crate) fn resolve_expression(
                 errors,
                 types.clone(),
                 scopes.clone(),
+                type_defs,
                 function_by_name,
                 resolved_functions,
                 &index_access_expr.target,
@@ -269,6 +272,7 @@ pub(crate) fn resolve_expression(
                 errors,
                 types.clone(),
                 scopes.clone(),
+                type_defs,
                 function_by_name,
                 resolved_functions,
                 &index_access_expr.index,

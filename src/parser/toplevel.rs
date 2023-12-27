@@ -134,6 +134,7 @@ fn parse_function_decl(input: Span) -> ParseResult<FunctionDecl> {
                 generic_args,
                 args: params,
                 return_type: ty,
+                intrinsic: false,
             },
         )),
     )(input)

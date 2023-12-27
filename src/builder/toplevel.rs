@@ -28,7 +28,7 @@ impl<'a> LLVMCodeGenerator<'a> {
             .iter()
             .any(|x| matches!(x, Argument::VarArgs));
 
-        self.llvm_module.add_function(
+        let function = self.llvm_module.add_function(
             &function.decl.name,
             if let Some(return_type) = self.type_to_basic_type_enum(&function.decl.return_type) {
                 let basic_type = BasicTypeEnum::try_from(return_type).unwrap();
@@ -37,7 +37,9 @@ impl<'a> LLVMCodeGenerator<'a> {
                 self.llvm_context.void_type().fn_type(&param_types, false)
             },
             None,
-        )
+        );
+
+        function
     }
 
     pub(super) fn gen_function_body(&mut self, function: &'a Function) {
@@ -69,8 +71,13 @@ impl<'a> LLVMCodeGenerator<'a> {
             {
                 let parameter = function_value.get_nth_param(i as u32).unwrap();
                 parameter.set_name(name.as_str());
-                let allocated_pointer = self.llvm_builder.build_alloca(parameter.get_type(), &name);
-                self.llvm_builder.build_store(allocated_pointer, parameter);
+                let allocated_pointer = self
+                    .llvm_builder
+                    .build_alloca(parameter.get_type(), &name)
+                    .unwrap();
+                self.llvm_builder
+                    .build_store(allocated_pointer, parameter)
+                    .unwrap();
                 self.add_variable(name, allocated_pointer);
             }
 

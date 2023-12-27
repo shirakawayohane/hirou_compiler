@@ -38,19 +38,6 @@ impl ResolvedType {
             ResolvedType::Unknown => false,
         }
     }
-    pub fn is_valid_as_operand(&self) -> bool {
-        match self {
-            ResolvedType::I32 => true,
-            ResolvedType::I64 => true,
-            ResolvedType::U32 => true,
-            ResolvedType::U64 => true,
-            ResolvedType::USize => true,
-            ResolvedType::U8 => true,
-            ResolvedType::Ptr(_) => false,
-            ResolvedType::Void => false,
-            ResolvedType::Unknown => false,
-        }
-    }
     pub fn is_pointer_type(&self) -> bool {
         if let ResolvedType::Ptr(_) = self {
             true
@@ -151,10 +138,10 @@ pub struct ResolvedExpression {
 
 #[derive(Debug, Clone)]
 pub struct Assignment {
-    pub index_access: Option<ResolvedExpression>,
-    pub deref_count: u32,
     pub name: String,
     pub expression: ResolvedExpression,
+    pub deref_count: usize,
+    pub index_access: Option<ResolvedExpression>,
 }
 
 #[derive(Debug, Clone)]
@@ -177,7 +164,7 @@ pub struct Effect {
 pub enum Statement {
     VariableDecl(VariableDecl),
     Return(Return),
-    Assignmetn(Assignment),
+    Assignment(Assignment),
     Effect(Effect),
 }
 

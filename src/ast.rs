@@ -28,21 +28,6 @@ impl Deref for Range {
     }
 }
 
-impl<T> Located<T> {
-    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Located<U> {
-        Located {
-            range: self.range,
-            value: f(self.value),
-        }
-    }
-    pub fn default(value: T) -> Self {
-        Located {
-            range: Range::default(),
-            value,
-        }
-    }
-}
-
 impl<T> Deref for Located<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
@@ -132,16 +117,6 @@ pub enum UnresolvedType {
     Ptr(Box<UnresolvedType>),
 }
 
-#[derive(Debug)]
-pub struct StructTypeDef {
-    pub fields: Vec<(String, UnresolvedType)>,
-}
-
-#[derive(Debug)]
-pub enum TypeDefKind {
-    Struct(StructTypeDef),
-}
-
 impl Display for UnresolvedType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -215,6 +190,7 @@ pub struct FunctionDecl {
     pub generic_args: Option<Vec<Located<GenericArgument>>>,
     pub args: Vec<Argument>,
     pub return_type: Located<UnresolvedType>,
+    pub intrinsic: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -224,8 +200,26 @@ pub struct Function {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct StructTypeDef {
+    pub generic_args: Option<Vec<Located<GenericArgument>>>,
+    pub fields: Vec<(String, UnresolvedType)>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TypeDefKind {
+    Struct(StructTypeDef),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TypeDef {
+    pub name: String,
+    pub kind: TypeDefKind,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum TopLevel {
     Function(Function),
+    TypeDef(TypeDef),
 }
 
 #[derive(Debug)]
