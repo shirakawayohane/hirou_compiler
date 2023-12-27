@@ -1,7 +1,4 @@
-use inkwell::{
-    values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum},
-    AddressSpace,
-};
+use inkwell::values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum};
 
 use super::*;
 use crate::{ast::BinaryOp, resolved_ast::*};
@@ -53,6 +50,7 @@ impl LLVMCodeGenerator<'_> {
             ResolvedType::Ptr(_) => unreachable!(),
             ResolvedType::Void => unreachable!(),
             ResolvedType::Unknown => unreachable!(),
+            ResolvedType::Struct(_) => unreachable!(),
         }
     }
     fn eval_string_literal(&self, string_literal: &StringLiteral) -> BasicValueEnum {
@@ -88,7 +86,7 @@ impl LLVMCodeGenerator<'_> {
                     pointee_ty,
                     ptr.into_pointer_value(),
                     &[index.into_int_value()],
-                    "index_access",
+                    "",
                 )
                 .unwrap()
         };

@@ -3,6 +3,8 @@ source_filename = "main"
 
 @string_literal = private unnamed_addr constant [4 x i8] c"%d\0A\00", align 1
 
+declare ptr @malloc(i64)
+
 declare i32 @printf(ptr, ...)
 
 define void @printi32(i32 %n) {
@@ -30,9 +32,14 @@ entry:
   %7 = getelementptr inbounds i32, ptr %6, i64 0
   store i32 10, ptr %7, align 4
   %8 = load ptr, ptr %3, align 8
-  %9 = load i32, ptr %8, align 4
-  call void @printi32(i32 %9)
+  %9 = getelementptr inbounds i32, ptr %8, i64 1
+  store i32 20, ptr %9, align 4
+  %10 = load ptr, ptr %3, align 8
+  %11 = load i32, ptr %10, align 4
+  call void @printi32(i32 %11)
+  %12 = load ptr, ptr %3, align 8
+  %13 = getelementptr inbounds i32, ptr %12, i64 1
+  %14 = load i32, ptr %13, align 4
+  call void @printi32(i32 %14)
   ret i32 0
 }
-
-declare ptr @malloc(i64)
