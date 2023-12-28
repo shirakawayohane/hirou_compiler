@@ -3,19 +3,6 @@ source_filename = "main"
 
 %"Vec<i32>" = type { i64, i64, ptr }
 
-declare ptr @malloc(i64)
-
-define void @"vec()->Vec<i32>"(ptr noalias sret(%"Vec<i32>") %0) {
-entry:
-  %1 = alloca i64, align 8
-  store i64 4, ptr %1, align 4
-  %2 = load i64, ptr %1, align 4
-  %3 = load i64, ptr %1, align 4
-  %4 = call ptr @"generic_malloc(usize)->[i32]"(i64 %3)
-  store %"Vec<i32>" { i64 0, i64 %2, ptr %4 }, ptr %0, align 8
-  ret void
-}
-
 define ptr @"generic_malloc(usize)->[i32]"(i64 %size) {
 entry:
   %size1 = alloca i64, align 8
@@ -32,8 +19,27 @@ entry:
   ret ptr %6
 }
 
+define void @"vec()->Vec<i32>"(ptr noalias sret(%"Vec<i32>") %0) {
+entry:
+  %1 = alloca i64, align 8
+  store i64 4, ptr %1, align 4
+  %2 = load i64, ptr %1, align 4
+  %3 = load i64, ptr %1, align 4
+  %4 = call ptr @"generic_malloc(usize)->[i32]"(i64 %3)
+  %5 = getelementptr inbounds %"Vec<i32>", ptr %0, i32 0, i32 0
+  store i64 0, ptr %5, align 4
+  %6 = getelementptr inbounds %"Vec<i32>", ptr %0, i32 0, i32 1
+  store i64 %2, ptr %6, align 4
+  %7 = getelementptr inbounds %"Vec<i32>", ptr %0, i32 0, i32 2
+  store ptr %4, ptr %7, align 8
+  ret void
+}
+
 define i32 @main() {
 entry:
-  call void @"vec()->Vec<i32>"()
+  %0 = alloca %"Vec<i32>", align 8
+  call void @"vec()->Vec<i32>"(ptr %0)
   ret i32 0
 }
+
+declare ptr @malloc(i64)

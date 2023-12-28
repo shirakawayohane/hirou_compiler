@@ -191,13 +191,23 @@ impl LLVMCodeGenerator<'_> {
         &self,
         call_expr: &CallExpr,
     ) -> Result<Option<BasicValueEnum<'_>>, BuilderError> {
-        let args = call_expr
+        let mut args = call_expr
             .args
             .iter()
             .map(|arg| self.gen_expression(&arg).map(|x| x.unwrap().into()))
             .collect::<Result<Vec<BasicMetadataValueEnum>, _>>()?;
         let function = *self.function_by_name.get(&call_expr.callee).unwrap();
         let func = self.gen_or_get_function(function);
+        // 構造体を返す関数を呼ぶ場合、第一引数にスタックポインタを渡す
+        if let ResolvedType::Struct(_) = &function.decl.return_type {
+            let return_ty = self
+                .type_to_basic_type_enum(&function.decl.return_type)
+                .unwrap();
+            let ptr = self.llvm_builder.build_alloca(return_ty, "")?;
+            args.insert(0, ptr.into());
+            let value = self.llvm_builder.build_call(func, &args, "").unwrap();
+            return Ok(value.try_as_basic_value().left());
+        }
         let value = self.llvm_builder.build_call(func, &args, "").unwrap();
         Ok(value.try_as_basic_value().left())
     }
