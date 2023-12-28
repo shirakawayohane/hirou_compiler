@@ -1,30 +1,34 @@
-use crate::{ast::*, parser::ty::parse_type};
+use crate::{
+    ast::*,
+    parser::ty::{parse_generic_argument_decls, parse_type},
+};
 
 use super::{statement::parse_statement, token::*, util::*, *};
 
 use nom::{
     branch::alt,
-    character::complete::{multispace0, space0},
+    character::complete::space0,
     combinator::{cut, map, opt},
     error::context,
-    multi::separated_list0,
-    sequence::{delimited, pair, tuple},
+    sequence::{delimited, tuple},
 };
 
-fn parse_generic_argument(input: Span) -> ParseResult<GenericArgument> {
-    located(context(
-        "generic_argument",
-        map(parse_identifier, |name| GenericArgument { name }),
-    ))(input)
-}
-fn parse_generic_arguments<'a>(
-    input: Span<'a>,
-) -> NotLocatedParseResult<Vec<Located<GenericArgument>>> {
-    delimited(
-        langlebracket,
-        separated_list0(comma, parse_generic_argument),
-        ranglebracket,
-    )(input)
+#[test]
+fn test_parse_generic_arguments() {
+    let result = parse_generic_argument_decls(Span::new("<T>"));
+    assert!(result.is_ok());
+    let (rest, args) = result.unwrap();
+    assert_eq!(rest.to_string().as_str(), "");
+    assert_eq!(args.len(), 1);
+    assert_eq!(args[0].value.name, "T");
+
+    let result = parse_generic_argument_decls(Span::new("<T, U>"));
+    assert!(result.is_ok());
+    let (rest, args) = result.unwrap();
+    assert_eq!(rest.to_string().as_str(), "");
+    assert_eq!(args.len(), 2);
+    assert_eq!(args[0].value.name, "T");
+    assert_eq!(args[1].value.name, "U");
 }
 
 fn parse_argument(input: Span) -> NotLocatedParseResult<Argument> {
@@ -51,6 +55,15 @@ fn parse_arguments(input: Span) -> NotLocatedParseResult<Vec<Argument>> {
     }
     let (rest, _) = rparen(rest)?;
     Ok((rest, args))
+}
+
+#[test]
+fn test_parse_zero_argument() {
+    let result = parse_arguments(Span::new("()"));
+    assert!(result.is_ok());
+    let (rest, args) = result.unwrap();
+    assert_eq!(rest.to_string().as_str(), "");
+    assert_eq!(args.len(), 0);
 }
 
 #[test]
@@ -120,8 +133,8 @@ fn parse_function_decl(input: Span) -> ParseResult<FunctionDecl> {
         located(map(
             tuple((
                 fn_token,
-                delimited(multispace0, parse_identifier, multispace0),
-                opt(parse_generic_arguments),
+                parse_identifier,
+                opt(parse_generic_argument_decls),
                 // params
                 parse_arguments,
                 map(
@@ -159,7 +172,7 @@ fn parse_function(input: Span) -> ParseResult<TopLevel> {
     located(context(
         "function",
         map(
-            tuple((parse_function_decl, skip0, parse_block)),
+            tuple((parse_function_decl, skip0, cut(parse_block))),
             |(decl, _, body)| {
                 TopLevel::Function(Function {
                     decl: decl.value,
@@ -170,8 +183,51 @@ fn parse_function(input: Span) -> ParseResult<TopLevel> {
     ))(input)
 }
 
+fn parse_struct(input: Span) -> ParseResult<TopLevel> {
+    fn parse_field(input: Span) -> NotLocatedParseResult<(String, UnresolvedType)> {
+        map(
+            tuple((parse_identifier, colon, parse_type)),
+            |(name, _, ty)| (name, ty.value),
+        )(input)
+    }
+    fn parse_fields(input: Span) -> NotLocatedParseResult<Vec<(String, UnresolvedType)>> {
+        let mut fields = Vec::new();
+        let mut rest = input;
+        loop {
+            (rest, _) = skip0(rest)?;
+            if rest.starts_with("}") {
+                break;
+            }
+            let field;
+            (rest, field) = parse_field(rest)?;
+            fields.push(field);
+        }
+        Ok((rest, fields))
+    }
+    context(
+        "struct",
+        located(map(
+            tuple((
+                struct_token,
+                parse_identifier,
+                opt(parse_generic_argument_decls),
+                delimited(lbracket, parse_fields, rbracket),
+            )),
+            |(_, name, generic_args, fields)| {
+                TopLevel::TypeDef(TypeDef {
+                    kind: TypeDefKind::Struct(StructTypeDef {
+                        generic_args,
+                        fields,
+                    }),
+                    name,
+                })
+            },
+        )),
+    )(input)
+}
+
 pub(crate) fn parse_toplevel(input: Span) -> ParseResult<TopLevel> {
-    context("toplevel", parse_function)(input)
+    context("toplevel", alt((parse_function, parse_struct)))(input)
 }
 
 #[test]
@@ -185,4 +241,15 @@ fn print-i32(s: *u8, n: i32): void {
         .into(),
     );
     assert!(result.is_ok());
+
+    let result = parse_toplevel("struct Vec<T> { size: i32, data: *T }".into());
+    assert!(result.is_ok());
+
+    let result = parse_function(
+        "
+        fn vec<T>(): Vec<T> {
+        }"
+        .into(),
+    );
+    assert!(result.is_ok())
 }

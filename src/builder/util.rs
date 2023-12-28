@@ -17,18 +17,12 @@ impl LLVMCodeGenerator<'_> {
                 ResolvedType::I64 => (Some(ResolvedType::I64), None),
                 ResolvedType::U32 => (None, Some(ResolvedType::I32)),
                 ResolvedType::U64 => (Some(ResolvedType::I64), Some(ResolvedType::I64)),
-                ResolvedType::USize => {
-                    if ptr_sized_int_type.get_bit_width() == 32 {
-                        (None, Some(ResolvedType::I32))
-                    } else {
-                        (None, Some(ResolvedType::I64))
-                    }
-                }
+                ResolvedType::USize => (Some(ResolvedType::I64), Some(ResolvedType::I64)),
                 ResolvedType::U8 => (None, Some(ResolvedType::I32)),
                 _ => panic!("Invalid type for binary expression"),
             },
             ResolvedType::I64 => match rhs {
-                ResolvedType::I32 => (None, None),
+                ResolvedType::I32 => (None, Some(ResolvedType::I64)),
                 ResolvedType::I64 => (None, None),
                 ResolvedType::U32 => (None, Some(ResolvedType::I64)),
                 ResolvedType::U64 => (None, Some(ResolvedType::I64)),
@@ -45,7 +39,7 @@ impl LLVMCodeGenerator<'_> {
                     if ptr_sized_int_type.get_bit_width() == 32 {
                         (None, None)
                     } else {
-                        (Some(ResolvedType::U64), None)
+                        (Some(ResolvedType::USize), None)
                     }
                 }
                 ResolvedType::U8 => (Some(ResolvedType::U32), None),
@@ -66,13 +60,7 @@ impl LLVMCodeGenerator<'_> {
                 _ => panic!("Invalid type for binary expression"),
             },
             ResolvedType::USize => match rhs {
-                ResolvedType::I32 => {
-                    if ptr_sized_int_type.get_bit_width() == 32 {
-                        (Some(ResolvedType::I32), None)
-                    } else {
-                        (Some(ResolvedType::I64), None)
-                    }
-                }
+                ResolvedType::I32 => (Some(ResolvedType::I32), None),
                 ResolvedType::I64 => (Some(ResolvedType::I64), None),
                 ResolvedType::U32 => {
                     if ptr_sized_int_type.get_bit_width() == 32 {
@@ -116,6 +104,7 @@ impl LLVMCodeGenerator<'_> {
             ResolvedType::Ptr(_) => panic!("Invalid type for binary expression"),
             ResolvedType::Void => panic!("Invalid type for binary expression"),
             ResolvedType::Unknown => panic!("Invalid type for binary expression"),
+            ResolvedType::Struct(_) => panic!("Invalid type for binary expression"),
         }
     }
 
@@ -124,6 +113,7 @@ impl LLVMCodeGenerator<'_> {
         value: BasicValueEnum<'ctx>,
         ty: &ResolvedType,
     ) -> BasicValueEnum<'ctx> {
+        dbg!(ty, value);
         let value = value.into_int_value();
         match ty {
             ResolvedType::I32 => self
@@ -153,8 +143,13 @@ impl LLVMCodeGenerator<'_> {
                 .as_basic_value_enum(),
             ResolvedType::Ptr(_) => unreachable!(),
             ResolvedType::Void => unreachable!(),
-            ResolvedType::USize => unreachable!(),
+            ResolvedType::USize => self
+                .llvm_builder
+                .build_int_cast(value, self.ptr_sized_int_type, "(usize)")
+                .unwrap()
+                .as_basic_value_enum(),
             ResolvedType::Unknown => unreachable!(),
+            ResolvedType::Struct(_) => unreachable!(),
         }
     }
 }

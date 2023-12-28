@@ -9,7 +9,8 @@ use crate::resolved_ast;
 
 use super::error::{CompileError, FaitalError};
 use super::expression::resolve_expression;
-use super::{resolve_type, TypeScopes, VariableScopes};
+use super::ty::resolve_type;
+use super::{TypeScopes, VariableScopes};
 
 pub fn resolve_statement(
     errors: &mut Vec<CompileError>,
@@ -22,11 +23,18 @@ pub fn resolve_statement(
 ) -> Result<resolved_ast::Statement, FaitalError> {
     Ok(match statement {
         Statement::VariableDecl(decl) => {
-            let annotation = Some(resolve_type(
-                errors,
-                type_scopes.borrow_mut().deref_mut(),
-                &decl.ty,
-            )?);
+            let annotation = decl
+                .ty
+                .as_ref()
+                .map(|ty| {
+                    resolve_type(
+                        errors,
+                        type_scopes.borrow_mut().deref_mut(),
+                        type_defs,
+                        &ty.value,
+                    )
+                })
+                .transpose()?;
             let resolved_expr = resolve_expression(
                 errors,
                 type_scopes.clone(),
@@ -35,7 +43,7 @@ pub fn resolve_statement(
                 function_by_name,
                 resolved_functions,
                 &decl.value,
-                annotation,
+                annotation.clone(),
             )?;
             scopes
                 .borrow_mut()

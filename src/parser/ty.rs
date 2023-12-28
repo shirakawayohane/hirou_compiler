@@ -2,13 +2,55 @@ use nom::{
     branch::alt,
     combinator::{map, opt},
     error::context,
-    multi::separated_list1,
-    sequence::{delimited, pair, preceded},
+    sequence::{pair, preceded},
 };
 
 use crate::ast::*;
 
-use super::{token::*, util::located, ParseResult, Span};
+use super::*;
+use super::{token::*, util::located, NotLocatedParseResult, ParseResult, Span};
+
+pub(super) fn parse_generic_argument_decls<'a>(
+    input: Span<'a>,
+) -> NotLocatedParseResult<Vec<Located<GenericArgument>>> {
+    fn parse_generic_argument(input: Span) -> ParseResult<GenericArgument> {
+        located(context(
+            "generic_argument",
+            map(parse_identifier, |name| GenericArgument { name }),
+        ))(input)
+    }
+    let mut args = Vec::new();
+    let (mut rest, _) = langlebracket(input)?;
+    loop {
+        (rest, _) = skip0(rest)?;
+        if rest.starts_with(">") {
+            break;
+        }
+        let arg;
+        (rest, arg) = parse_generic_argument(rest)?;
+        args.push(arg);
+    }
+    let (rest, _) = ranglebracket(rest)?;
+    Ok((rest, args))
+}
+
+pub(super) fn parse_generic_arguments(
+    input: Span,
+) -> NotLocatedParseResult<Vec<Located<UnresolvedType>>> {
+    let mut args = Vec::new();
+    let (mut rest, _) = langlebracket(input)?;
+    loop {
+        (rest, _) = skip0(rest)?;
+        if rest.starts_with(">") {
+            break;
+        }
+        let arg;
+        (rest, arg) = parse_type(rest)?;
+        args.push(arg);
+    }
+    let (rest, _) = ranglebracket(rest)?;
+    Ok((rest, args))
+}
 
 fn parse_ptr(input: Span) -> ParseResult<UnresolvedType> {
     located(map(preceded(asterisk, parse_type), |ty| {
@@ -18,14 +60,7 @@ fn parse_ptr(input: Span) -> ParseResult<UnresolvedType> {
 
 fn parse_typeref(input: Span) -> ParseResult<UnresolvedType> {
     located(map(
-        pair(
-            parse_identifier,
-            opt(delimited(
-                lsqrbracket,
-                separated_list1(comma, parse_typeref),
-                rsqrbracket,
-            )),
-        ),
+        pair(parse_identifier, opt(parse_generic_arguments)),
         |(ident, generics_args)| {
             UnresolvedType::TypeRef(TypeRef {
                 name: ident,
@@ -64,6 +99,17 @@ fn test_parse_type() {
     assert!(match ty.value {
         UnresolvedType::TypeRef(TypeRef { name, generic_args }) =>
             name == "u8" && generic_args.is_none(),
+        _ => false,
+    });
+    assert_eq!(rest.to_string().as_str(), ",");
+
+    let result = parse_type(Span::new("Vec<i32>,"));
+    assert!(result.is_ok());
+    let (rest, ty) = result.unwrap();
+    assert!(match ty.value {
+        UnresolvedType::TypeRef(TypeRef { name, generic_args }) => {
+            name == "Vec" && generic_args.is_some()
+        }
         _ => false,
     });
     assert_eq!(rest.to_string().as_str(), ",");

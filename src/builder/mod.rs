@@ -19,8 +19,6 @@ use inkwell::targets::{
 use inkwell::values::PointerValue;
 use std::collections::HashMap;
 
-type MangledName = String;
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ScopeKind {
     Global,
@@ -128,7 +126,7 @@ impl<'a> LLVMCodeGenerator<'a> {
 
         for top in &module.toplevels {
             match top {
-                TopLevel::Function(func) => self.gen_function_body(func),
+                TopLevel::Function(func) => self.gen_function_body(func).unwrap(),
             }
         }
 

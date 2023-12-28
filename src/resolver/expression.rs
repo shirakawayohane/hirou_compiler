@@ -3,9 +3,10 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::ast::Expression;
 use crate::resolved_ast::{ExpressionKind, ResolvedExpression, ResolvedType};
-use crate::{ast, in_global_scope, resolved_ast};
+use crate::resolver::ty::resolve_type;
+use crate::{ast, in_global_scope, in_new_scope, resolved_ast};
 
-use super::{error::*, mangle_fn_name, resolve_function, resolve_type, TypeScopes, VariableScopes};
+use super::{error::*, mangle_fn_name, resolve_function, TypeScopes, VariableScopes};
 
 pub(crate) fn resolve_expression(
     errors: &mut Vec<CompileError>,
@@ -36,8 +37,6 @@ pub(crate) fn resolve_expression(
                     kind: expr_kind,
                 });
             } else {
-                dbg!(scopes.borrow());
-                println!("variable {} not found", variable_ref.name);
                 errors.push(CompileError::from_error_kind(
                     CompileErrorKind::VariableNotFound {
                         name: variable_ref.name.to_owned(),
@@ -134,6 +133,7 @@ pub(crate) fn resolve_expression(
                                 let resolved_type = resolve_type(
                                     errors,
                                     types.borrow_mut().deref_mut(),
+                                    type_defs,
                                     &actual_arg,
                                 )?;
                                 types
@@ -181,11 +181,20 @@ pub(crate) fn resolve_expression(
                     });
                 });
             };
-            let resolved_return_ty = resolve_type(
+            let mut resolved_return_ty = resolve_type(
                 errors,
                 types.borrow_mut().deref_mut(),
+                type_defs,
                 &callee.decl.return_type.value,
             )?;
+            // void* はアノテーションがあればその型として扱う
+            if let Some(annotation) = annotation {
+                if let ResolvedType::Ptr(inner) = &resolved_return_ty {
+                    if let ResolvedType::Void = **inner {
+                        resolved_return_ty = annotation;
+                    }
+                }
+            };
             let mut resolved_args = Vec::new();
             for (i, arg) in call_expr.args.iter().enumerate() {
                 let calee_arg = &callee.decl.args[i];
@@ -203,7 +212,8 @@ pub(crate) fn resolve_expression(
                         )?);
                     }
                     ast::Argument::Normal(ty, _name) => {
-                        let resolved_ty = resolve_type(errors, types.borrow_mut().deref_mut(), ty)?;
+                        let resolved_ty =
+                            resolve_type(errors, types.borrow_mut().deref_mut(), type_defs, ty)?;
 
                         resolved_args.push(resolve_expression(
                             errors,
@@ -302,6 +312,75 @@ pub(crate) fn resolve_expression(
                     value: str_literal.value.clone(),
                 }),
                 ty: ResolvedType::Ptr(Box::new(ResolvedType::Ptr(Box::new(ResolvedType::U8)))),
+            });
+        }
+        Expression::StructLiteral(struct_literal_expr) => {
+            let mut resolved_fields = Vec::new();
+            let struct_def = if let Some(typedef) = type_defs.get(&struct_literal_expr.name) {
+                let ast::TypeDefKind::Struct(struct_def) = &typedef.kind;
+                struct_def
+            } else {
+                errors.push(CompileError::from_error_kind(
+                    CompileErrorKind::TypeNotFound {
+                        name: struct_literal_expr.name.clone(),
+                    },
+                ));
+                return Ok(resolved_ast::ResolvedExpression {
+                    ty: ResolvedType::Unknown,
+                    kind: resolved_ast::ExpressionKind::StructLiteral(
+                        resolved_ast::StructLiteral { fields: Vec::new() },
+                    ),
+                });
+            };
+            for (_name, field_expr) in &struct_literal_expr.fields {
+                in_new_scope!(types, {
+                    if let Some(generic_args) = &struct_def.generic_args {
+                        for (i, generic_arg) in generic_args.iter().enumerate() {
+                            let resolved_type = resolve_type(
+                                errors,
+                                types.borrow_mut().deref_mut(),
+                                type_defs,
+                                &struct_literal_expr.generic_args.as_ref().unwrap()[i],
+                            )?;
+                            types
+                                .borrow_mut()
+                                .add(generic_arg.name.clone(), resolved_type);
+                        }
+                    }
+                    resolved_fields.push(resolve_expression(
+                        errors,
+                        types.clone(),
+                        scopes.clone(),
+                        type_defs,
+                        function_by_name,
+                        resolved_functions,
+                        &field_expr,
+                        None,
+                    )?)
+                });
+            }
+            return Ok(resolved_ast::ResolvedExpression {
+                ty: ResolvedType::Struct(
+                    resolved_fields
+                        .iter()
+                        .map(|x| x.ty.clone())
+                        .collect::<Vec<_>>(),
+                ),
+                kind: resolved_ast::ExpressionKind::StructLiteral(resolved_ast::StructLiteral {
+                    fields: resolved_fields,
+                }),
+            });
+        }
+        Expression::SizeOf(sizeof_expr) => {
+            let resolved_ty = resolve_type(
+                errors,
+                types.borrow_mut().deref_mut(),
+                type_defs,
+                &sizeof_expr.ty,
+            )?;
+            return Ok(resolved_ast::ResolvedExpression {
+                kind: resolved_ast::ExpressionKind::SizeOf(resolved_ty),
+                ty: ResolvedType::USize,
             });
         }
     };

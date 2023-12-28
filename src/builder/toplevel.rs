@@ -1,4 +1,5 @@
 use inkwell::{
+    builder::BuilderError,
     types::{BasicType, BasicTypeEnum},
     values::FunctionValue,
 };
@@ -42,9 +43,9 @@ impl<'a> LLVMCodeGenerator<'a> {
         function
     }
 
-    pub(super) fn gen_function_body(&mut self, function: &'a Function) {
+    pub(super) fn gen_function_body(&mut self, function: &'a Function) -> Result<(), BuilderError> {
         if function.body.len() == 0 {
-            return;
+            return Ok(());
         }
 
         let function_value = self.llvm_module.get_function(&function.decl.name).unwrap();
@@ -83,10 +84,11 @@ impl<'a> LLVMCodeGenerator<'a> {
 
             // Generate function body
             for statement in &function.body {
-                self.gen_statement(&statement);
+                self.gen_statement(&statement)?;
             }
         }
         self.pop_scope();
+        Ok(())
     }
 
     pub(super) fn gen_toplevel(&mut self, top: &'a TopLevel) {

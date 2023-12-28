@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, fs::read_to_string, path::Path, rc::Rc};
+use std::{collections::HashMap, fs::read_to_string, path::Path};
 mod ast;
 mod builder;
 mod parser;
@@ -12,7 +12,6 @@ use nom::{
     error::{convert_error, VerboseError},
     Finish,
 };
-use resolver::TypeScopes;
 
 #[derive(clap::Parser, Debug)]
 #[command(author, version, about, long_about = None)]

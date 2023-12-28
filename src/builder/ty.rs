@@ -28,6 +28,17 @@ impl<'a> LLVMCodeGenerator<'a> {
             }
             ResolvedType::Void => return None,
             ResolvedType::Unknown => unreachable!(),
+            ResolvedType::Struct(fields) => {
+                let mut field_types = Vec::new();
+                for field in fields {
+                    if let Some(t) = self.type_to_basic_type_enum(field) {
+                        field_types.push(t);
+                    } else {
+                        return None;
+                    }
+                }
+                BasicTypeEnum::StructType(self.llvm_context.struct_type(&field_types, false))
+            }
         })
     }
     pub fn type_to_basic_metadata_type_enum(
@@ -53,6 +64,19 @@ impl<'a> LLVMCodeGenerator<'a> {
             ),
             ResolvedType::Void => return None,
             ResolvedType::Unknown => unimplemented!(),
+            ResolvedType::Struct(fields) => {
+                let mut field_types = Vec::new();
+                for field in fields {
+                    if let Some(t) = self.type_to_basic_type_enum(field) {
+                        field_types.push(t);
+                    } else {
+                        return None;
+                    }
+                }
+                BasicMetadataTypeEnum::StructType(
+                    self.llvm_context.struct_type(&field_types, false),
+                )
+            }
         })
     }
 }

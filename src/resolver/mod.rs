@@ -2,12 +2,14 @@ mod error;
 mod expression;
 mod intrinsic;
 mod statement;
+mod ty;
 
 use std::{cell::RefCell, collections::HashMap, ops::DerefMut, rc::Rc};
 
 use crate::{
     ast::{self},
     resolved_ast::{self, ResolvedType},
+    resolver::ty::resolve_type,
 };
 
 use self::{
@@ -16,7 +18,7 @@ use self::{
     statement::resolve_statement,
 };
 
-type Result<T, E = FaitalError> = std::result::Result<T, E>;
+pub(crate) type Result<T, E = FaitalError> = std::result::Result<T, E>;
 
 use crate::ast::*;
 
@@ -42,31 +44,6 @@ pub(crate) fn mangle_fn_name(
     mangled_name.push_str("->");
     mangled_name.push_str(&ret.to_string());
     mangled_name
-}
-
-fn resolve_type<'a>(
-    errors: &mut Vec<CompileError>,
-    type_scopes: &mut TypeScopes,
-    ty: &ast::UnresolvedType,
-) -> Result<ResolvedType> {
-    match ty {
-        UnresolvedType::TypeRef(typ_ref) => {
-            let resolved_type = type_scopes.get(&typ_ref.name).unwrap_or_else(|| {
-                errors.push(CompileError::from_error_kind(
-                    error::CompileErrorKind::TypeNotFound {
-                        name: typ_ref.name.clone(),
-                    },
-                ));
-                &&ResolvedType::Unknown
-            });
-            // let resolved_type = *type_scopes.borrow().get(&typ_ref.name).unwrap();
-            Ok(resolved_type.clone())
-        }
-        UnresolvedType::Ptr(inner_type) => {
-            let inner_type: ResolvedType = resolve_type(errors, type_scopes, inner_type)?;
-            Ok(ResolvedType::Ptr(Box::new(inner_type)))
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -164,7 +141,7 @@ macro_rules! in_global_scope {
 }
 
 #[macro_export]
-macro_rules! is_new_scope {
+macro_rules! in_new_scope {
     ($scopes: expr, $block: block) => {
         $scopes.borrow_mut().push_new();
         $block
@@ -185,6 +162,7 @@ fn resolve_function<'a>(
     let result_type = resolve_type(
         errors,
         type_scopes.borrow_mut().deref_mut(),
+        type_defs,
         &current_fn.decl.return_type,
     )?;
     if !current_fn.decl.intrinsic && current_fn.body.len() == 0 {
@@ -198,7 +176,7 @@ fn resolve_function<'a>(
         }
         return Ok(());
     }
-    is_new_scope!(scopes, {
+    in_new_scope!(scopes, {
         let mut resolved_args: Vec<resolved_ast::Argument> = Vec::new();
         for arg in &current_fn.decl.args {
             match arg {
@@ -206,8 +184,12 @@ fn resolve_function<'a>(
                     resolved_args.push(resolved_ast::Argument::VarArgs);
                 }
                 Argument::Normal(arg_ty, arg_name) => {
-                    let arg_type =
-                        resolve_type(errors, type_scopes.borrow_mut().deref_mut(), &arg_ty)?;
+                    let arg_type = resolve_type(
+                        errors,
+                        type_scopes.borrow_mut().deref_mut(),
+                        type_defs,
+                        &arg_ty,
+                    )?;
                     scopes.borrow_mut().add(arg_name.clone(), arg_type.clone());
                     resolved_args.push(resolved_ast::Argument::Normal(arg_type, arg_name.clone()));
                 }
@@ -250,9 +232,11 @@ fn resolve_function<'a>(
                     expression: None,
                 }));
             } else {
-                let last_stmt = resolved_statements.last().unwrap();
+                let last_stmt = resolved_statements.pop().unwrap();
                 match last_stmt {
-                    resolved_ast::Statement::Return(_) => {}
+                    resolved_ast::Statement::Return(_) => {
+                        resolved_statements.push(last_stmt);
+                    }
                     resolved_ast::Statement::Effect(effect) => {
                         resolved_statements.push(resolved_ast::Statement::Return(
                             resolved_ast::Return {
@@ -265,6 +249,7 @@ fn resolve_function<'a>(
                         ));
                     }
                     _ => {
+                        resolved_statements.push(last_stmt);
                         resolved_statements.push(resolved_ast::Statement::Return(
                             resolved_ast::Return { expression: None },
                         ));

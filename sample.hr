@@ -5,17 +5,25 @@ fn printi32(n: i32): void {
 struct Vec<T> {
   size: usize,
   capacity: usize,
-  memory: *T
+  data: *T
+}
+
+fn vec<T>(): Vec<T> {
+  let initial_capacity: usize = 4
+  Vec<T> {
+    size: 0,
+    capacity: initial_capacity,
+    buf: (generic_malloc<T> initial_capacity)
+  }
+}
+
+fn generic_malloc<T>(size: usize) : *T {
+  let size = (* size (sizeof T))
+  let result: *T = (malloc size)
+  result
 }
 
 fn main(): i32 {
-  let dummy:i32 = 0
-  let dummy:i32 = 0
-  let size: usize = 4
-  let buf: *i32 = (malloc size)
-  buf[0] = 10
-  buf[1] = 20
-  (printi32 *buf)
-  (printi32 buf[1])
+  (vec<i32>)
   return 0
 }

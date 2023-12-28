@@ -51,7 +51,7 @@ pub(super) fn register_intrinsic_functions(function_by_name: &mut HashMap<String
                     function_name,
                     Function {
                         decl: FunctionDecl {
-                            intrinsic: !["print-i32"].contains(&function.decl.name.as_str()),
+                            intrinsic: true,
                             ..function.decl
                         },
                         body: function.body,

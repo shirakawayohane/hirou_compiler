@@ -60,6 +60,11 @@ pub struct CallExpr {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct SizeOfExpr {
+    pub ty: Located<UnresolvedType>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct VariableRefExpr {
     pub name: String,
 }
@@ -72,6 +77,13 @@ pub struct NumberLiteralExpr {
 #[derive(Debug, Clone, PartialEq)]
 pub struct StringLiteralExpr {
     pub value: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct StructLiteralExpr {
+    pub name: String,
+    pub generic_args: Option<Vec<Located<UnresolvedType>>>,
+    pub fields: Vec<(String, LocatedExpr)>,
 }
 
 pub type LocatedExpr = Located<Box<Expression>>;
@@ -96,9 +108,11 @@ pub struct IndexAccessExpr {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
+    SizeOf(SizeOfExpr),
     VariableRef(VariableRefExpr),
     NumberLiteral(NumberLiteralExpr),
     StringLiteral(StringLiteralExpr),
+    StructLiteral(StructLiteralExpr),
     BinaryExpr(BinaryExpr),
     Call(CallExpr),
     DerefExpr(DerefExpr),
@@ -150,7 +164,7 @@ pub struct AssignmentStatement {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct VariableDeclStatement {
-    pub ty: Located<UnresolvedType>,
+    pub ty: Option<Located<UnresolvedType>>,
     pub name: String,
     pub value: Located<Expression>,
 }

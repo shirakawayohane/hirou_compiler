@@ -22,6 +22,7 @@ pub enum ResolvedType {
     Ptr(Box<ResolvedType>),
     Void,
     Unknown,
+    Struct(Vec<ResolvedType>),
 }
 
 impl ResolvedType {
@@ -36,6 +37,7 @@ impl ResolvedType {
             ResolvedType::Ptr(_) => false,
             ResolvedType::Void => false,
             ResolvedType::Unknown => false,
+            ResolvedType::Struct(_) => false,
         }
     }
     pub fn is_pointer_type(&self) -> bool {
@@ -71,8 +73,20 @@ impl Display for ResolvedType {
                     ResolvedType::USize => USIZE_TYPE_NAME,
                     ResolvedType::U8 => U8_TYPE_NAME,
                     ResolvedType::Void => VOID_TYPE_NAME,
-                    ResolvedType::Ptr(_) => unreachable!(),
+                    ResolvedType::Ptr(inner) => {
+                        return write!(f, "*{}", inner);
+                    }
                     ResolvedType::Unknown => UNKNOWN_TYPE_NAME,
+                    ResolvedType::Struct(fields) => {
+                        f.write_char('{')?;
+                        for (i, field) in fields.iter().enumerate() {
+                            if i != 0 {
+                                f.write_str(", ")?;
+                            }
+                            write!(f, "{}", field)?;
+                        }
+                        return Ok(());
+                    }
                 }
             )
         }
@@ -102,6 +116,11 @@ pub struct StringLiteral {
 }
 
 #[derive(Debug, Clone)]
+pub struct StructLiteral {
+    pub fields: Vec<ResolvedExpression>,
+}
+
+#[derive(Debug, Clone)]
 pub struct BinaryExpr {
     pub op: BinaryOp,
     pub lhs: Box<ResolvedExpression>,
@@ -121,9 +140,11 @@ pub struct IndexAccessExor {
 
 #[derive(Debug, Clone)]
 pub enum ExpressionKind {
+    SizeOf(ResolvedType),
     VariableRef(VariableRefExpr),
     NumberLiteral(NumberLiteral),
     StringLiteral(StringLiteral),
+    StructLiteral(StructLiteral),
     BinaryExpr(BinaryExpr),
     CallExpr(CallExpr),
     Deref(DerefExpr),
