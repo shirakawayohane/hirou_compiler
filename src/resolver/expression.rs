@@ -2,10 +2,11 @@ use std::ops::DerefMut;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::ast::Expression;
-use crate::resolved_ast::{ExpressionKind, ResolvedExpression, ResolvedType};
+use crate::resolved_ast::{ExpressionKind, ResolvedExpression, ResolvedStructType, ResolvedType};
 use crate::resolver::ty::resolve_type;
 use crate::{ast, in_global_scope, in_new_scope, resolved_ast};
 
+use super::ty::get_resolved_struct_name;
 use super::{error::*, mangle_fn_name, resolve_function, TypeScopes, VariableScopes};
 
 pub(crate) fn resolve_expression(
@@ -109,9 +110,9 @@ pub(crate) fn resolve_expression(
                     if generic_args.len() != actual_generic_args.len() {
                         errors.push(CompileError::from_error_kind(
                             CompileErrorKind::MismatchGenericArgCount {
-                                fn_name: call_expr.name.to_owned(),
-                                expected: generic_args.len() as u32,
-                                actual: actual_generic_args.len() as u32,
+                                name: call_expr.name.to_owned(),
+                                expected: generic_args.len(),
+                                actual: actual_generic_args.len(),
                             },
                         ));
                         // ジェネリック引数の数が合わない場合はUnknown扱いにして継続する
@@ -153,9 +154,8 @@ pub(crate) fn resolve_expression(
                     });
                 } else {
                     errors.push(CompileError::from_error_kind(
-                        CompileErrorKind::NoGenericArgs {
-                            fn_name: call_expr.name.to_owned(),
-                            expected: generic_args.len() as u32,
+                        CompileErrorKind::UnnecessaryGenericArgs {
+                            name: call_expr.name.to_owned(),
                         },
                     ));
                     return Ok(ResolvedExpression {
@@ -316,6 +316,7 @@ pub(crate) fn resolve_expression(
         }
         Expression::StructLiteral(struct_literal_expr) => {
             let mut resolved_fields = Vec::new();
+            let mut resolved_generic_args = Vec::new();
             let struct_def = if let Some(typedef) = type_defs.get(&struct_literal_expr.name) {
                 let ast::TypeDefKind::Struct(struct_def) = &typedef.kind;
                 struct_def
@@ -332,8 +333,37 @@ pub(crate) fn resolve_expression(
                     ),
                 });
             };
-            for (_name, field_expr) in &struct_literal_expr.fields {
-                in_new_scope!(types, {
+            in_new_scope!(types, {
+                if let Some(generic_args_in_def) = &struct_def.generic_args {
+                    for (i, generic_arg) in generic_args_in_def.iter().enumerate() {
+                        let resolved_generic_arg = resolve_type(
+                            errors,
+                            types.borrow_mut().deref_mut(),
+                            type_defs,
+                            &struct_literal_expr.generic_args.as_ref().unwrap()[i],
+                        )?;
+                        resolved_generic_args.push(resolved_generic_arg.clone());
+                        types
+                            .borrow_mut()
+                            .add(generic_arg.name.clone(), resolved_generic_arg);
+                    }
+                }
+                for (field_name, ty) in &struct_def.fields {
+                    let field_in_expr = if let Some(expr) = struct_literal_expr
+                        .fields
+                        .iter()
+                        .find(|x| &x.0 == field_name)
+                    {
+                        expr
+                    } else {
+                        errors.push(CompileError::from_error_kind(
+                            CompileErrorKind::FieldNotFound {
+                                field_name: field_name.clone(),
+                                type_name: struct_literal_expr.name.clone(),
+                            },
+                        ));
+                        continue;
+                    };
                     if let Some(generic_args) = &struct_def.generic_args {
                         for (i, generic_arg) in generic_args.iter().enumerate() {
                             let resolved_type = resolve_type(
@@ -347,6 +377,9 @@ pub(crate) fn resolve_expression(
                                 .add(generic_arg.name.clone(), resolved_type);
                         }
                     }
+
+                    let expected_ty =
+                        resolve_type(errors, types.borrow_mut().deref_mut(), type_defs, ty)?;
                     resolved_fields.push(resolve_expression(
                         errors,
                         types.clone(),
@@ -354,18 +387,28 @@ pub(crate) fn resolve_expression(
                         type_defs,
                         function_by_name,
                         resolved_functions,
-                        &field_expr,
-                        None,
-                    )?)
-                });
-            }
+                        &field_in_expr.1,
+                        Some(expected_ty),
+                    )?);
+                }
+            });
+
+            let struct_name = get_resolved_struct_name(
+                &struct_literal_expr.name,
+                if struct_def.generic_args.is_some() {
+                    Some(&resolved_generic_args)
+                } else {
+                    None
+                },
+            );
             return Ok(resolved_ast::ResolvedExpression {
-                ty: ResolvedType::Struct(
-                    resolved_fields
+                ty: ResolvedType::Struct(ResolvedStructType {
+                    name: struct_name,
+                    fields: resolved_fields
                         .iter()
                         .map(|x| x.ty.clone())
                         .collect::<Vec<_>>(),
-                ),
+                }),
                 kind: resolved_ast::ExpressionKind::StructLiteral(resolved_ast::StructLiteral {
                     fields: resolved_fields,
                 }),

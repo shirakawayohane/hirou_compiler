@@ -3,43 +3,14 @@ use inkwell::{
     AddressSpace,
 };
 
-use crate::resolved_ast::ResolvedType;
+use crate::resolved_ast::{ResolvedStructType, ResolvedType};
 
 use super::LLVMCodeGenerator;
 
 impl<'a> LLVMCodeGenerator<'a> {
     pub fn type_to_basic_type_enum(&self, ty: &ResolvedType) -> Option<BasicTypeEnum<'a>> {
-        Some(match ty {
-            ResolvedType::I32 => BasicTypeEnum::IntType(self.llvm_context.i32_type()),
-            ResolvedType::U8 => BasicTypeEnum::IntType(self.llvm_context.i8_type()),
-            ResolvedType::U32 => BasicTypeEnum::IntType(self.llvm_context.i32_type()),
-            ResolvedType::U64 => BasicTypeEnum::IntType(self.llvm_context.i64_type()),
-            ResolvedType::I64 => BasicTypeEnum::IntType(self.llvm_context.i64_type()),
-            ResolvedType::USize => BasicTypeEnum::IntType(self.llvm_context.i64_type()),
-            ResolvedType::Ptr(inner) => {
-                BasicTypeEnum::PointerType(if let Some(t) = self.type_to_basic_type_enum(inner) {
-                    t.ptr_type(AddressSpace::default())
-                } else {
-                    // Void Pointer Type
-                    self.llvm_context
-                        .i8_type()
-                        .ptr_type(AddressSpace::default())
-                })
-            }
-            ResolvedType::Void => return None,
-            ResolvedType::Unknown => unreachable!(),
-            ResolvedType::Struct(fields) => {
-                let mut field_types = Vec::new();
-                for field in fields {
-                    if let Some(t) = self.type_to_basic_type_enum(field) {
-                        field_types.push(t);
-                    } else {
-                        return None;
-                    }
-                }
-                BasicTypeEnum::StructType(self.llvm_context.struct_type(&field_types, false))
-            }
-        })
+        self.type_to_basic_metadata_type_enum(ty)
+            .map(|x| x.try_into().unwrap())
     }
     pub fn type_to_basic_metadata_type_enum(
         &self,
@@ -64,7 +35,11 @@ impl<'a> LLVMCodeGenerator<'a> {
             ),
             ResolvedType::Void => return None,
             ResolvedType::Unknown => unimplemented!(),
-            ResolvedType::Struct(fields) => {
+            ResolvedType::Struct(ResolvedStructType { name, fields }) => {
+                if let Some(t) = self.llvm_context.get_struct_type(name) {
+                    return Some(t.into());
+                }
+                let struct_type = self.llvm_context.opaque_struct_type(name);
                 let mut field_types = Vec::new();
                 for field in fields {
                     if let Some(t) = self.type_to_basic_type_enum(field) {
@@ -73,9 +48,8 @@ impl<'a> LLVMCodeGenerator<'a> {
                         return None;
                     }
                 }
-                BasicMetadataTypeEnum::StructType(
-                    self.llvm_context.struct_type(&field_types, false),
-                )
+                struct_type.set_body(&field_types, false);
+                struct_type.into()
             }
         })
     }

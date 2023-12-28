@@ -52,14 +52,23 @@ pub enum CompileErrorKind {
     InvalidArrayIndex,
     #[error("Cannot find type name {name}")]
     TypeNotFound { name: String },
-    #[error("Mismatch generic args privided. `{fn_name}` requires {expected} generic arguments, but got {actual}")]
+    #[error("Mismatch generic args privided. `{name}` requires {expected} generic arguments, but got {actual}")]
     MismatchGenericArgCount {
-        fn_name: String,
-        expected: u32,
-        actual: u32,
+        name: String,
+        expected: usize,
+        actual: usize,
     },
-    #[error("`{fn_name}` requires {expected:?} generic arguments. Currently, type inference is not supported.")]
-    NoGenericArgs { fn_name: String, expected: u32 },
+    #[error("`{name}` requires  no generic arguments.")]
+    UnnecessaryGenericArgs { name: String },
+    #[error("`{name}` requires generic arguments.")]
+    NoGenericArgs { name: String },
+    #[error("Cannot find field `{field_name:?}` in type `{type_name:?}`")]
+    FieldNotFound {
+        field_name: String,
+        type_name: String,
+    },
+    #[error("Generic args length mismatch. expected {expected}, but got {actual}")]
+    InvalidGenericArgsLength { expected: usize, actual: usize },
 }
 
 #[derive(Debug, Error)]

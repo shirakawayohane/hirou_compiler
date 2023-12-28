@@ -12,6 +12,12 @@ pub const USIZE_TYPE_NAME: &str = "usize";
 pub const UNKNOWN_TYPE_NAME: &str = "unknown";
 
 #[derive(Debug, PartialEq, Eq, Clone)]
+pub struct ResolvedStructType {
+    pub name: String,
+    pub fields: Vec<ResolvedType>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ResolvedType {
     I32,
     I64,
@@ -22,7 +28,7 @@ pub enum ResolvedType {
     Ptr(Box<ResolvedType>),
     Void,
     Unknown,
-    Struct(Vec<ResolvedType>),
+    Struct(ResolvedStructType),
 }
 
 impl ResolvedType {
@@ -77,15 +83,8 @@ impl Display for ResolvedType {
                         return write!(f, "*{}", inner);
                     }
                     ResolvedType::Unknown => UNKNOWN_TYPE_NAME,
-                    ResolvedType::Struct(fields) => {
-                        f.write_char('{')?;
-                        for (i, field) in fields.iter().enumerate() {
-                            if i != 0 {
-                                f.write_str(", ")?;
-                            }
-                            write!(f, "{}", field)?;
-                        }
-                        return Ok(());
+                    ResolvedType::Struct(ResolvedStructType { name, fields: _ }) => {
+                        name
                     }
                 }
             )

@@ -70,22 +70,16 @@ impl LLVMCodeGenerator<'_> {
     fn eval_struct_literal(
         &self,
         struct_literal: &StructLiteral,
+        ty: &ResolvedType,
     ) -> Result<BasicValueEnum, BuilderError> {
         let mut values = Vec::new();
         for field in &struct_literal.fields {
             let value = self.gen_expression(field)?.unwrap();
             values.push(value);
         }
-        let struct_type = self.llvm_context.struct_type(
-            values
-                .iter()
-                .map(|x| x.get_type())
-                .collect::<Vec<_>>()
-                .as_ref(),
-            false,
-        );
-        let struct_value = struct_type.const_named_struct(&values);
-        Ok(struct_value.as_basic_value_enum())
+        let ty = self.type_to_basic_type_enum(ty).unwrap().into_struct_type();
+        let struct_value = ty.const_named_struct(&values);
+        Ok(struct_value.into())
     }
     fn eval_variable_ref(
         &self,
@@ -228,7 +222,7 @@ impl LLVMCodeGenerator<'_> {
                 self.eval_string_literal(string_literal).map(Some)
             }
             ExpressionKind::StructLiteral(struct_literal) => {
-                self.eval_struct_literal(struct_literal).map(Some)
+                self.eval_struct_literal(struct_literal, &expr.ty).map(Some)
             }
             ExpressionKind::SizeOf(ty) => Ok(Some(self.eval_sizeof(ty))),
         }

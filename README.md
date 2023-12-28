@@ -24,7 +24,8 @@ brew install llvm@14
 echo export LLVM_SYS_140_PREFIX=/usr/homebrew/opt/llvm@14 >> ~/.bashrc
 ```
 
-## 検証事項TODOリスト
+## TODOリスト
+- エラー箇所をわかるようにする
 - 戻り値の型
 - 引数の型
 - 引数の数

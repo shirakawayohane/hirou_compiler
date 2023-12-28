@@ -1,6 +1,6 @@
 use crate::{
     ast::{self, UnresolvedType},
-    resolved_ast::ResolvedType,
+    resolved_ast::{ResolvedStructType, ResolvedType},
 };
 
 use super::*;
@@ -25,7 +25,56 @@ pub(super) fn resolve_type<'a>(
                                 field_ty,
                             )?);
                         }
-                        return Ok(ResolvedType::Struct(resolved_fields));
+
+                        let mut resolved_generic_args = Vec::new();
+                        if let Some(generic_args) = &typ_ref.generic_args {
+                            if let Some(generic_args_in_def) = &struct_def.generic_args {
+                                if generic_args.len() != generic_args_in_def.len() {
+                                    errors.push(CompileError::from_error_kind(
+                                        error::CompileErrorKind::MismatchGenericArgCount {
+                                            name: typ_ref.name.clone(),
+                                            expected: generic_args_in_def.len(),
+                                            actual: generic_args.len(),
+                                        },
+                                    ));
+                                    return Ok(ResolvedType::Unknown);
+                                } else {
+                                    for generic_arg in generic_args {
+                                        let resolved_generic_arg = resolve_type(
+                                            errors,
+                                            type_scopes,
+                                            type_defs,
+                                            generic_arg,
+                                        )?;
+                                        resolved_generic_args.push(resolved_generic_arg);
+                                    }
+                                }
+                            } else {
+                                errors.push(CompileError::from_error_kind(
+                                    error::CompileErrorKind::UnnecessaryGenericArgs {
+                                        name: typ_ref.name.clone(),
+                                    },
+                                ));
+                                return Ok(ResolvedType::Unknown);
+                            }
+                        } else {
+                            if struct_def.generic_args.is_some() {
+                                errors.push(CompileError::from_error_kind(
+                                    error::CompileErrorKind::NoGenericArgs {
+                                        name: typ_ref.name.clone(),
+                                    },
+                                ));
+                                return Ok(ResolvedType::Unknown);
+                            }
+                        }
+
+                        return Ok(ResolvedType::Struct(ResolvedStructType {
+                            name: get_resolved_struct_name(
+                                &type_def.name,
+                                Some(&resolved_generic_args),
+                            ),
+                            fields: resolved_fields,
+                        }));
                     }
                 }
             }
@@ -45,5 +94,24 @@ pub(super) fn resolve_type<'a>(
                 resolve_type(errors, type_scopes, type_defs, inner_type)?;
             Ok(ResolvedType::Ptr(Box::new(inner_type)))
         }
+    }
+}
+
+pub(crate) fn get_resolved_struct_name(
+    name: &str,
+    generic_args: Option<&[ResolvedType]>,
+) -> String {
+    if let Some(generic_args) = generic_args {
+        format!(
+            "{}<{}>",
+            name,
+            generic_args
+                .iter()
+                .map(|x| x.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    } else {
+        name.to_string()
     }
 }

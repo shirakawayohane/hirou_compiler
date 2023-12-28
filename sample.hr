@@ -5,7 +5,7 @@ fn printi32(n: i32): void {
 struct Vec<T> {
   size: usize,
   capacity: usize,
-  data: *T
+  buf: *T
 }
 
 fn vec<T>(): Vec<T> {
