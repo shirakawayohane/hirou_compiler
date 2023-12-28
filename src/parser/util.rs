@@ -1,10 +1,6 @@
 use crate::ast::{Expression, Located, Position, Range};
 
-use super::{
-    expression::parse_boxed_expression,
-    token::{comma, lsqrbracket, rsqrbracket},
-    *,
-};
+use super::{expression::parse_boxed_expression, token::*, *};
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_till},
@@ -12,7 +8,7 @@ use nom::{
     combinator::{eof, map},
     error::VerboseError,
     multi::many0,
-    sequence::tuple,
+    sequence::{preceded, tuple},
     Parser,
 };
 
@@ -76,4 +72,8 @@ pub(super) fn located<'a, O>(
 
 pub(super) fn index_access<'a>(input: Span<'a>) -> ParseResult<Box<Expression>> {
     delimited(lsqrbracket, parse_boxed_expression, rsqrbracket)(input)
+}
+
+pub(super) fn field_access<'a>(input: Span<'a>) -> NotLocatedParseResult<String> {
+    preceded(dot, parse_identifier)(input)
 }

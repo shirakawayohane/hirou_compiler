@@ -72,44 +72,74 @@ impl LLVMCodeGenerator<'_> {
         struct_literal: &StructLiteral,
         ty: &ResolvedType,
     ) -> Result<BasicValueEnum, BuilderError> {
+        let ty = self.type_to_basic_type_enum(ty).unwrap();
         let mut values = Vec::new();
-        for field in &struct_literal.fields {
-            let value = self.gen_expression(field)?.unwrap();
+        for (_name, field_expr) in &struct_literal.fields {
+            let value = self.gen_expression(field_expr)?.unwrap();
             values.push(value);
         }
-        let ty = self.type_to_basic_type_enum(ty).unwrap().into_struct_type();
-        let struct_value = ty.const_named_struct(&values);
-        Ok(struct_value.into())
+        Ok(ty.into_struct_type().const_named_struct(&values).into())
     }
     fn eval_variable_ref(
         &self,
         variable_ref: &VariableRefExpr,
         ty: &ResolvedType,
-    ) -> BasicValueEnum {
+    ) -> Result<BasicValueEnum, BuilderError> {
         let ptr = self.get_variable(&variable_ref.name);
         let pointee_ty = self.type_to_basic_type_enum(ty).unwrap();
-        self.llvm_builder.build_load(pointee_ty, ptr, "").unwrap()
+        let value = self.llvm_builder.build_load(pointee_ty, ptr, "")?;
+        Ok(value)
     }
     fn eval_index_access(
         &self,
         index_access: &IndexAccessExor,
         ty: &ResolvedType,
     ) -> Result<BasicValueEnum, BuilderError> {
-        let ptr = self.gen_expression(&index_access.target)?.unwrap();
+        let ptr = self
+            .gen_expression(&index_access.target)?
+            .unwrap()
+            .into_pointer_value();
         let pointee_ty = self
             .type_to_basic_type_enum(ty)
             .unwrap_or(self.type_to_basic_type_enum(&ResolvedType::U8).unwrap());
         let index = self.gen_expression(&index_access.index)?.unwrap();
         let ptr = unsafe {
-            self.llvm_builder.build_in_bounds_gep(
-                pointee_ty,
-                ptr.into_pointer_value(),
-                &[index.into_int_value()],
-                "",
-            )?
+            self.llvm_builder
+                .build_in_bounds_gep(pointee_ty, ptr, &[index.into_int_value()], "")?
         };
         let value = self.llvm_builder.build_load(pointee_ty, ptr, "").unwrap();
         Ok(value)
+    }
+    fn eval_field_access(
+        &self,
+        field_access: &FieldAccessExpr,
+        ty: &ResolvedType,
+    ) -> Result<BasicValueEnum, BuilderError> {
+        if let ResolvedType::Struct(struct_ty) = &field_access.target.ty {
+            let ty_enum = self.type_to_basic_type_enum(ty).unwrap();
+            let ptr = self.llvm_builder.build_alloca(ty_enum, "")?;
+            self.llvm_builder
+                .build_store(ptr, self.gen_expression(&field_access.target)?.unwrap())?;
+            let index = struct_ty
+                .fields
+                .iter()
+                .position(|x| x.0 == field_access.field_name)
+                .unwrap();
+            let ptr = self.llvm_builder.build_struct_gep(
+                self.type_to_basic_type_enum(&field_access.target.ty)
+                    .unwrap(),
+                ptr,
+                index as u32,
+                "",
+            )?;
+            let value = self
+                .llvm_builder
+                .build_load(self.type_to_basic_type_enum(ty).unwrap(), ptr, "")
+                .unwrap();
+            Ok(value)
+        } else {
+            unreachable!()
+        }
     }
     fn eval_deref(
         &self,
@@ -205,8 +235,9 @@ impl LLVMCodeGenerator<'_> {
                 .unwrap();
             let ptr = self.llvm_builder.build_alloca(return_ty, "")?;
             args.insert(0, ptr.into());
-            let value = self.llvm_builder.build_call(func, &args, "").unwrap();
-            return Ok(value.try_as_basic_value().left());
+            self.llvm_builder.build_call(func, &args, "")?;
+            let value = self.llvm_builder.build_load(return_ty, ptr, "")?;
+            return Ok(value.into());
         }
         let value = self.llvm_builder.build_call(func, &args, "").unwrap();
         Ok(value.try_as_basic_value().left())
@@ -220,7 +251,7 @@ impl LLVMCodeGenerator<'_> {
                 self.eval_number_literal(number_literal, &expr.ty).map(Some)
             }
             ExpressionKind::VariableRef(variable_ref) => {
-                Ok(Some(self.eval_variable_ref(variable_ref, &expr.ty)))
+                self.eval_variable_ref(variable_ref, &expr.ty).map(Some)
             }
             ExpressionKind::IndexAccess(index_access) => {
                 self.eval_index_access(index_access, &expr.ty).map(Some)
@@ -235,6 +266,9 @@ impl LLVMCodeGenerator<'_> {
                 self.eval_struct_literal(struct_literal, &expr.ty).map(Some)
             }
             ExpressionKind::SizeOf(ty) => Ok(Some(self.eval_sizeof(ty))),
+            ExpressionKind::FieldAccess(field_access_expr) => self
+                .eval_field_access(field_access_expr, &expr.ty)
+                .map(Some),
         }
     }
 }

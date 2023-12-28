@@ -41,8 +41,8 @@ impl<'a> LLVMCodeGenerator<'a> {
                 }
                 let struct_type = self.llvm_context.opaque_struct_type(name);
                 let mut field_types = Vec::new();
-                for field in fields {
-                    if let Some(t) = self.type_to_basic_type_enum(field) {
+                for (_field_name, field_ty) in fields {
+                    if let Some(t) = self.type_to_basic_type_enum(field_ty) {
                         field_types.push(t);
                     } else {
                         return None;

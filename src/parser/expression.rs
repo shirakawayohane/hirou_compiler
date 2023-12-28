@@ -174,7 +174,7 @@ fn parse_field(input: Span) -> NotLocatedParseResult<(String, LocatedExpr)> {
     context(
         "field",
         map(
-            tuple((parse_identifier, colon, parse_boxed_expression)),
+            tuple((parse_identifier, colon, cut(parse_boxed_expression))),
             |(name, _, expr)| (name, expr),
         ),
     )(input)
@@ -284,20 +284,36 @@ pub(super) fn parse_boxed_expression(input: Span) -> ParseResult<Box<Expression>
         |x| Box::new(x),
     ))(input)?;
 
-    let (rest, opt_index_expr) = opt(located(index_access))(rest)?;
-
-    if let Some(index_expr) = opt_index_expr {
-        Ok((
-            rest,
-            Located {
-                range: index_expr.range,
-                value: Box::new(Expression::IndexAccess(IndexAccessExpr {
-                    target: expr,
-                    index: index_expr.value,
-                })),
-            },
-        ))
-    } else {
-        Ok((rest, expr))
+    {
+        let (rest, opt_index_expr) = opt(located(index_access))(rest)?;
+        if let Some(index_expr) = opt_index_expr {
+            return Ok((
+                rest,
+                Located {
+                    range: index_expr.range,
+                    value: Box::new(Expression::IndexAccess(IndexAccessExpr {
+                        target: expr,
+                        index: index_expr.value,
+                    })),
+                },
+            ));
+        }
     }
+    {
+        let (rest, opt_field_access) = opt(located(field_access))(rest)?;
+        if let Some(field_access) = opt_field_access {
+            return Ok((
+                rest,
+                Located {
+                    range: field_access.range,
+                    value: Box::new(Expression::FieldAccess(FieldAccessExpr {
+                        target: expr,
+                        field_name: field_access.value,
+                    })),
+                },
+            ));
+        }
+    }
+
+    Ok((rest, expr))
 }

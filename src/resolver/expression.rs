@@ -306,6 +306,50 @@ pub(crate) fn resolve_expression(
                 ty: resolved_ty,
             });
         }
+        Expression::FieldAccess(field_access_expr) => {
+            let target = resolve_expression(
+                errors,
+                types.clone(),
+                scopes.clone(),
+                type_defs,
+                function_by_name,
+                resolved_functions,
+                &field_access_expr.target,
+                None,
+            )?;
+            let resolved_ty = if let ResolvedType::Struct(struct_ty) = &target.ty {
+                if let Some((_name, ty)) = struct_ty
+                    .fields
+                    .iter()
+                    .find(|x| x.0 == field_access_expr.field_name)
+                {
+                    ty.clone()
+                } else {
+                    errors.push(CompileError::from_error_kind(
+                        CompileErrorKind::FieldNotFound {
+                            field_name: field_access_expr.field_name.clone(),
+                            type_name: struct_ty.name.clone(),
+                        },
+                    ));
+                    ResolvedType::Unknown
+                }
+            } else {
+                errors.push(CompileError::from_error_kind(
+                    CompileErrorKind::InvalidFieldAccess {
+                        ty: target.clone().ty,
+                        name: field_access_expr.field_name.clone(),
+                    },
+                ));
+                ResolvedType::Unknown
+            };
+            return Ok(resolved_ast::ResolvedExpression {
+                kind: resolved_ast::ExpressionKind::FieldAccess(resolved_ast::FieldAccessExpr {
+                    target: Box::new(target),
+                    field_name: field_access_expr.field_name.clone(),
+                }),
+                ty: resolved_ty,
+            });
+        }
         Expression::StringLiteral(str_literal) => {
             return Ok(resolved_ast::ResolvedExpression {
                 kind: resolved_ast::ExpressionKind::StringLiteral(resolved_ast::StringLiteral {
@@ -380,16 +424,19 @@ pub(crate) fn resolve_expression(
 
                     let expected_ty =
                         resolve_type(errors, types.borrow_mut().deref_mut(), type_defs, ty)?;
-                    resolved_fields.push(resolve_expression(
-                        errors,
-                        types.clone(),
-                        scopes.clone(),
-                        type_defs,
-                        function_by_name,
-                        resolved_functions,
-                        &field_in_expr.1,
-                        Some(expected_ty),
-                    )?);
+                    resolved_fields.push((
+                        field_name.clone(),
+                        resolve_expression(
+                            errors,
+                            types.clone(),
+                            scopes.clone(),
+                            type_defs,
+                            function_by_name,
+                            resolved_functions,
+                            &field_in_expr.1,
+                            Some(expected_ty),
+                        )?,
+                    ));
                 }
             });
 
@@ -406,8 +453,8 @@ pub(crate) fn resolve_expression(
                     name: struct_name,
                     fields: resolved_fields
                         .iter()
-                        .map(|x| x.ty.clone())
-                        .collect::<Vec<_>>(),
+                        .map(|(name, expr)| (name.clone(), expr.ty.clone()))
+                        .collect(),
                 }),
                 kind: resolved_ast::ExpressionKind::StructLiteral(resolved_ast::StructLiteral {
                     fields: resolved_fields,

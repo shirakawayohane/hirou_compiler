@@ -140,24 +140,12 @@ impl<'a> LLVMCodeGenerator<'a> {
                             Statement::Return(return_stmt) => {
                                 let value = self
                                     .gen_expression(return_stmt.expression.as_ref().unwrap())?
-                                    .unwrap()
-                                    .into_struct_value();
+                                    .unwrap();
                                 let first_param_ptr = function_value
                                     .get_first_param()
                                     .unwrap()
                                     .into_pointer_value();
-                                for field_idx in 0..value.count_fields() {
-                                    let field_value = value.get_field_at_index(field_idx).unwrap();
-                                    let field_ptr = self.llvm_builder.build_struct_gep(
-                                        value.get_type(),
-                                        first_param_ptr,
-                                        field_idx,
-                                        "",
-                                    )?;
-                                    self.llvm_builder
-                                        .build_store(field_ptr, field_value)
-                                        .unwrap();
-                                }
+                                self.llvm_builder.build_store(first_param_ptr, value)?;
                                 self.llvm_builder.build_return(None)?;
                                 continue;
                             }

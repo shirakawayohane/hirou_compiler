@@ -17,13 +17,11 @@ pub(super) fn resolve_type<'a>(
                 match &type_def.kind {
                     TypeDefKind::Struct(struct_def) => {
                         let mut resolved_fields = Vec::new();
-                        for (_, field_ty) in &struct_def.fields {
-                            resolved_fields.push(resolve_type(
-                                errors,
-                                type_scopes,
-                                type_defs,
-                                field_ty,
-                            )?);
+                        for (field_name, field_ty) in &struct_def.fields {
+                            resolved_fields.push((
+                                field_name.to_string(),
+                                resolve_type(errors, type_scopes, type_defs, field_ty)?,
+                            ));
                         }
 
                         let mut resolved_generic_args = Vec::new();

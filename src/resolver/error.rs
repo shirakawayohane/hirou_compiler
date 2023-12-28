@@ -48,6 +48,8 @@ pub enum CompileErrorKind {
     InvalidDeref { name: String, deref_count: u32 },
     #[error("Cannot access {ty} by index.")]
     InvalidIndexAccess { ty: ResolvedType },
+    #[error("`{ty}` has no field named `{name}`")]
+    InvalidFieldAccess { ty: ResolvedType, name: String },
     #[error("Array index must be an integer value")]
     InvalidArrayIndex,
     #[error("Cannot find type name {name}")]

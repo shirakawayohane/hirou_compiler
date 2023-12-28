@@ -1,29 +1,37 @@
-fn printi32(n: i32): void {
-    (printf "%d\n", n)
-}
-
 struct Vec<T> {
-  size: usize,
-  capacity: usize,
-  buf: *T
+  capacity: i32,
+  size: i32,
+  buf: *T,
 }
 
-fn vec<T>(): Vec<T> {
-  let initial_capacity: usize = 4
-  Vec<T> {
-    size: 0,
-    capacity: initial_capacity,
-    buf: (generic_malloc<T> initial_capacity)
-  }
-}
-
-fn generic_malloc<T>(size: usize) : *T {
-  let size = (* size (sizeof T))
-  let result: *T = (malloc size)
+fn g_malloc<T>(size: usize) : *T {
+  let mem_size = (* size (sizeof T))
+  let result: *T = (malloc mem_size)
   result
 }
 
+fn vec<T>(): Vec<T> {
+  Vec<T> {
+    capacity: 100,
+    size: 50,
+    buf: (g_malloc<T> 4)
+  }
+}
+
+fn set<T>(vec: Vec<T>, index: usize, value: T): void {
+  let buf = vec.buf
+  buf[index] = value
+}
+
+fn get<T>(vec: Vec<T>, index: usize): T {
+  let buf = vec.buf
+  buf[index]
+}
+
 fn main(): i32 {
-  (vec<i32>)
+  let v = (vec<i32>)
+  (set<i32> vec 1 123)
+  let set_value = (get<i32> vec 1)
+  (printf "%d\n", set_value)
   return 0
 }

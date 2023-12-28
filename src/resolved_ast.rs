@@ -14,7 +14,7 @@ pub const UNKNOWN_TYPE_NAME: &str = "unknown";
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ResolvedStructType {
     pub name: String,
-    pub fields: Vec<ResolvedType>,
+    pub fields: Vec<(String, ResolvedType)>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -116,7 +116,7 @@ pub struct StringLiteral {
 
 #[derive(Debug, Clone)]
 pub struct StructLiteral {
-    pub fields: Vec<ResolvedExpression>,
+    pub fields: Vec<(String, ResolvedExpression)>,
 }
 
 #[derive(Debug, Clone)]
@@ -138,6 +138,12 @@ pub struct IndexAccessExor {
 }
 
 #[derive(Debug, Clone)]
+pub struct FieldAccessExpr {
+    pub target: Box<ResolvedExpression>,
+    pub field_name: String,
+}
+
+#[derive(Debug, Clone)]
 pub enum ExpressionKind {
     SizeOf(ResolvedType),
     VariableRef(VariableRefExpr),
@@ -148,6 +154,7 @@ pub enum ExpressionKind {
     CallExpr(CallExpr),
     Deref(DerefExpr),
     IndexAccess(IndexAccessExor),
+    FieldAccess(FieldAccessExpr),
 }
 
 #[derive(Debug, Clone)]

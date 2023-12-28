@@ -107,6 +107,12 @@ pub struct IndexAccessExpr {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct FieldAccessExpr {
+    pub target: LocatedExpr,
+    pub field_name: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
     SizeOf(SizeOfExpr),
     VariableRef(VariableRefExpr),
@@ -117,6 +123,7 @@ pub enum Expression {
     Call(CallExpr),
     DerefExpr(DerefExpr),
     IndexAccess(IndexAccessExpr),
+    FieldAccess(FieldAccessExpr),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
