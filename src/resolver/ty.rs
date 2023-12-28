@@ -49,7 +49,7 @@ pub(super) fn resolve_type<'a>(
                                 }
                             } else {
                                 errors.push(CompileError::from_error_kind(
-                                    error::CompileErrorKind::UnnecessaryGenericArgs {
+                                    error::CompileErrorKind::NoGenericArgs {
                                         name: typ_ref.name.clone(),
                                     },
                                 ));

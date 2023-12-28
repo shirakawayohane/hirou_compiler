@@ -28,10 +28,16 @@ fn get<T>(vec: Vec<T>, index: usize): T {
   buf[index]
 }
 
+fn add(l: i32, r: i32): i32 {
+  (+ l r)
+}
+
 fn main(): i32 {
   let v = (vec<i32>)
-  (set<i32> vec 1 123)
-  let set_value = (get<i32> vec 1)
+  (set<i32> v 1 123)
+  let set_value = (get<i32> v 1)
   (printf "%d\n", set_value)
+
+  (printf "%d\n" (add 1 2))
   return 0
 }

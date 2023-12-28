@@ -154,7 +154,7 @@ pub(crate) fn resolve_expression(
                     });
                 } else {
                     errors.push(CompileError::from_error_kind(
-                        CompileErrorKind::UnnecessaryGenericArgs {
+                        CompileErrorKind::NoGenericArgs {
                             name: call_expr.name.to_owned(),
                         },
                     ));
