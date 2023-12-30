@@ -15,6 +15,7 @@ pub const UNKNOWN_TYPE_NAME: &str = "unknown";
 pub struct ResolvedStructType {
     pub name: String,
     pub fields: Vec<(String, ResolvedType)>,
+    pub generic_args: Option<Vec<ResolvedType>>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -83,7 +84,7 @@ impl Display for ResolvedType {
                         return write!(f, "*{}", inner);
                     }
                     ResolvedType::Unknown => UNKNOWN_TYPE_NAME,
-                    ResolvedType::Struct(ResolvedStructType { name, fields: _ }) => {
+                    ResolvedType::Struct(ResolvedStructType { name, fields: _, generic_args: _ }) => {
                         name
                     }
                 }

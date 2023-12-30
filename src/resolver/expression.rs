@@ -1,7 +1,7 @@
 use std::ops::DerefMut;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::ast::Expression;
+use crate::ast::{Expression, TypeRef};
 use crate::resolved_ast::{ExpressionKind, ResolvedExpression, ResolvedStructType, ResolvedType};
 use crate::resolver::ty::resolve_type;
 use crate::{ast, in_global_scope, in_new_scope, resolved_ast};
@@ -153,18 +153,52 @@ pub(crate) fn resolve_expression(
                         });
                     });
                 } else {
-                    errors.push(CompileError::from_error_kind(
-                        CompileErrorKind::NoGenericArgs {
-                            name: call_expr.name.to_owned(),
-                        },
-                    ));
-                    return Ok(ResolvedExpression {
-                        kind: ExpressionKind::CallExpr(resolved_ast::CallExpr {
-                            callee: call_expr.name.clone(),
-                            args: Vec::new(),
-                        }),
-                        ty: ResolvedType::Unknown,
-                    });
+                    let mut resolved_by_annotation = false;
+                    if let Some(annotation) = annotation {
+                        if let ast::UnresolvedType::TypeRef(TypeRef { name, generic_args }) =
+                            &callee.decl.return_type.value
+                        {
+                            if let ResolvedType::Struct(resolved_struct) = &annotation {
+                                if &resolved_struct.name == name {
+                                    resolved_by_annotation = true;
+                                    in_global_scope!(scopes, {
+                                        in_global_scope!(types, {
+                                            // 正常系
+                                            let resolved_generic_args =
+                                                resolved_struct.generic_args.unwrap();
+                                            for i in 0..resolved_generic_args.len() {
+                                                let actual_arg = resolved_generic_args[i].clone();
+                                                types.borrow_mut().add(name.clone(), actual_arg);
+                                            }
+                                            resolve_function(
+                                                errors,
+                                                types.clone(),
+                                                scopes.clone(),
+                                                type_defs,
+                                                function_by_name,
+                                                resolved_functions,
+                                                callee,
+                                            )?
+                                        });
+                                    });
+                                }
+                            }
+                        }
+                    }
+                    if !resolved_by_annotation {
+                        errors.push(CompileError::from_error_kind(
+                            CompileErrorKind::NoGenericArgs {
+                                name: call_expr.name.to_owned(),
+                            },
+                        ));
+                        return Ok(ResolvedExpression {
+                            kind: ExpressionKind::CallExpr(resolved_ast::CallExpr {
+                                callee: call_expr.name.clone(),
+                                args: Vec::new(),
+                            }),
+                            ty: ResolvedType::Unknown,
+                        });
+                    }
                 };
             } else {
                 in_global_scope!(scopes, {
@@ -188,10 +222,10 @@ pub(crate) fn resolve_expression(
                 &callee.decl.return_type.value,
             )?;
             // void* はアノテーションがあればその型として扱う
-            if let Some(annotation) = annotation {
-                if let ResolvedType::Ptr(inner) = &resolved_return_ty {
-                    if let ResolvedType::Void = **inner {
-                        resolved_return_ty = annotation;
+            if let Some(annotation) = &annotation {
+                if let ResolvedType::Ptr(inner) = resolved_return_ty {
+                    if let ResolvedType::Void = *inner {
+                        resolved_return_ty = annotation.clone();
                     }
                 }
             };
@@ -455,6 +489,11 @@ pub(crate) fn resolve_expression(
                         .iter()
                         .map(|(name, expr)| (name.clone(), expr.ty.clone()))
                         .collect(),
+                    generic_args: if struct_def.generic_args.is_some() {
+                        Some(resolved_generic_args)
+                    } else {
+                        None
+                    },
                 }),
                 kind: resolved_ast::ExpressionKind::StructLiteral(resolved_ast::StructLiteral {
                     fields: resolved_fields,

@@ -35,7 +35,11 @@ impl<'a> LLVMCodeGenerator<'a> {
             ),
             ResolvedType::Void => return None,
             ResolvedType::Unknown => unimplemented!(),
-            ResolvedType::Struct(ResolvedStructType { name, fields }) => {
+            ResolvedType::Struct(ResolvedStructType {
+                name,
+                fields,
+                generic_args: _,
+            }) => {
                 if let Some(t) = self.llvm_context.get_struct_type(name) {
                     return Some(t.into());
                 }

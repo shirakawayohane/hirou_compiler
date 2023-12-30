@@ -72,6 +72,11 @@ pub(super) fn resolve_type<'a>(
                                 Some(&resolved_generic_args),
                             ),
                             fields: resolved_fields,
+                            generic_args: if struct_def.generic_args.is_some() {
+                                Some(resolved_generic_args)
+                            } else {
+                                None
+                            },
                         }));
                     }
                 }
