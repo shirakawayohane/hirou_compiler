@@ -39,6 +39,7 @@ impl<'a> LLVMCodeGenerator<'a> {
                 name,
                 fields,
                 generic_args: _,
+                non_generic_name: _,
             }) => {
                 if let Some(t) = self.llvm_context.get_struct_type(name) {
                     return Some(t.into());

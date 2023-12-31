@@ -5,27 +5,8 @@ use thiserror::Error;
 
 use crate::{ast::UnresolvedType, resolved_ast::ResolvedType};
 
-#[derive(Debug)]
-pub enum ContextType {
-    // expressions
-    VariableRefExpression,
-    CallExpression,
-    NumberLiteralExpression,
-    BinaryExpression,
-    IntrinsicExpression,
-    // statements
-    AsignStatement,
-    ReturnStatement,
-    DiscardedExpressionStatement,
-    VariableDeclStatement,
-    // toplevels
-    Function,
-}
-
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq)]
 pub enum CompileErrorKind {
-    #[error("in {0:?}")]
-    Context(ContextType),
     #[error("Variable `{name:?}` is not found in this scope.")]
     VariableNotFound { name: String },
     #[error("Function `{name:?}` is not found.")]
@@ -73,7 +54,7 @@ pub enum CompileErrorKind {
     InvalidGenericArgsLength { expected: usize, actual: usize },
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq)]
 pub struct CompileError {
     errors: Vec<CompileErrorKind>,
 }

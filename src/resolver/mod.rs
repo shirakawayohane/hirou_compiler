@@ -142,11 +142,12 @@ macro_rules! in_global_scope {
 
 #[macro_export]
 macro_rules! in_new_scope {
-    ($scopes: expr, $block: block) => {
+    ($scopes:expr, $block:block) => {{
         $scopes.borrow_mut().push_new();
-        $block
+        let result = $block;
         $scopes.borrow_mut().pop();
-    };
+        result
+    }};
 }
 
 // ジェネリック関数の場合は事前に型を登録しておく必要がある

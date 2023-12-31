@@ -269,6 +269,7 @@ impl LLVMCodeGenerator<'_> {
             ExpressionKind::FieldAccess(field_access_expr) => self
                 .eval_field_access(field_access_expr, &expr.ty)
                 .map(Some),
+            ExpressionKind::Unknown => unreachable!(),
         }
     }
 }

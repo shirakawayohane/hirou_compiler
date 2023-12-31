@@ -1,7 +1,7 @@
 use std::ops::DerefMut;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::ast::{Expression, TypeRef};
+use crate::ast::{Expression, TypeDef, TypeDefKind, TypeRef, UnresolvedType};
 use crate::resolved_ast::{ExpressionKind, ResolvedExpression, ResolvedStructType, ResolvedType};
 use crate::resolver::ty::resolve_type;
 use crate::{ast, in_global_scope, in_new_scope, resolved_ast};
@@ -117,10 +117,7 @@ pub(crate) fn resolve_expression(
                         ));
                         // ジェネリック引数の数が合わない場合はUnknown扱いにして継続する
                         return Ok(ResolvedExpression {
-                            kind: ExpressionKind::CallExpr(resolved_ast::CallExpr {
-                                callee: call_expr.name.clone(),
-                                args: Vec::new(),
-                            }),
+                            kind: ExpressionKind::Unknown,
                             ty: ResolvedType::Unknown,
                         });
                     };
@@ -154,21 +151,29 @@ pub(crate) fn resolve_expression(
                     });
                 } else {
                     let mut resolved_by_annotation = false;
-                    if let Some(annotation) = annotation {
+                    if let Some(annotation) = &annotation {
                         if let ast::UnresolvedType::TypeRef(TypeRef { name, generic_args }) =
                             &callee.decl.return_type.value
                         {
                             if let ResolvedType::Struct(resolved_struct) = &annotation {
-                                if &resolved_struct.name == name {
+                                dbg!(name, &resolved_struct.non_generic_name);
+                                if &resolved_struct.non_generic_name == name {
                                     resolved_by_annotation = true;
                                     in_global_scope!(scopes, {
                                         in_global_scope!(types, {
                                             // 正常系
                                             let resolved_generic_args =
-                                                resolved_struct.generic_args.unwrap();
+                                                resolved_struct.generic_args.as_ref().unwrap();
                                             for i in 0..resolved_generic_args.len() {
                                                 let actual_arg = resolved_generic_args[i].clone();
-                                                types.borrow_mut().add(name.clone(), actual_arg);
+                                                dbg!(name.clone(), actual_arg.clone());
+                                                if let UnresolvedType::TypeRef(typeref) =
+                                                    &generic_args.as_ref().unwrap()[i]
+                                                {
+                                                    types
+                                                        .borrow_mut()
+                                                        .add(typeref.name.clone(), actual_arg);
+                                                }
                                             }
                                             resolve_function(
                                                 errors,
@@ -223,8 +228,8 @@ pub(crate) fn resolve_expression(
             )?;
             // void* はアノテーションがあればその型として扱う
             if let Some(annotation) = &annotation {
-                if let ResolvedType::Ptr(inner) = resolved_return_ty {
-                    if let ResolvedType::Void = *inner {
+                if let ResolvedType::Ptr(inner) = &resolved_return_ty {
+                    if let ResolvedType::Void = **inner {
                         resolved_return_ty = annotation.clone();
                     }
                 }
@@ -395,9 +400,9 @@ pub(crate) fn resolve_expression(
         Expression::StructLiteral(struct_literal_expr) => {
             let mut resolved_fields = Vec::new();
             let mut resolved_generic_args = Vec::new();
-            let struct_def = if let Some(typedef) = type_defs.get(&struct_literal_expr.name) {
-                let ast::TypeDefKind::Struct(struct_def) = &typedef.kind;
-                struct_def
+
+            let typedef = if let Some(typedef) = type_defs.get(&struct_literal_expr.name) {
+                typedef
             } else {
                 errors.push(CompileError::from_error_kind(
                     CompileErrorKind::TypeNotFound {
@@ -411,6 +416,8 @@ pub(crate) fn resolve_expression(
                     ),
                 });
             };
+            let TypeDefKind::Struct(struct_def) = &typedef.kind;
+
             in_new_scope!(types, {
                 if let Some(generic_args_in_def) = &struct_def.generic_args {
                     for (i, generic_arg) in generic_args_in_def.iter().enumerate() {
@@ -485,14 +492,15 @@ pub(crate) fn resolve_expression(
             return Ok(resolved_ast::ResolvedExpression {
                 ty: ResolvedType::Struct(ResolvedStructType {
                     name: struct_name,
+                    non_generic_name: typedef.name.clone(),
                     fields: resolved_fields
                         .iter()
                         .map(|(name, expr)| (name.clone(), expr.ty.clone()))
                         .collect(),
-                    generic_args: if struct_def.generic_args.is_some() {
-                        Some(resolved_generic_args)
-                    } else {
+                    generic_args: if resolved_generic_args.is_empty() {
                         None
+                    } else {
+                        Some(resolved_generic_args)
                     },
                 }),
                 kind: resolved_ast::ExpressionKind::StructLiteral(resolved_ast::StructLiteral {

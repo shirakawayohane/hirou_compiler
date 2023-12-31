@@ -34,10 +34,6 @@ fn add(l: i32, r: i32): i32 {
 
 fn main(): i32 {
   let v: Vec<i32> = (vec)
-  (set<i32> v 1 123)
-  let set_value = (get<i32> v 1)
-  (printf "%d\n", set_value)
-
-  (printf "%d\n" (add 1 2))
+  (printf "%d\n", v.capacity)
   return 0
 }

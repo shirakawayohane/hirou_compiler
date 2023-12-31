@@ -14,6 +14,7 @@ pub const UNKNOWN_TYPE_NAME: &str = "unknown";
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ResolvedStructType {
     pub name: String,
+    pub non_generic_name: String,
     pub fields: Vec<(String, ResolvedType)>,
     pub generic_args: Option<Vec<ResolvedType>>,
 }
@@ -54,6 +55,21 @@ impl ResolvedType {
             false
         }
     }
+    // ジェネリクスを除いた型名を取得する
+    pub fn get_name(&self) -> &str {
+        match self {
+            ResolvedType::I32 => I32_TYPE_NAME,
+            ResolvedType::I64 => I64_TYPE_NAME,
+            ResolvedType::U32 => U32_TYPE_NAME,
+            ResolvedType::U64 => U64_TYPE_NAME,
+            ResolvedType::USize => USIZE_TYPE_NAME,
+            ResolvedType::U8 => U8_TYPE_NAME,
+            ResolvedType::Ptr(_) => "Pointer",
+            ResolvedType::Void => VOID_TYPE_NAME,
+            ResolvedType::Unknown => "unknown",
+            ResolvedType::Struct(struct_type) => struct_type.non_generic_name.as_str(),
+        }
+    }
 }
 
 impl Display for ResolvedType {
@@ -84,7 +100,12 @@ impl Display for ResolvedType {
                         return write!(f, "*{}", inner);
                     }
                     ResolvedType::Unknown => UNKNOWN_TYPE_NAME,
-                    ResolvedType::Struct(ResolvedStructType { name, fields: _, generic_args: _ }) => {
+                    ResolvedType::Struct(ResolvedStructType {
+                        name,
+                        fields: _,
+                        generic_args: _,
+                        non_generic_name: _,
+                    }) => {
                         name
                     }
                 }
@@ -156,6 +177,7 @@ pub enum ExpressionKind {
     Deref(DerefExpr),
     IndexAccess(IndexAccessExor),
     FieldAccess(FieldAccessExpr),
+    Unknown,
 }
 
 #[derive(Debug, Clone)]
