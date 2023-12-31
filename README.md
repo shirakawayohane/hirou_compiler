@@ -27,7 +27,7 @@ set -Ux LLVM_SYS_160_PREFIX /opt/homebrew/Cellar/llvm@16/16.0.6
 ```
 
 ## TODOリスト
-- 関数呼び出しのジェネリック引数の型推論
+- 引数による関数のジェネリクス引数の自動推論
 - 関数の戻り値の自動推論
 - 型をGenericのままResolveできるようにする
 - エラー箇所をわかるようにする

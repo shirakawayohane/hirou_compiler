@@ -34,6 +34,7 @@ fn add(l: i32, r: i32): i32 {
 
 fn main(): i32 {
   let v: Vec<i32> = (vec)
-  (printf "%d\n", v.capacity)
+  // TODO
+  (set v 1 10)
   return 0
 }
