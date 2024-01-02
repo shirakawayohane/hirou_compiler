@@ -99,9 +99,7 @@ impl LLVMCodeGenerator<'_> {
             .gen_expression(&index_access.target)?
             .unwrap()
             .into_pointer_value();
-        let pointee_ty = self
-            .type_to_basic_type_enum(ty)
-            .unwrap_or(self.type_to_basic_type_enum(&ResolvedType::U8).unwrap());
+        let pointee_ty = self.type_to_basic_type_enum(ty).unwrap();
         let index = self.gen_expression(&index_access.index)?.unwrap();
         let ptr = unsafe {
             self.llvm_builder
@@ -217,7 +215,7 @@ impl LLVMCodeGenerator<'_> {
         let size = self.type_to_basic_type_enum(ty).unwrap().size_of().unwrap();
         size.as_basic_value_enum()
     }
-    pub(super) fn gen_call_expr(
+    pub(super) fn eval_call_expr(
         &self,
         call_expr: &CallExpr,
     ) -> Result<Option<BasicValueEnum<'_>>, BuilderError> {
@@ -259,7 +257,7 @@ impl LLVMCodeGenerator<'_> {
             }
             ExpressionKind::Deref(deref) => self.eval_deref(deref, &expr.ty).map(Some),
             ExpressionKind::BinaryExpr(binary_expr) => self.eval_binary_expr(binary_expr).map(Some),
-            ExpressionKind::CallExpr(call_expr) => self.gen_call_expr(call_expr),
+            ExpressionKind::CallExpr(call_expr) => self.eval_call_expr(call_expr),
             ExpressionKind::StringLiteral(string_literal) => {
                 self.eval_string_literal(string_literal).map(Some)
             }

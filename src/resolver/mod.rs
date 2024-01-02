@@ -242,15 +242,22 @@ fn resolve_function<'a>(
                         resolved_statements.push(last_stmt);
                     }
                     resolved_ast::Statement::Effect(effect) => {
-                        resolved_statements.push(resolved_ast::Statement::Return(
-                            resolved_ast::Return {
-                                expression: if result_type == ResolvedType::Void {
-                                    None
-                                } else {
-                                    Some(effect.expression.clone())
+                        if result_type == ResolvedType::Void {
+                            resolved_statements.push(resolved_ast::Statement::Effect(
+                                resolved_ast::Effect {
+                                    expression: effect.expression.clone(),
                                 },
-                            },
-                        ));
+                            ));
+                            resolved_statements.push(resolved_ast::Statement::Return(
+                                resolved_ast::Return { expression: None },
+                            ));
+                        } else {
+                            resolved_statements.push(resolved_ast::Statement::Return(
+                                resolved_ast::Return {
+                                    expression: Some(effect.expression.clone()),
+                                },
+                            ));
+                        }
                     }
                     _ => {
                         resolved_statements.push(last_stmt);

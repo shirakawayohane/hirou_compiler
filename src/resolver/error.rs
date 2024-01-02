@@ -21,7 +21,7 @@ pub enum CompileErrorKind {
     InvalidOperand(String),
     #[error("Invalid operand.")]
     InvalidArgument,
-    #[error("Asign value does not match. expected `{expected}`, but got `{actual}`")]
+    #[error("Type does not match. expected `{expected}`, but got `{actual}`")]
     TypeMismatch {
         expected: ResolvedType,
         actual: ResolvedType,

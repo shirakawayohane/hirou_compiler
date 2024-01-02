@@ -1,4 +1,7 @@
-use std::fmt::{Display, Write};
+use std::{
+    backtrace,
+    fmt::{Display, Write},
+};
 
 use crate::ast::BinaryOp;
 
@@ -56,6 +59,19 @@ impl ResolvedType {
         }
     }
     pub fn can_insert(&self, other: &ResolvedType) -> bool {
+        // void* には任意のポインタ型を代入できる
+        {
+            if let ResolvedType::Ptr(pointee_type) = self {
+                if ResolvedType::Void == **pointee_type {
+                    return other.is_pointer_type();
+                }
+            }
+            if let ResolvedType::Ptr(pointee_type) = other {
+                if ResolvedType::Void == **pointee_type {
+                    return self.is_pointer_type();
+                }
+            }
+        }
         // TODO: より高等な型チェック
         self == other
     }

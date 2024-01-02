@@ -39,7 +39,7 @@ fn add(l: i32, r: i32): i32 {
 
 fn main(): void {
   let vv2: Vec<Vector2> = (vec)
-  (set<Vector2> vv2 0 Vector2 { x: 10, y: 20 })
-  let v2 = (get<Vector2> vv2 0)
-  (printf "%d, %d\n" v2.x v2.y)
+  (set<Vector2> vv2 0 Vector2 { x: 15, y: 25 })
+  // let v2 = (get<Vector2> vv2 0)
+  // (printf "%d, %d\n" v2.x v2.y)
 }

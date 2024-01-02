@@ -221,7 +221,7 @@ pub(crate) fn resolve_expression(
                 kind: resolved_ast::ExpressionKind::StringLiteral(resolved_ast::StringLiteral {
                     value: str_literal.value.clone(),
                 }),
-                ty: ResolvedType::Ptr(Box::new(ResolvedType::Ptr(Box::new(ResolvedType::U8)))),
+                ty: ResolvedType::Ptr(Box::new(ResolvedType::U8)),
             });
         }
         Expression::StructLiteral(struct_literal_expr) => {

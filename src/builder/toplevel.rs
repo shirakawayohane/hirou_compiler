@@ -131,6 +131,7 @@ impl<'a> LLVMCodeGenerator<'a> {
                 self.add_variable(name, allocated_pointer);
             }
 
+            println!("function: {:?}", function.decl.name);
             // Generate function body
             for (i, statement) in function.body.iter().enumerate() {
                 if i == function.body.len() - 1 {
@@ -146,17 +147,22 @@ impl<'a> LLVMCodeGenerator<'a> {
                                     .unwrap()
                                     .into_pointer_value();
                                 let struct_value = value.into_struct_value();
-                                for field_idx in 0..struct_value.count_fields() {
+                                for field_idx in 0..struct_value.get_type().count_fields() {
                                     let field_ptr = self.llvm_builder.build_struct_gep(
                                         struct_value.get_type(),
                                         first_param_ptr,
                                         field_idx,
                                         "",
                                     )?;
-                                    self.llvm_builder.build_store(
+                                    let field_value = dbg!(self.llvm_builder.build_load(
+                                        struct_value
+                                            .get_type()
+                                            .get_field_type_at_index(field_idx)
+                                            .unwrap(),
                                         field_ptr,
-                                        struct_value.get_field_at_index(field_idx).unwrap(),
-                                    )?;
+                                        "",
+                                    )?);
+                                    self.llvm_builder.build_store(field_ptr, field_value)?;
                                 }
                                 self.llvm_builder.build_return(None)?;
                                 continue;
