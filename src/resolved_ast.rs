@@ -1,7 +1,4 @@
-use std::{
-    backtrace,
-    fmt::{Display, Write},
-};
+use std::fmt::{Display, Write};
 
 use crate::ast::BinaryOp;
 
@@ -49,6 +46,13 @@ impl ResolvedType {
             ResolvedType::Void => false,
             ResolvedType::Unknown => false,
             ResolvedType::Struct(_) => false,
+        }
+    }
+    pub fn is_struct_type(&self) -> bool {
+        if let ResolvedType::Struct(_) = self {
+            true
+        } else {
+            false
         }
     }
     pub fn is_pointer_type(&self) -> bool {

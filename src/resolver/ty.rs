@@ -1,5 +1,4 @@
 use std::{
-    backtrace::Backtrace,
     borrow::{Borrow, BorrowMut},
     ops::Deref,
 };
@@ -129,8 +128,6 @@ pub(super) fn resolve_type<'a>(
                     }
                 }
             } else {
-                // println!("{}", Backtrace::force_capture());
-                // dbg!(ty);
                 let resolved_type = type_scopes.get(&typ_ref.name).unwrap_or_else(|| {
                     dbg!(errors.push(CompileError::from_error_kind(
                         error::CompileErrorKind::TypeNotFound {

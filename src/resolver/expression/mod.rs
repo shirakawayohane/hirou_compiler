@@ -3,7 +3,7 @@ mod call;
 use std::ops::DerefMut;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::ast::{Expression, TypeDef, TypeDefKind, TypeRef, UnresolvedType};
+use crate::ast::{Expression, TypeDefKind};
 use crate::resolved_ast::{ExpressionKind, ResolvedExpression, ResolvedStructType, ResolvedType};
 use crate::resolver::ty::resolve_type;
 use crate::{ast, in_global_scope, in_new_scope, resolved_ast};

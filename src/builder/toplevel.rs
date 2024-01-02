@@ -50,7 +50,6 @@ impl<'a> LLVMCodeGenerator<'a> {
         };
         let function = self.llvm_module.add_function(
             &function.decl.name,
-            // structを返す関数の場合は第一引数にポインタを追加する
             if let Some(return_ty) = return_ty {
                 if returns_struct {
                     self.llvm_context
@@ -109,6 +108,12 @@ impl<'a> LLVMCodeGenerator<'a> {
 
             // Set parameters in function body
             // Generate function body
+
+            if returns_struct {
+                let parameter = function_value.get_first_param().unwrap();
+                parameter.set_name("sret_ptr");
+            }
+
             for (i, (_ty, name)) in function
                 .decl
                 .args
@@ -119,6 +124,7 @@ impl<'a> LLVMCodeGenerator<'a> {
                 })
                 .enumerate()
             {
+                let i = if returns_struct { i + 1 } else { i };
                 let parameter = function_value.get_nth_param(i as u32).unwrap();
                 parameter.set_name(name.as_str());
                 let allocated_pointer = self
@@ -131,7 +137,6 @@ impl<'a> LLVMCodeGenerator<'a> {
                 self.add_variable(name, allocated_pointer);
             }
 
-            println!("function: {:?}", function.decl.name);
             // Generate function body
             for (i, statement) in function.body.iter().enumerate() {
                 if i == function.body.len() - 1 {
@@ -146,24 +151,20 @@ impl<'a> LLVMCodeGenerator<'a> {
                                     .get_first_param()
                                     .unwrap()
                                     .into_pointer_value();
-                                let struct_value = value.into_struct_value();
-                                for field_idx in 0..struct_value.get_type().count_fields() {
-                                    let field_ptr = self.llvm_builder.build_struct_gep(
-                                        struct_value.get_type(),
-                                        first_param_ptr,
-                                        field_idx,
-                                        "",
-                                    )?;
-                                    let field_value = dbg!(self.llvm_builder.build_load(
-                                        struct_value
-                                            .get_type()
-                                            .get_field_type_at_index(field_idx)
-                                            .unwrap(),
-                                        field_ptr,
-                                        "",
-                                    )?);
-                                    self.llvm_builder.build_store(field_ptr, field_value)?;
-                                }
+                                let struct_ptr = value.into_pointer_value();
+                                let struct_ty = self
+                                    .type_to_basic_type_enum(
+                                        &return_stmt.expression.as_ref().unwrap().ty,
+                                    )
+                                    .unwrap()
+                                    .into_struct_type();
+                                self.llvm_builder.build_memcpy(
+                                    first_param_ptr,
+                                    8,
+                                    struct_ptr,
+                                    8,
+                                    struct_ty.size_of().unwrap().into(),
+                                )?;
                                 self.llvm_builder.build_return(None)?;
                                 continue;
                             }

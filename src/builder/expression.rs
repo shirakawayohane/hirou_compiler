@@ -73,12 +73,13 @@ impl LLVMCodeGenerator<'_> {
         ty: &ResolvedType,
     ) -> Result<BasicValueEnum, BuilderError> {
         let ty = self.type_to_basic_type_enum(ty).unwrap();
-        let mut values = Vec::new();
-        for (_name, field_expr) in &struct_literal.fields {
+        let ptr = self.llvm_builder.build_alloca(ty, "")?;
+        for (i, (_name, field_expr)) in struct_literal.fields.iter().enumerate() {
             let value = self.gen_expression(field_expr)?.unwrap();
-            values.push(value);
+            let ptr = self.llvm_builder.build_struct_gep(ty, ptr, i as u32, "")?;
+            self.llvm_builder.build_store(ptr, value)?;
         }
-        Ok(ty.into_struct_type().const_named_struct(&values).into())
+        Ok(ptr.as_basic_value_enum())
     }
     fn eval_variable_ref(
         &self,
@@ -87,8 +88,11 @@ impl LLVMCodeGenerator<'_> {
     ) -> Result<BasicValueEnum, BuilderError> {
         let ptr = self.get_variable(&variable_ref.name);
         let pointee_ty = self.type_to_basic_type_enum(ty).unwrap();
-        let value = self.llvm_builder.build_load(pointee_ty, ptr, "")?;
-        Ok(value)
+        if ty.is_struct_type() {
+            Ok(ptr.as_basic_value_enum())
+        } else {
+            Ok(self.llvm_builder.build_load(pointee_ty, ptr, "")?)
+        }
     }
     fn eval_index_access(
         &self,
@@ -105,8 +109,12 @@ impl LLVMCodeGenerator<'_> {
             self.llvm_builder
                 .build_in_bounds_gep(pointee_ty, ptr, &[index.into_int_value()], "")?
         };
-        let value = self.llvm_builder.build_load(pointee_ty, ptr, "").unwrap();
-        Ok(value)
+        if ty.is_struct_type() {
+            Ok(ptr.as_basic_value_enum())
+        } else {
+            let value = self.llvm_builder.build_load(pointee_ty, ptr, "")?;
+            Ok(value)
+        }
     }
     fn eval_field_access(
         &self,
@@ -115,24 +123,25 @@ impl LLVMCodeGenerator<'_> {
     ) -> Result<BasicValueEnum, BuilderError> {
         if let ResolvedType::Struct(struct_ty) = &field_access.target.ty {
             let ty_enum = self.type_to_basic_type_enum(ty).unwrap();
-            let ptr = self.llvm_builder.build_alloca(ty_enum, "")?;
-            self.llvm_builder
-                .build_store(ptr, self.gen_expression(&field_access.target)?.unwrap())?;
-            let index = struct_ty
+            let index: usize = struct_ty
                 .fields
                 .iter()
                 .position(|x| x.0 == field_access.field_name)
                 .unwrap();
-            let ptr = self.llvm_builder.build_struct_gep(
+            let struct_ptr = self
+                .gen_expression(&field_access.target)?
+                .unwrap()
+                .into_pointer_value();
+            let field_ptr = self.llvm_builder.build_struct_gep(
                 self.type_to_basic_type_enum(&field_access.target.ty)
                     .unwrap(),
-                ptr,
+                struct_ptr,
                 index as u32,
                 "",
             )?;
             let value = self
                 .llvm_builder
-                .build_load(self.type_to_basic_type_enum(ty).unwrap(), ptr, "")
+                .build_load(ty_enum, field_ptr, "")
                 .unwrap();
             Ok(value)
         } else {
@@ -215,14 +224,26 @@ impl LLVMCodeGenerator<'_> {
         let size = self.type_to_basic_type_enum(ty).unwrap().size_of().unwrap();
         size.as_basic_value_enum()
     }
-    pub(super) fn eval_call_expr(
-        &self,
+    pub(super) fn eval_call_expr<'a>(
+        &'a self,
         call_expr: &CallExpr,
-    ) -> Result<Option<BasicValueEnum<'_>>, BuilderError> {
+    ) -> Result<Option<BasicValueEnum<'a>>, BuilderError> {
         let mut args = call_expr
             .args
             .iter()
-            .map(|arg| self.gen_expression(&arg).map(|x| x.unwrap().into()))
+            .map(|arg| {
+                self.gen_expression(&arg).map(|x| {
+                    if arg.ty.is_struct_type() {
+                        let ty = self.type_to_basic_type_enum(&arg.ty).unwrap();
+                        self.llvm_builder
+                            .build_load(ty, x.unwrap().into_pointer_value(), "")
+                            .unwrap()
+                            .into()
+                    } else {
+                        x.unwrap().into()
+                    }
+                })
+            })
             .collect::<Result<Vec<BasicMetadataValueEnum>, _>>()?;
 
         let function = *self.function_by_name.get(&call_expr.callee).unwrap();
@@ -235,16 +256,16 @@ impl LLVMCodeGenerator<'_> {
             let ptr = self.llvm_builder.build_alloca(return_ty, "")?;
             args.insert(0, ptr.into());
             self.llvm_builder.build_call(func, &args, "")?;
-            let value = self.llvm_builder.build_load(return_ty, ptr, "")?;
-            return Ok(value.into());
+            // let value = self.llvm_builder.build_load(return_ty, ptr, "")?;
+            return Ok(Some(ptr.as_basic_value_enum()));
         }
         let value = self.llvm_builder.build_call(func, &args, "").unwrap();
         Ok(value.try_as_basic_value().left())
     }
-    pub(super) fn gen_expression(
-        &self,
+    pub(super) fn gen_expression<'a>(
+        &'a self,
         expr: &ResolvedExpression,
-    ) -> Result<Option<BasicValueEnum>, BuilderError> {
+    ) -> Result<Option<BasicValueEnum<'a>>, BuilderError> {
         match &expr.kind {
             ExpressionKind::NumberLiteral(number_literal) => {
                 self.eval_number_literal(number_literal, &expr.ty).map(Some)

@@ -3,10 +3,8 @@ use std::collections::HashMap;
 use std::ops::DerefMut;
 use std::rc::Rc;
 
-use crate::ast::{Statement, StructTypeDef, UnresolvedType};
-use crate::resolved_ast::{
-    self, ExpressionKind, ResolvedExpression, ResolvedStructType, ResolvedType,
-};
+use crate::ast::Statement;
+use crate::resolved_ast::{self, ExpressionKind, ResolvedExpression};
 use crate::resolver::error::CompileErrorKind;
 use crate::{ast, in_new_scope};
 

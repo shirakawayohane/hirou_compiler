@@ -1,3 +1,5 @@
+use crate::ast::UnresolvedType;
+
 use super::*;
 
 pub fn resolve_call_with_generic_args(
