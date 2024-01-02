@@ -41,11 +41,22 @@ fn print-i32(n: i32): void {
   (printf "%d\n" n)
 }
 
-fn main(): void {
-  (print-i32 10)
+fn test_annotation_inference(): void {
+  let v2: Vec<i32> = (vec)
+  let vv2: Vec<Vec<i32>> = (vec)
+  (set<Vec<i32>> vv2 0 v2)
+  let v2_2 = (get<Vec<i32>> vv2 0)
+  (printf "%d\n" v2_2.capacity)
+}
+
+fn test_struct_vector(): void {
   let v2 = Vector2 { x: 10, y: 20 }
   let vv2: Vec<Vector2> = (vec)
   (set<Vector2> vv2 0 v2)
   let v2_2 = (get<Vector2> vv2 0)
   (printf "%d, %d\n" v2_2.x v2_2.y)
+}
+
+fn main(): void {
+  (printf "Hello, world!")
 }
