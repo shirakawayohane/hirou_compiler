@@ -1,3 +1,5 @@
+mod call;
+
 use std::ops::DerefMut;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
@@ -5,6 +7,8 @@ use crate::ast::{Expression, TypeDef, TypeDefKind, TypeRef, UnresolvedType};
 use crate::resolved_ast::{ExpressionKind, ResolvedExpression, ResolvedStructType, ResolvedType};
 use crate::resolver::ty::resolve_type;
 use crate::{ast, in_global_scope, in_new_scope, resolved_ast};
+
+use self::call::resolve_call_expr;
 
 use super::ty::get_resolved_struct_name;
 use super::{error::*, mangle_fn_name, resolve_function, TypeScopes, VariableScopes};
@@ -100,193 +104,16 @@ pub(crate) fn resolve_expression(
             });
         }
         Expression::Call(call_expr) => {
-            let callee = function_by_name
-                .get(&call_expr.name)
-                .ok_or_else(|| FaitalError(format!("No function named {}", call_expr.name)))?;
-
-            if let Some(generic_args) = &callee.decl.generic_args {
-                // スコープに解決したジェネリックの型を追加する
-                if let Some(actual_generic_args) = &call_expr.generic_args {
-                    if generic_args.len() != actual_generic_args.len() {
-                        errors.push(CompileError::from_error_kind(
-                            CompileErrorKind::MismatchGenericArgCount {
-                                name: call_expr.name.to_owned(),
-                                expected: generic_args.len(),
-                                actual: actual_generic_args.len(),
-                            },
-                        ));
-                        // ジェネリック引数の数が合わない場合はUnknown扱いにして継続する
-                        return Ok(ResolvedExpression {
-                            kind: ExpressionKind::Unknown,
-                            ty: ResolvedType::Unknown,
-                        });
-                    };
-
-                    in_global_scope!(scopes, {
-                        in_global_scope!(types, {
-                            // 正常系
-                            for i in 0..generic_args.len() {
-                                let generic_arg = &generic_args[i];
-                                let actual_arg = &actual_generic_args[i];
-                                let resolved_type = resolve_type(
-                                    errors,
-                                    types.borrow_mut().deref_mut(),
-                                    type_defs,
-                                    &actual_arg,
-                                )?;
-                                types
-                                    .borrow_mut()
-                                    .add(generic_arg.name.clone(), resolved_type);
-                            }
-                            resolve_function(
-                                errors,
-                                types.clone(),
-                                scopes.clone(),
-                                type_defs,
-                                function_by_name,
-                                resolved_functions,
-                                callee,
-                            )?
-                        });
-                    });
-                } else {
-                    let mut resolved_by_annotation = false;
-                    if let Some(annotation) = &annotation {
-                        if let ast::UnresolvedType::TypeRef(TypeRef { name, generic_args }) =
-                            &callee.decl.return_type.value
-                        {
-                            if let ResolvedType::Struct(resolved_struct) = &annotation {
-                                dbg!(name, &resolved_struct.non_generic_name);
-                                if &resolved_struct.non_generic_name == name {
-                                    resolved_by_annotation = true;
-                                    in_global_scope!(scopes, {
-                                        in_global_scope!(types, {
-                                            // 正常系
-                                            let resolved_generic_args =
-                                                resolved_struct.generic_args.as_ref().unwrap();
-                                            for i in 0..resolved_generic_args.len() {
-                                                let actual_arg = resolved_generic_args[i].clone();
-                                                dbg!(name.clone(), actual_arg.clone());
-                                                if let UnresolvedType::TypeRef(typeref) =
-                                                    &generic_args.as_ref().unwrap()[i]
-                                                {
-                                                    types
-                                                        .borrow_mut()
-                                                        .add(typeref.name.clone(), actual_arg);
-                                                }
-                                            }
-                                            resolve_function(
-                                                errors,
-                                                types.clone(),
-                                                scopes.clone(),
-                                                type_defs,
-                                                function_by_name,
-                                                resolved_functions,
-                                                callee,
-                                            )?
-                                        });
-                                    });
-                                }
-                            }
-                        }
-                    }
-                    if !resolved_by_annotation {
-                        errors.push(CompileError::from_error_kind(
-                            CompileErrorKind::NoGenericArgs {
-                                name: call_expr.name.to_owned(),
-                            },
-                        ));
-                        return Ok(ResolvedExpression {
-                            kind: ExpressionKind::CallExpr(resolved_ast::CallExpr {
-                                callee: call_expr.name.clone(),
-                                args: Vec::new(),
-                            }),
-                            ty: ResolvedType::Unknown,
-                        });
-                    }
-                };
-            } else {
-                in_global_scope!(scopes, {
-                    in_global_scope!(types, {
-                        resolve_function(
-                            errors,
-                            types.clone(),
-                            scopes.clone(),
-                            type_defs,
-                            function_by_name,
-                            resolved_functions,
-                            callee,
-                        )?
-                    });
-                });
-            };
-            let mut resolved_return_ty = resolve_type(
+            return resolve_call_expr(
                 errors,
-                types.borrow_mut().deref_mut(),
+                types,
+                scopes,
                 type_defs,
-                &callee.decl.return_type.value,
-            )?;
-            // void* はアノテーションがあればその型として扱う
-            if let Some(annotation) = &annotation {
-                if let ResolvedType::Ptr(inner) = &resolved_return_ty {
-                    if let ResolvedType::Void = **inner {
-                        resolved_return_ty = annotation.clone();
-                    }
-                }
-            };
-            let mut resolved_args = Vec::new();
-            for (i, arg) in call_expr.args.iter().enumerate() {
-                let calee_arg = &callee.decl.args[i];
-                match calee_arg {
-                    ast::Argument::VarArgs => {
-                        resolved_args.push(resolve_expression(
-                            errors,
-                            types.clone(),
-                            scopes.clone(),
-                            type_defs,
-                            function_by_name,
-                            resolved_functions,
-                            arg,
-                            None,
-                        )?);
-                    }
-                    ast::Argument::Normal(ty, _name) => {
-                        let resolved_ty =
-                            resolve_type(errors, types.borrow_mut().deref_mut(), type_defs, ty)?;
-
-                        resolved_args.push(resolve_expression(
-                            errors,
-                            types.clone(),
-                            scopes.clone(),
-                            type_defs,
-                            function_by_name,
-                            resolved_functions,
-                            arg,
-                            Some(resolved_ty),
-                        )?);
-                    }
-                }
-            }
-
-            return Ok(resolved_ast::ResolvedExpression {
-                kind: resolved_ast::ExpressionKind::CallExpr(resolved_ast::CallExpr {
-                    callee: if callee.decl.generic_args.is_some() {
-                        mangle_fn_name(
-                            &call_expr.name,
-                            resolved_args
-                                .iter()
-                                .map(|x| &x.ty)
-                                .collect::<Vec<_>>()
-                                .as_slice(),
-                            &resolved_return_ty,
-                        )
-                    } else {
-                        call_expr.name.clone()
-                    },
-                    args: resolved_args,
-                }),
-                ty: resolved_return_ty,
-            });
+                function_by_name,
+                resolved_functions,
+                call_expr,
+                annotation,
+            )
         }
         Expression::DerefExpr(deref_expr) => {
             let target = resolve_expression(

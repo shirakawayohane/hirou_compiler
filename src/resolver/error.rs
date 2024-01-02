@@ -52,6 +52,8 @@ pub enum CompileErrorKind {
     },
     #[error("Generic args length mismatch. expected {expected}, but got {actual}")]
     InvalidGenericArgsLength { expected: usize, actual: usize },
+    #[error("Cannot infer generic argument of function `{name}`. {message}")]
+    CannotInferGenericArgs { name: String, message: String },
 }
 
 #[derive(Debug, Error, PartialEq)]

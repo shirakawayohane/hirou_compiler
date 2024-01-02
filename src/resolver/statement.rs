@@ -37,24 +37,19 @@ pub fn resolve_statement(
 
                     match &decl.value.value {
                         ast::Expression::Call(call_expr) => {
-                            println!("1");
                             if let Some(callee) = function_by_name.get(&call_expr.name) {
-                                println!("2");
                                 let return_ty = &callee.decl.return_type.value;
                                 if let UnresolvedType::TypeRef(return_ty_type_ref) = return_ty {
                                     // annotationの型と関数定義の型が一致している場合、関数定義の方のジェネリクスを解決できるよう、annotationを参考にスコープに型を登録する。
                                     if return_ty_type_ref.name == resolved_annotation.get_name() {
-                                        println!("4");
                                         if let Some(type_def) =
                                             type_defs.get(&return_ty_type_ref.name)
                                         {
-                                            println!("5");
                                             match &type_def.kind {
                                                 ast::TypeDefKind::Struct(StructTypeDef {
                                                     generic_args: Some(generic_args),
                                                     fields: _,
                                                 }) => {
-                                                    println!("6");
                                                     if let resolved_ast::ResolvedType::Struct(
                                                         ResolvedStructType {
                                                             name: _,
@@ -65,7 +60,6 @@ pub fn resolve_statement(
                                                         },
                                                     ) = &resolved_annotation
                                                     {
-                                                        println!("7");
                                                         for (i, generic_arg) in
                                                             generic_args.iter().enumerate()
                                                         {
