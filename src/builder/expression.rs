@@ -226,6 +226,7 @@ impl LLVMCodeGenerator<'_> {
             .iter()
             .map(|arg| self.gen_expression(&arg).map(|x| x.unwrap().into()))
             .collect::<Result<Vec<BasicMetadataValueEnum>, _>>()?;
+
         let function = *self.function_by_name.get(&call_expr.callee).unwrap();
         let func = self.gen_or_get_function(function);
         // 構造体を返す関数を呼ぶ場合、第一引数にスタックポインタを渡す

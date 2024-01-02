@@ -22,9 +22,15 @@ pub enum CompileErrorKind {
     #[error("Invalid operand.")]
     InvalidArgument,
     #[error("Asign value does not match. expected `{expected}`, but got `{actual}`")]
-    TypeMismatch { expected: String, actual: String },
+    TypeMismatch {
+        expected: ResolvedType,
+        actual: ResolvedType,
+    },
     #[error("Return value does not match. expected `{expected}`, but got `{actual}`")]
-    ReturnTypeMismatch { expected: String, actual: String },
+    ReturnTypeMismatch {
+        expected: ResolvedType,
+        actual: ResolvedType,
+    },
     #[error("Cannot deref {name} for {deref_count:?} times.")]
     InvalidDeref { name: String, deref_count: u32 },
     #[error("Cannot access {ty} by index.")]
@@ -37,6 +43,12 @@ pub enum CompileErrorKind {
     TypeNotFound { name: String },
     #[error("Mismatch generic args privided. `{name}` requires {expected} generic arguments, but got {actual}")]
     MismatchGenericArgCount {
+        name: String,
+        expected: usize,
+        actual: usize,
+    },
+    #[error("Mismatch args privided to `{name}`. It requires {expected} generic arguments, but got {actual}")]
+    MismatchFunctionArgCount {
         name: String,
         expected: usize,
         actual: usize,

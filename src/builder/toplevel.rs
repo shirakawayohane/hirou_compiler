@@ -145,7 +145,19 @@ impl<'a> LLVMCodeGenerator<'a> {
                                     .get_first_param()
                                     .unwrap()
                                     .into_pointer_value();
-                                self.llvm_builder.build_store(first_param_ptr, value)?;
+                                let struct_value = value.into_struct_value();
+                                for field_idx in 0..struct_value.count_fields() {
+                                    let field_ptr = self.llvm_builder.build_struct_gep(
+                                        struct_value.get_type(),
+                                        first_param_ptr,
+                                        field_idx,
+                                        "",
+                                    )?;
+                                    self.llvm_builder.build_store(
+                                        field_ptr,
+                                        struct_value.get_field_at_index(field_idx).unwrap(),
+                                    )?;
+                                }
                                 self.llvm_builder.build_return(None)?;
                                 continue;
                             }

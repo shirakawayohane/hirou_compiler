@@ -27,79 +27,18 @@ pub fn resolve_statement(
     Ok(match statement {
         Statement::VariableDecl(decl) => {
             in_new_scope!(type_scopes, {
-                let annotation = if let Some(unresolved_annotation) = &decl.ty {
-                    let resolved_annotation = resolve_type(
-                        errors,
-                        type_scopes.borrow_mut().deref_mut(),
-                        type_defs,
-                        unresolved_annotation,
-                    )?;
-
-                    match &decl.value.value {
-                        ast::Expression::Call(call_expr) => {
-                            if let Some(callee) = function_by_name.get(&call_expr.name) {
-                                let return_ty = &callee.decl.return_type.value;
-                                if let UnresolvedType::TypeRef(return_ty_type_ref) = return_ty {
-                                    // annotationの型と関数定義の型が一致している場合、関数定義の方のジェネリクスを解決できるよう、annotationを参考にスコープに型を登録する。
-                                    if return_ty_type_ref.name == resolved_annotation.get_name() {
-                                        if let Some(type_def) =
-                                            type_defs.get(&return_ty_type_ref.name)
-                                        {
-                                            match &type_def.kind {
-                                                ast::TypeDefKind::Struct(StructTypeDef {
-                                                    generic_args: Some(generic_args),
-                                                    fields: _,
-                                                }) => {
-                                                    if let resolved_ast::ResolvedType::Struct(
-                                                        ResolvedStructType {
-                                                            name: _,
-                                                            non_generic_name: _,
-                                                            generic_args:
-                                                                Some(resolved_ty_generic_args),
-                                                            fields: _,
-                                                        },
-                                                    ) = &resolved_annotation
-                                                    {
-                                                        for (i, generic_arg) in
-                                                            generic_args.iter().enumerate()
-                                                        {
-                                                            type_scopes.borrow_mut().add(
-                                                                generic_arg.name.clone(),
-                                                                resolved_ty_generic_args[i].clone(),
-                                                            );
-                                                        }
-                                                    }
-                                                }
-                                                _ => todo!(),
-                                            }
-                                        }
-                                    }
-                                }
-                            } else {
-                                errors.push(CompileError::from_error_kind(
-                                    CompileErrorKind::FunctionNotFound {
-                                        name: call_expr.name.clone(),
-                                    },
-                                ));
-                                return Ok(resolved_ast::Statement::VariableDecl(
-                                    resolved_ast::VariableDecl {
-                                        name: decl.name.clone(),
-                                        value: ResolvedExpression {
-                                            kind: ExpressionKind::Unknown,
-                                            ty: ResolvedType::Unknown,
-                                        },
-                                    },
-                                ));
-                            }
-                        }
-                        // TODO: Call以外の式の場合も同様に型を解決する
-                        _ => {}
-                    }
-
-                    Some(resolved_annotation)
-                } else {
-                    None
-                };
+                let resolved_annotation = decl
+                    .ty
+                    .clone()
+                    .map(|unresolved_ty| {
+                        resolve_type(
+                            errors,
+                            type_scopes.borrow_mut().deref_mut(),
+                            type_defs,
+                            &unresolved_ty,
+                        )
+                    })
+                    .transpose()?;
                 let resolved_expr = resolve_expression(
                     errors,
                     type_scopes.clone(),
@@ -108,8 +47,30 @@ pub fn resolve_statement(
                     function_by_name,
                     resolved_functions,
                     &decl.value,
-                    annotation.clone(),
+                    resolved_annotation.clone(),
                 )?;
+                if let Some(resolved_annotation) = resolved_annotation {
+                    if !resolved_annotation.can_insert(&resolved_expr.ty) {
+                        errors.push(CompileError::from_error_kind(
+                            CompileErrorKind::TypeMismatch {
+                                expected: resolved_annotation.clone(),
+                                actual: resolved_expr.ty.clone(),
+                            },
+                        ));
+                        scopes
+                            .borrow_mut()
+                            .add(decl.name.clone(), resolved_expr.ty.clone());
+                        return Ok(resolved_ast::Statement::VariableDecl(
+                            resolved_ast::VariableDecl {
+                                name: decl.name.clone(),
+                                value: ResolvedExpression {
+                                    ty: resolved_annotation.clone(),
+                                    kind: ExpressionKind::Unknown,
+                                },
+                            },
+                        ));
+                    }
+                }
                 scopes
                     .borrow_mut()
                     .add(decl.name.clone(), resolved_expr.ty.clone());

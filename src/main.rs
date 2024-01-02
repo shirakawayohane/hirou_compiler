@@ -55,7 +55,9 @@ fn main() {
             }
         };
     if !errors.is_empty() {
-        dbg!(errors);
+        for error in errors {
+            println!("{}", error);
+        }
         return;
     }
     let mut llvm_codegenerator = builder::LLVMCodeGenerator::new(

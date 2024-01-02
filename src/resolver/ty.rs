@@ -1,4 +1,5 @@
 use std::{
+    backtrace::Backtrace,
     borrow::{Borrow, BorrowMut},
     ops::Deref,
 };
@@ -29,13 +30,13 @@ pub(super) fn resolve_type<'a>(
                         if let Some(generic_args) = &typ_ref.generic_args {
                             if let Some(generic_args_in_def) = &struct_def.generic_args {
                                 if generic_args.len() != generic_args_in_def.len() {
-                                    errors.push(CompileError::from_error_kind(
+                                    dbg!(errors.push(CompileError::from_error_kind(
                                         error::CompileErrorKind::MismatchGenericArgCount {
                                             name: typ_ref.name.clone(),
                                             expected: generic_args_in_def.len(),
                                             actual: generic_args.len(),
                                         },
-                                    ));
+                                    )));
                                     return Ok(ResolvedType::Unknown);
                                 } else {
                                     in_new_scope!(type_scopes, {
@@ -85,39 +86,57 @@ pub(super) fn resolve_type<'a>(
                                     })
                                 }
                             } else {
-                                errors.push(CompileError::from_error_kind(
+                                dbg!(errors.push(CompileError::from_error_kind(
                                     error::CompileErrorKind::NoGenericArgs {
                                         name: typ_ref.name.clone(),
                                     },
-                                ));
+                                )));
                                 return Ok(ResolvedType::Unknown);
                             }
                         } else {
                             if struct_def.generic_args.is_some() {
-                                errors.push(CompileError::from_error_kind(
+                                dbg!(errors.push(CompileError::from_error_kind(
                                     error::CompileErrorKind::NoGenericArgs {
                                         name: typ_ref.name.clone(),
                                     },
-                                ));
+                                )));
                                 return Ok(ResolvedType::Unknown);
                             } else {
-                                errors.push(CompileError::from_error_kind(
-                                    error::CompileErrorKind::UnnecessaryGenericArgs {
-                                        name: typ_ref.name.clone(),
-                                    },
-                                ));
-                                return Ok(ResolvedType::Unknown);
+                                return Ok(ResolvedType::Struct(ResolvedStructType {
+                                    name: get_resolved_struct_name(&type_def.name, None),
+                                    fields: struct_def
+                                        .fields
+                                        .iter()
+                                        .map(|(name, unresolved_ty)| {
+                                            match resolve_type(
+                                                errors,
+                                                type_scopes.borrow_mut().deref_mut(),
+                                                type_defs.borrow().deref(),
+                                                unresolved_ty,
+                                            ) {
+                                                Ok(resolved_ty) => {
+                                                    Ok((name.clone(), resolved_ty.clone()))
+                                                }
+                                                Err(err) => Err(err),
+                                            }
+                                        })
+                                        .collect::<Result<Vec<_>>>()?,
+                                    generic_args: None,
+                                    non_generic_name: type_def.name.clone(),
+                                }));
                             }
                         }
                     }
                 }
             } else {
+                // println!("{}", Backtrace::force_capture());
+                // dbg!(ty);
                 let resolved_type = type_scopes.get(&typ_ref.name).unwrap_or_else(|| {
-                    errors.push(CompileError::from_error_kind(
+                    dbg!(errors.push(CompileError::from_error_kind(
                         error::CompileErrorKind::TypeNotFound {
                             name: typ_ref.name.clone(),
                         },
-                    ));
+                    )));
                     &&ResolvedType::Unknown
                 });
                 Ok(resolved_type.clone())

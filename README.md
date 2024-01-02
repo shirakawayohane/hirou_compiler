@@ -37,3 +37,4 @@ set -Ux LLVM_SYS_160_PREFIX /opt/homebrew/Cellar/llvm@16/16.0.6
 - structのフィールドにVoidを入れることは出来ないことの検証
 - boolおよび演算の実装
 - panic!, todo!, unreachable!の実装
+- annotationをOption<&ResolvedType>にできるか検討

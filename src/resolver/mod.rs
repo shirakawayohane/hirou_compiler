@@ -126,20 +126,23 @@ impl<'a> TypeScopes {
     }
 }
 
+// Don't use `return` in this macro
 #[macro_export]
 macro_rules! in_global_scope {
-    ($scopes: expr, $block: block) => {
+    ($scopes: expr, $block: block) => {{
         let mut stashed_scopes = Vec::new();
         while $scopes.borrow().len() > 1 {
             stashed_scopes.push($scopes.borrow_mut().pop());
         }
-        $block
+        let result = $block;
         while stashed_scopes.len() > 0 {
             $scopes.borrow_mut().push(stashed_scopes.pop().unwrap());
         }
-    };
+        result
+    }};
 }
 
+// Don't use `return` in this macro
 #[macro_export]
 macro_rules! in_new_scope {
     ($scopes:expr, $block:block) => {{
@@ -168,12 +171,12 @@ fn resolve_function<'a>(
     )?;
     if !current_fn.decl.intrinsic && current_fn.body.len() == 0 {
         if result_type != ResolvedType::Void {
-            errors.push(CompileError::from_error_kind(
+            dbg!(errors.push(CompileError::from_error_kind(
                 error::CompileErrorKind::ReturnTypeMismatch {
-                    expected: result_type.to_string(),
-                    actual: ResolvedType::Void.to_string(),
+                    expected: result_type,
+                    actual: ResolvedType::Void,
                 },
-            ));
+            )));
         }
         return Ok(());
     }

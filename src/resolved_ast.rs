@@ -55,20 +55,9 @@ impl ResolvedType {
             false
         }
     }
-    // ジェネリクスを除いた型名を取得する
-    pub fn get_name(&self) -> &str {
-        match self {
-            ResolvedType::I32 => I32_TYPE_NAME,
-            ResolvedType::I64 => I64_TYPE_NAME,
-            ResolvedType::U32 => U32_TYPE_NAME,
-            ResolvedType::U64 => U64_TYPE_NAME,
-            ResolvedType::USize => USIZE_TYPE_NAME,
-            ResolvedType::U8 => U8_TYPE_NAME,
-            ResolvedType::Ptr(_) => "Pointer",
-            ResolvedType::Void => VOID_TYPE_NAME,
-            ResolvedType::Unknown => "unknown",
-            ResolvedType::Struct(struct_type) => struct_type.non_generic_name.as_str(),
-        }
+    pub fn can_insert(&self, other: &ResolvedType) -> bool {
+        // TODO: より高等な型チェック
+        self == other
     }
 }
 

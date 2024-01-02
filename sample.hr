@@ -1,3 +1,8 @@
+struct Vector2 {
+  x: i32,
+  y: i32,
+}
+
 struct Vec<T> {
   capacity: i32,
   size: i32,
@@ -32,10 +37,9 @@ fn add(l: i32, r: i32): i32 {
   (+ l r)
 }
 
-fn main(): i32 {
-  let v: Vec<i32> = (vec)
-  (printf "%d\n", v.size)
-  // TODO
-  (set<i32> v 1 10)
-  return 0
+fn main(): void {
+  let vv2: Vec<Vector2> = (vec)
+  (set<Vector2> vv2 0 Vector2 { x: 10, y: 20 })
+  let v2 = (get<Vector2> vv2 0)
+  (printf "%d, %d\n" v2.x v2.y)
 }
