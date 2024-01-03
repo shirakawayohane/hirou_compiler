@@ -62,6 +62,13 @@ impl ResolvedType {
             false
         }
     }
+    pub fn is_unknown(&self) -> bool {
+        if let ResolvedType::Unknown = self {
+            true
+        } else {
+            false
+        }
+    }
     pub fn can_insert(&self, other: &ResolvedType) -> bool {
         // void* には任意のポインタ型を代入できる
         {
