@@ -33,6 +33,7 @@ where
     }
 }
 
+#[allow(unused)]
 impl<T> Located<T> {
     pub fn default_from(value: T) -> Self {
         Self {

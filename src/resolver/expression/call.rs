@@ -1,3 +1,5 @@
+use clap::error;
+
 use crate::ast::UnresolvedType;
 
 use super::*;
@@ -72,7 +74,6 @@ fn infer_generic_args_recursively(
     current_callee_return_ty: &UnresolvedType,
     current_annotation: &ResolvedType,
 ) -> Result<bool, FaitalError> {
-    let callee_name = &callee.decl.name;
     let callee_generic_args = callee.decl.generic_args.as_ref().unwrap();
     match current_callee_return_ty {
         UnresolvedType::TypeRef(return_ty_typeref) => {
@@ -190,9 +191,10 @@ pub fn resolve_infer_generic_from_arguments(
         return Ok(false);
     }
     let mut inferred = false;
+    let mut temp_errors = Vec::new();
     in_global_scope!(scopes, {
         in_global_scope!(types, {
-            for (arg_idx, arg) in call_expr.args.iter().enumerate() {
+            for (arg_idx, _arg) in call_expr.args.iter().enumerate() {
                 let callee_arg = &callee.decl.args[arg_idx];
                 // 引数にジェネリクスを含まない場合は推論しない
                 // 含む場合、unknownになるはずなので推論する
@@ -200,7 +202,7 @@ pub fn resolve_infer_generic_from_arguments(
                     ast::Argument::VarArgs => unreachable!(),
                     ast::Argument::Normal(callee_ty, _name) => {
                         if infer_generic_args_recursively(
-                            errors,
+                            &mut temp_errors,
                             types.clone(),
                             scopes.clone(),
                             type_defs,
@@ -223,9 +225,14 @@ pub fn resolve_infer_generic_from_arguments(
                 function_by_name,
                 resolved_functions,
                 callee,
-            )
+            )?;
         });
     });
+
+    if inferred {
+        errors.extend(temp_errors);
+    }
+
     Ok(inferred)
 }
 
@@ -250,8 +257,9 @@ pub fn resolve_infer_generic_from_annotation(
     if let Some(annotation) = &annotation {
         return in_global_scope!(scopes, {
             in_global_scope!(types, {
+                let mut temp_errors = Vec::new();
                 let inferred = infer_generic_args_recursively(
-                    errors,
+                    &mut temp_errors,
                     types.clone(),
                     scopes.clone(),
                     type_defs,
@@ -261,20 +269,24 @@ pub fn resolve_infer_generic_from_annotation(
                     &callee.decl.return_type.value,
                     *annotation,
                 )?;
-                resolve_function(
-                    errors,
-                    types.clone(),
-                    scopes.clone(),
-                    type_defs,
-                    function_by_name,
-                    resolved_functions,
-                    callee,
-                )?;
+                if inferred {
+                    errors.extend(temp_errors);
+                    resolve_function(
+                        errors,
+                        types.clone(),
+                        scopes.clone(),
+                        type_defs,
+                        function_by_name,
+                        resolved_functions,
+                        callee,
+                    )?;
+                }
                 Ok(inferred)
             })
         });
+    } else {
+        Ok(false)
     }
-    Ok(false)
 }
 
 pub fn resolve_non_generic_function(
@@ -333,9 +345,16 @@ pub fn resolve_call_expr(
     };
 
     let mut inferred = true;
-    let mut dummy_vec = Vec::new();
-    if !resolve_call_with_generic_args(
-        &mut dummy_vec,
+    if !resolve_non_generic_function(
+        errors,
+        types.clone(),
+        scopes.clone(),
+        type_defs,
+        function_by_name,
+        resolved_functions,
+        callee,
+    )? && !resolve_call_with_generic_args(
+        errors,
         types.clone(),
         scopes.clone(),
         type_defs,
@@ -343,16 +362,8 @@ pub fn resolve_call_expr(
         resolved_functions,
         call_expr,
         callee,
-    )? && !resolve_non_generic_function(
-        &mut dummy_vec,
-        types.clone(),
-        scopes.clone(),
-        type_defs,
-        function_by_name,
-        resolved_functions,
-        callee,
     )? && !resolve_infer_generic_from_annotation(
-        &mut dummy_vec,
+        errors,
         types.clone(),
         scopes.clone(),
         type_defs,
@@ -416,7 +427,7 @@ pub fn resolve_call_expr(
 
     if !inferred {
         if !resolve_infer_generic_from_arguments(
-            &mut dummy_vec,
+            errors,
             types.clone(),
             scopes.clone(),
             type_defs,

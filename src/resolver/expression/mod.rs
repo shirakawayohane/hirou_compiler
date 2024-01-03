@@ -301,19 +301,28 @@ pub(crate) fn resolve_expression(
 
                     let expected_ty =
                         resolve_type(errors, types.borrow_mut().deref_mut(), type_defs, ty)?;
-                    resolved_fields.push((
-                        field_name.clone(),
-                        resolve_expression(
-                            errors,
-                            types.clone(),
-                            scopes.clone(),
-                            type_defs,
-                            function_by_name,
-                            resolved_functions,
-                            field_in_expr.1.as_deref(),
-                            Some(expected_ty),
-                        )?,
-                    ));
+                    let resolved_field = resolve_expression(
+                        errors,
+                        types.clone(),
+                        scopes.clone(),
+                        type_defs,
+                        function_by_name,
+                        resolved_functions,
+                        field_in_expr.1.as_deref(),
+                        Some(expected_ty.clone()),
+                    )?;
+
+                    if !expected_ty.can_insert(&resolved_field.ty) {
+                        dbg!(errors.push(CompileError::new(
+                            loc_expr.range,
+                            CompileErrorKind::TypeMismatch {
+                                expected: expected_ty.clone(),
+                                actual: resolved_field.ty.clone(),
+                            },
+                        )));
+                    }
+
+                    resolved_fields.push((field_name.clone(), resolved_field));
                 }
             });
 

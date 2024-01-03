@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use std::ops::DerefMut;
 use std::rc::Rc;
 
+use clap::error;
+
 use crate::ast::{Located, Statement};
 use crate::resolved_ast::{self, ExpressionKind, ResolvedExpression};
 use crate::resolver::error::CompileErrorKind;

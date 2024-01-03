@@ -27,8 +27,6 @@ set -Ux LLVM_SYS_160_PREFIX /opt/homebrew/Cellar/llvm@16/16.0.6
 ```
 
 ## TODOリスト
-- エラーが正しく伝播しないのを治す
-- StructLiteralの型チェック
 - 関数の戻り値の自動推論
 - 型をGenericのままResolveできるようにする
 - 戻り値の型を検証
