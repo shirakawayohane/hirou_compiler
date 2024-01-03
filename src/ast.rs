@@ -254,7 +254,7 @@ pub struct FunctionDecl {
     pub generic_args: Option<Vec<Located<GenericArgument>>>,
     pub args: Vec<Argument>,
     pub return_type: Located<UnresolvedType>,
-    pub intrinsic: bool,
+    pub is_intrinsic: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]

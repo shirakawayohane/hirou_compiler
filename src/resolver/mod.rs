@@ -219,7 +219,7 @@ fn resolve_function<'a>(
             )?);
         }
         // 必ずReturnするための特別な処理
-        if !current_fn.decl.intrinsic {
+        if !current_fn.decl.is_intrinsic {
             if resolved_statements.len() == 0 {
                 resolved_statements.push(resolved_ast::Statement::Return(resolved_ast::Return {
                     expression: None,
@@ -255,6 +255,23 @@ fn resolve_function<'a>(
                         ));
                     }
                 }
+            }
+        }
+
+        if ResolvedType::Void != result_type && !current_fn.decl.is_intrinsic {
+            let return_stmt = resolved_statements.last().unwrap();
+            let actual_return_ty = match return_stmt {
+                resolved_ast::Statement::Return(ret) => &ret.expression.as_ref().unwrap().ty,
+                _ => unreachable!(),
+            };
+            if !result_type.can_insert(actual_return_ty) {
+                errors.push(CompileError::new(
+                    current_fn.body.last().unwrap().range,
+                    crate::resolver::error::CompileErrorKind::TypeMismatch {
+                        expected: result_type.clone(),
+                        actual: actual_return_ty.clone(),
+                    },
+                ));
             }
         }
 

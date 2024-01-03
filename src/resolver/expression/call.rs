@@ -378,6 +378,22 @@ pub fn resolve_call_expr(
 
     let mut resolved_args = Vec::new();
     let has_var_args = callee.decl.args.last() == Some(&ast::Argument::VarArgs);
+
+    if !has_var_args && callee.decl.args.len() != call_expr.args.len() {
+        dbg!(errors.push(CompileError::new(
+            call_expr.range,
+            CompileErrorKind::MismatchFunctionArgCount {
+                name: call_expr.name.to_owned(),
+                expected: callee.decl.args.len(),
+                actual: call_expr.args.len(),
+            },
+        )));
+        return Ok(ResolvedExpression {
+            ty: ResolvedType::Unknown,
+            kind: ExpressionKind::Unknown,
+        });
+    }
+
     for (i, arg) in call_expr.args.iter().enumerate() {
         let calee_arg = if has_var_args && i >= callee.decl.args.len() {
             &callee.decl.args[callee.decl.args.len() - 1]

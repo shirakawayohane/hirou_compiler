@@ -27,10 +27,6 @@ set -Ux LLVM_SYS_160_PREFIX /opt/homebrew/Cellar/llvm@16/16.0.6
 ```
 
 ## TODOリスト
-- 関数の戻り値の自動推論
-- 型をGenericのままResolveできるようにする
-- 戻り値の型を検証
-- 引数の数を検証
 - indexがintであるかの検証
 - structのフィールドにVoidを入れることは出来ないことの検証
 - boolおよび演算の実装
