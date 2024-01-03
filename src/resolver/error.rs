@@ -3,7 +3,10 @@ use std::fmt::Display;
 
 use thiserror::Error;
 
-use crate::{ast::UnresolvedType, resolved_ast::ResolvedType};
+use crate::{
+    ast::{Range, UnresolvedType},
+    resolved_ast::ResolvedType,
+};
 
 #[derive(Debug, Error, PartialEq)]
 pub enum CompileErrorKind {
@@ -70,27 +73,61 @@ pub enum CompileErrorKind {
 
 #[derive(Debug, Error, PartialEq)]
 pub struct CompileError {
-    errors: Vec<CompileErrorKind>,
+    range: Range,
+    kind: CompileErrorKind,
 }
 
 #[derive(Debug)]
 pub struct FaitalError(pub String);
 
 impl CompileError {
-    pub fn from_error_kind(kind: CompileErrorKind) -> Self {
-        CompileError { errors: vec![kind] }
+    pub fn new(range: Range, kind: CompileErrorKind) -> Self {
+        CompileError { kind, range }
     }
-    pub fn append(kind: CompileErrorKind, mut other: Self) -> Self {
-        other.errors.push(kind);
-        other
+}
+
+impl CompileError {
+    pub fn fmt_with_source(
+        &self,
+        f: &mut impl std::io::Write,
+        path: &str,
+        source: &str,
+    ) -> std::io::Result<()> {
+        let mut display_lines = Vec::new();
+        let mut lines = source.lines();
+        let mut line = lines.next().unwrap();
+        // self.rangeから表示する行を切り取る
+        let mut line_number = 1;
+        while line_number < self.range.from.line {
+            line = lines.next().unwrap();
+            line_number += 1;
+        }
+        while line_number <= self.range.to.line {
+            display_lines.push((line_number, line));
+            line = lines.next().unwrap();
+            line_number += 1;
+        }
+        writeln!(
+            f,
+            "error: {}
+  in {}:{}:{}\n{}",
+            self.kind,
+            path,
+            self.range.from.line,
+            self.range.from.col,
+            display_lines
+                .iter()
+                .map(|(line_number, line)| format!("{} |{}", line_number, line))
+                .collect::<Vec<_>>()
+                .join("\n")
+        )?;
+        Ok(())
     }
 }
 
 impl Display for CompileError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for err in &self.errors {
-            writeln!(f, "{}", err)?;
-        }
+        writeln!(f, "{}", self.kind)?;
         Ok(())
     }
 }

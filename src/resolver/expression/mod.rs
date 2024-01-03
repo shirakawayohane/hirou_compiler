@@ -3,7 +3,7 @@ mod call;
 use std::ops::DerefMut;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::ast::{Expression, TypeDefKind};
+use crate::ast::{Expression, Located, TypeDefKind};
 use crate::resolved_ast::{ExpressionKind, ResolvedExpression, ResolvedStructType, ResolvedType};
 use crate::resolver::ty::resolve_type;
 use crate::{ast, in_global_scope, in_new_scope, resolved_ast};
@@ -20,10 +20,10 @@ pub(crate) fn resolve_expression(
     type_defs: &HashMap<String, ast::TypeDef>,
     function_by_name: &HashMap<String, ast::Function>,
     resolved_functions: &mut HashMap<String, resolved_ast::Function>,
-    expr: &ast::Expression,
+    loc_expr: Located<&ast::Expression>,
     annotation: Option<ResolvedType>,
 ) -> Result<resolved_ast::ResolvedExpression, FaitalError> {
-    match expr {
+    match loc_expr.value {
         Expression::VariableRef(variable_ref) => {
             let expr_kind =
                 resolved_ast::ExpressionKind::VariableRef(resolved_ast::VariableRefExpr {
@@ -42,7 +42,8 @@ pub(crate) fn resolve_expression(
                     kind: expr_kind,
                 });
             } else {
-                errors.push(CompileError::from_error_kind(
+                errors.push(CompileError::new(
+                    loc_expr.range,
                     CompileErrorKind::VariableNotFound {
                         name: variable_ref.name.to_owned(),
                     },
@@ -81,7 +82,7 @@ pub(crate) fn resolve_expression(
                 type_defs,
                 function_by_name,
                 resolved_functions,
-                &bin_expr.lhs,
+                bin_expr.lhs.as_deref(),
                 None,
             )?;
             let rhs = resolve_expression(
@@ -91,7 +92,7 @@ pub(crate) fn resolve_expression(
                 type_defs,
                 function_by_name,
                 resolved_functions,
-                &bin_expr.rhs,
+                bin_expr.rhs.as_deref(),
                 None,
             )?;
             return Ok(resolved_ast::ResolvedExpression {
@@ -111,7 +112,10 @@ pub(crate) fn resolve_expression(
                 type_defs,
                 function_by_name,
                 resolved_functions,
-                call_expr,
+                &Located {
+                    range: loc_expr.range,
+                    value: call_expr,
+                },
                 annotation,
             )
         }
@@ -123,7 +127,7 @@ pub(crate) fn resolve_expression(
                 type_defs,
                 function_by_name,
                 resolved_functions,
-                &deref_expr.target,
+                deref_expr.target.as_deref(),
                 None,
             )?;
             return Ok(resolved_ast::ResolvedExpression {
@@ -141,7 +145,7 @@ pub(crate) fn resolve_expression(
                 type_defs,
                 function_by_name,
                 resolved_functions,
-                &index_access_expr.target,
+                index_access_expr.target.as_deref(),
                 None,
             )?;
             let index = resolve_expression(
@@ -151,13 +155,14 @@ pub(crate) fn resolve_expression(
                 type_defs,
                 function_by_name,
                 resolved_functions,
-                &index_access_expr.index,
+                index_access_expr.index.as_deref(),
                 Some(ResolvedType::USize),
             )?;
             let resolved_ty = if let ResolvedType::Ptr(ptr) = &target.ty {
                 *ptr.clone()
             } else {
-                errors.push(CompileError::from_error_kind(
+                errors.push(CompileError::new(
+                    loc_expr.range,
                     CompileErrorKind::InvalidIndexAccess {
                         ty: target.clone().ty,
                     },
@@ -180,7 +185,7 @@ pub(crate) fn resolve_expression(
                 type_defs,
                 function_by_name,
                 resolved_functions,
-                &field_access_expr.target,
+                field_access_expr.target.as_deref(),
                 None,
             )?;
             let resolved_ty = if let ResolvedType::Struct(struct_ty) = &target.ty {
@@ -191,7 +196,8 @@ pub(crate) fn resolve_expression(
                 {
                     ty.clone()
                 } else {
-                    errors.push(CompileError::from_error_kind(
+                    errors.push(CompileError::new(
+                        loc_expr.range,
                         CompileErrorKind::FieldNotFound {
                             field_name: field_access_expr.field_name.clone(),
                             type_name: struct_ty.name.clone(),
@@ -200,7 +206,8 @@ pub(crate) fn resolve_expression(
                     ResolvedType::Unknown
                 }
             } else {
-                errors.push(CompileError::from_error_kind(
+                errors.push(CompileError::new(
+                    loc_expr.range,
                     CompileErrorKind::InvalidFieldAccess {
                         ty: target.clone().ty,
                         name: field_access_expr.field_name.clone(),
@@ -231,7 +238,8 @@ pub(crate) fn resolve_expression(
             let typedef = if let Some(typedef) = type_defs.get(&struct_literal_expr.name) {
                 typedef
             } else {
-                errors.push(CompileError::from_error_kind(
+                errors.push(CompileError::new(
+                    loc_expr.range,
                     CompileErrorKind::TypeNotFound {
                         name: struct_literal_expr.name.clone(),
                     },
@@ -268,7 +276,8 @@ pub(crate) fn resolve_expression(
                     {
                         expr
                     } else {
-                        errors.push(CompileError::from_error_kind(
+                        errors.push(CompileError::new(
+                            loc_expr.range,
                             CompileErrorKind::FieldNotFound {
                                 field_name: field_name.clone(),
                                 type_name: struct_literal_expr.name.clone(),
@@ -301,7 +310,7 @@ pub(crate) fn resolve_expression(
                             type_defs,
                             function_by_name,
                             resolved_functions,
-                            &field_in_expr.1,
+                            field_in_expr.1.as_deref(),
                             Some(expected_ty),
                         )?,
                     ));

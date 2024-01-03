@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs::read_to_string, path::Path};
+use std::{collections::HashMap, fs::read_to_string, io::Write, path::Path};
 mod ast;
 mod builder;
 mod parser;
@@ -6,7 +6,7 @@ mod resolved_ast;
 mod resolver;
 
 use builder::TargetPlatform;
-use clap::{command, Parser};
+use clap::{command, error, Parser};
 use inkwell::{context::Context as LLVMContext, OptimizationLevel};
 use nom::{
     error::{convert_error, VerboseError},
@@ -24,7 +24,8 @@ struct Args {
 
 fn main() {
     let args = Args::parse();
-    let input = read_to_string(args.target).unwrap();
+    let path = Path::new(&args.target);
+    let input = read_to_string(path).unwrap();
     let input = input.as_str().into();
     let module = match parser::parse_module(input).finish() {
         Ok((_, module)) => module,
@@ -55,8 +56,18 @@ fn main() {
             }
         };
     if !errors.is_empty() {
+        let absolute_path = path.canonicalize().unwrap();
+        let current_dir = std::env::current_dir().unwrap();
+        let relative_path = absolute_path.strip_prefix(current_dir).unwrap();
+        let mut stdout = std::io::stdout();
         for error in errors {
-            println!("{}", error);
+            error
+                .fmt_with_source(
+                    &mut stdout,
+                    relative_path.to_str().unwrap(),
+                    &input.fragment(),
+                )
+                .unwrap();
         }
         return;
     }

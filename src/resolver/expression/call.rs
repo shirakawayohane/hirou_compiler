@@ -1,4 +1,4 @@
-use crate::{ast::UnresolvedType, resolver::expression};
+use crate::ast::UnresolvedType;
 
 use super::*;
 
@@ -9,7 +9,7 @@ pub fn resolve_call_with_generic_args(
     type_defs: &HashMap<String, ast::TypeDef>,
     function_by_name: &HashMap<String, ast::Function>,
     resolved_functions: &mut HashMap<String, resolved_ast::Function>,
-    call_expr: &ast::CallExpr,
+    call_expr: &Located<&ast::CallExpr>,
     callee: &ast::Function,
     // 推論に成功した場合のみtrueを返す
 ) -> Result<bool, FaitalError> {
@@ -17,7 +17,8 @@ pub fn resolve_call_with_generic_args(
         // スコープに解決したジェネリックの型を追加する
         if let Some(actual_generic_args) = &call_expr.generic_args {
             if generic_args.len() != actual_generic_args.len() {
-                dbg!(errors.push(CompileError::from_error_kind(
+                dbg!(errors.push(CompileError::new(
+                    call_expr.range,
                     CompileErrorKind::MismatchGenericArgCount {
                         name: call_expr.name.to_owned(),
                         expected: generic_args.len(),
@@ -166,7 +167,7 @@ pub fn resolve_infer_generic_from_arguments(
     type_defs: &HashMap<String, ast::TypeDef>,
     function_by_name: &HashMap<String, ast::Function>,
     resolved_functions: &mut HashMap<String, resolved_ast::Function>,
-    call_expr: &ast::CallExpr,
+    call_expr: &Located<&ast::CallExpr>,
     callee: &ast::Function,
     resolved_args: &[ResolvedExpression], // 推論に成功した場合のみtrueを返す
 ) -> Result<bool, FaitalError> {
@@ -235,7 +236,7 @@ pub fn resolve_infer_generic_from_annotation(
     type_defs: &HashMap<String, ast::TypeDef>,
     function_by_name: &HashMap<String, ast::Function>,
     resolved_functions: &mut HashMap<String, resolved_ast::Function>,
-    call_expr: &ast::CallExpr,
+    call_expr: &Located<&ast::CallExpr>,
     callee: &ast::Function,
     annotation: Option<&ResolvedType>,
     // 推論に成功した場合のみtrueを返す
@@ -312,12 +313,24 @@ pub fn resolve_call_expr(
     type_defs: &HashMap<String, ast::TypeDef>,
     function_by_name: &HashMap<String, ast::Function>,
     resolved_functions: &mut HashMap<String, resolved_ast::Function>,
-    call_expr: &ast::CallExpr,
+    call_expr: &Located<&ast::CallExpr>,
     annotation: Option<ResolvedType>,
 ) -> Result<ResolvedExpression, FaitalError> {
-    let callee = function_by_name
-        .get(&call_expr.name)
-        .ok_or_else(|| FaitalError(format!("No function named {}", call_expr.name)))?;
+    let callee = match function_by_name.get(&call_expr.name) {
+        Some(callee) => callee,
+        None => {
+            dbg!(errors.push(CompileError::new(
+                call_expr.range,
+                CompileErrorKind::FunctionNotFound {
+                    name: call_expr.name.to_owned(),
+                },
+            )));
+            return Ok(ResolvedExpression {
+                ty: ResolvedType::Unknown,
+                kind: ExpressionKind::Unknown,
+            });
+        }
+    };
 
     let mut inferred = true;
     let mut dummy_vec = Vec::new();
@@ -369,7 +382,7 @@ pub fn resolve_call_expr(
                     type_defs,
                     function_by_name,
                     resolved_functions,
-                    arg,
+                    arg.as_inner_deref(),
                     None,
                 )?);
             }
@@ -383,11 +396,12 @@ pub fn resolve_call_expr(
                     type_defs,
                     function_by_name,
                     resolved_functions,
-                    arg,
+                    arg.as_inner_deref(),
                     Some(resolved_ty.clone()),
                 )?;
-                if !resolved_arg.ty.can_insert(&resolved_ty) {
-                    dbg!(errors.push(CompileError::from_error_kind(
+                if !resolved_ty.can_insert(&resolved_arg.ty) {
+                    dbg!(errors.push(CompileError::new(
+                        arg.range,
                         CompileErrorKind::TypeMismatch {
                             expected: resolved_ty.clone(),
                             actual: resolved_arg.ty.clone(),
@@ -412,7 +426,8 @@ pub fn resolve_call_expr(
             callee,
             &resolved_args,
         )? {
-            dbg!(errors.push(CompileError::from_error_kind(
+            dbg!(errors.push(CompileError::new(
+                call_expr.range,
                 CompileErrorKind::CannotInferGenericArgs {
                     name: call_expr.name.to_owned(),
                     message: "".to_string()
@@ -423,7 +438,7 @@ pub fn resolve_call_expr(
                     &mut Vec::new(),
                     types.borrow_mut().deref_mut(),
                     type_defs,
-                    &callee.decl.return_type.value,
+                    &callee.decl.return_type,
                 )?,
                 kind: ExpressionKind::Unknown,
             });
@@ -434,7 +449,7 @@ pub fn resolve_call_expr(
         errors,
         types.borrow_mut().deref_mut(),
         type_defs,
-        &callee.decl.return_type.value,
+        &callee.decl.return_type,
     )?;
     // void* はアノテーションがあればその型として扱う
     if let Some(annotation) = &annotation {
@@ -447,7 +462,8 @@ pub fn resolve_call_expr(
 
     // varargsはintrinsicでしか定義しないので、引数の最後に来ないケースは想定しない。
     if call_expr.args.len() != callee.decl.args.len() && !has_var_args {
-        dbg!(errors.push(CompileError::from_error_kind(
+        dbg!(errors.push(CompileError::new(
+            call_expr.range,
             CompileErrorKind::MismatchFunctionArgCount {
                 name: call_expr.name.to_owned(),
                 expected: callee.decl.args.len(),

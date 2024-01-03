@@ -18,9 +18,9 @@ pub(super) fn resolve_type<'a>(
     errors: &mut Vec<CompileError>,
     type_scopes: &mut TypeScopes,
     type_defs: &HashMap<String, ast::TypeDef>,
-    ty: &ast::UnresolvedType,
+    loc_ty: &Located<ast::UnresolvedType>,
 ) -> Result<ResolvedType> {
-    match ty {
+    match &loc_ty.value {
         UnresolvedType::TypeRef(typ_ref) => {
             if let Some(type_def) = type_defs.get(&typ_ref.name) {
                 match &type_def.kind {
@@ -29,7 +29,8 @@ pub(super) fn resolve_type<'a>(
                         if let Some(generic_args) = &typ_ref.generic_args {
                             if let Some(generic_args_in_def) = &struct_def.generic_args {
                                 if generic_args.len() != generic_args_in_def.len() {
-                                    dbg!(errors.push(CompileError::from_error_kind(
+                                    dbg!(errors.push(CompileError::new(
+                                        loc_ty.range,
                                         error::CompileErrorKind::MismatchGenericArgCount {
                                             name: typ_ref.name.clone(),
                                             expected: generic_args_in_def.len(),
@@ -85,7 +86,8 @@ pub(super) fn resolve_type<'a>(
                                     })
                                 }
                             } else {
-                                dbg!(errors.push(CompileError::from_error_kind(
+                                dbg!(errors.push(CompileError::new(
+                                    loc_ty.range,
                                     error::CompileErrorKind::NoGenericArgs {
                                         name: typ_ref.name.clone(),
                                     },
@@ -94,7 +96,8 @@ pub(super) fn resolve_type<'a>(
                             }
                         } else {
                             if struct_def.generic_args.is_some() {
-                                dbg!(errors.push(CompileError::from_error_kind(
+                                dbg!(errors.push(CompileError::new(
+                                    loc_ty.range,
                                     error::CompileErrorKind::NoGenericArgs {
                                         name: typ_ref.name.clone(),
                                     },
@@ -129,7 +132,8 @@ pub(super) fn resolve_type<'a>(
                 }
             } else {
                 let resolved_type = type_scopes.get(&typ_ref.name).unwrap_or_else(|| {
-                    dbg!(errors.push(CompileError::from_error_kind(
+                    dbg!(errors.push(CompileError::new(
+                        loc_ty.range,
                         error::CompileErrorKind::TypeNotFound {
                             name: typ_ref.name.clone(),
                         },
@@ -141,7 +145,7 @@ pub(super) fn resolve_type<'a>(
         }
         UnresolvedType::Ptr(inner_type) => {
             let inner_type: ResolvedType =
-                resolve_type(errors, type_scopes, type_defs, inner_type)?;
+                resolve_type(errors, type_scopes, type_defs, &inner_type)?;
             Ok(ResolvedType::Ptr(Box::new(inner_type)))
         }
     }
@@ -177,17 +181,19 @@ fn test_resolve_type() {
                 fields: vec![
                     (
                         "ptr".to_string(),
-                        UnresolvedType::Ptr(Box::new(UnresolvedType::TypeRef(TypeRef {
-                            name: "T".to_string(),
-                            generic_args: None,
-                        }))),
+                        Located::default_from(UnresolvedType::Ptr(Box::new(
+                            Located::default_from(UnresolvedType::TypeRef(TypeRef {
+                                name: "T".to_string(),
+                                generic_args: None,
+                            })),
+                        ))),
                     ),
                     (
                         "len".to_string(),
-                        UnresolvedType::TypeRef(TypeRef {
+                        Located::default_from(UnresolvedType::TypeRef(TypeRef {
                             name: "usize".to_string(),
                             generic_args: None,
-                        }),
+                        })),
                     ),
                 ],
                 generic_args: Some(vec![Located {
@@ -213,13 +219,15 @@ fn test_resolve_type() {
         &mut errors,
         &mut type_scopes,
         &type_defs,
-        &UnresolvedType::TypeRef(TypeRef {
+        &Located::default_from(UnresolvedType::TypeRef(TypeRef {
             name: "Vec".to_string(),
-            generic_args: Some(vec![UnresolvedType::TypeRef(TypeRef {
-                name: I32_TYPE_NAME.to_string(),
-                generic_args: None,
-            })]),
-        }),
+            generic_args: Some(vec![Located::default_from(UnresolvedType::TypeRef(
+                TypeRef {
+                    name: I32_TYPE_NAME.to_string(),
+                    generic_args: None,
+                },
+            ))]),
+        })),
     )
     .unwrap();
     assert_eq!(errors, Vec::new());

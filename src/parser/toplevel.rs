@@ -184,13 +184,13 @@ fn parse_function(input: Span) -> ParseResult<TopLevel> {
 }
 
 fn parse_struct(input: Span) -> ParseResult<TopLevel> {
-    fn parse_field(input: Span) -> NotLocatedParseResult<(String, UnresolvedType)> {
+    fn parse_field(input: Span) -> NotLocatedParseResult<(String, Located<UnresolvedType>)> {
         map(
-            tuple((parse_identifier, colon, parse_type)),
+            tuple((parse_identifier, colon, located(parse_type))),
             |(name, _, ty)| (name, ty.value),
         )(input)
     }
-    fn parse_fields(input: Span) -> NotLocatedParseResult<Vec<(String, UnresolvedType)>> {
+    fn parse_fields(input: Span) -> NotLocatedParseResult<Vec<(String, Located<UnresolvedType>)>> {
         let mut fields = Vec::new();
         let mut rest = input;
         loop {

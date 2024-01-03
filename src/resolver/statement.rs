@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::ops::DerefMut;
 use std::rc::Rc;
 
-use crate::ast::Statement;
+use crate::ast::{Located, Statement};
 use crate::resolved_ast::{self, ExpressionKind, ResolvedExpression};
 use crate::resolver::error::CompileErrorKind;
 use crate::{ast, in_new_scope};
@@ -20,9 +20,9 @@ pub fn resolve_statement(
     type_defs: &HashMap<String, ast::TypeDef>,
     function_by_name: &HashMap<String, ast::Function>,
     resolved_functions: &mut HashMap<String, resolved_ast::Function>,
-    statement: &ast::Statement,
+    loc_statement: &Located<ast::Statement>,
 ) -> Result<resolved_ast::Statement, FaitalError> {
-    Ok(match statement {
+    Ok(match &loc_statement.value {
         Statement::VariableDecl(decl) => {
             in_new_scope!(type_scopes, {
                 let resolved_annotation = decl
@@ -44,12 +44,13 @@ pub fn resolve_statement(
                     type_defs,
                     function_by_name,
                     resolved_functions,
-                    &decl.value,
+                    decl.value.as_ref(),
                     resolved_annotation.clone(),
                 )?;
                 if let Some(resolved_annotation) = resolved_annotation {
                     if !resolved_annotation.can_insert(&resolved_expr.ty) {
-                        errors.push(CompileError::from_error_kind(
+                        errors.push(CompileError::new(
+                            loc_statement.range,
                             CompileErrorKind::TypeMismatch {
                                 expected: resolved_annotation.clone(),
                                 actual: resolved_expr.ty.clone(),
@@ -88,7 +89,7 @@ pub fn resolve_statement(
                         type_defs,
                         function_by_name,
                         resolved_functions,
-                        expr,
+                        expr.as_ref(),
                         None,
                     )?),
                 })
@@ -104,7 +105,7 @@ pub fn resolve_statement(
                 type_defs,
                 function_by_name,
                 resolved_functions,
-                &effect.expression,
+                effect.expression.as_ref(),
                 None,
             )?,
         }),
@@ -116,7 +117,7 @@ pub fn resolve_statement(
                 type_defs,
                 function_by_name,
                 resolved_functions,
-                &assignment.expression,
+                assignment.expression.as_ref(),
                 None,
             )?;
             resolved_ast::Statement::Assignment(resolved_ast::Assignment {
@@ -134,7 +135,7 @@ pub fn resolve_statement(
                             type_defs,
                             function_by_name,
                             resolved_functions,
-                            x,
+                            x.as_ref(),
                             Some(resolved_ast::ResolvedType::USize),
                         )
                     })

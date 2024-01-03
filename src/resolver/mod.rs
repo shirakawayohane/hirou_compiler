@@ -169,17 +169,6 @@ fn resolve_function<'a>(
         type_defs,
         &current_fn.decl.return_type,
     )?;
-    if !current_fn.decl.intrinsic && current_fn.body.len() == 0 {
-        if result_type != ResolvedType::Void {
-            dbg!(errors.push(CompileError::from_error_kind(
-                error::CompileErrorKind::ReturnTypeMismatch {
-                    expected: result_type,
-                    actual: ResolvedType::Void,
-                },
-            )));
-        }
-        return Ok(());
-    }
     in_new_scope!(scopes, {
         let mut resolved_args: Vec<resolved_ast::Argument> = Vec::new();
         for arg in &current_fn.decl.args {

@@ -246,14 +246,6 @@ impl LLVMCodeGenerator<'_> {
             })
             .collect::<Result<Vec<BasicMetadataValueEnum>, _>>()?;
 
-        // function_by_nameをすべてprintする
-        println!("start");
-        for (name, func) in self.function_by_name.iter() {
-            dbg!(name);
-        }
-        println!("end");
-
-        dbg!(call_expr.callee.clone());
         let function = *self.function_by_name.get(&call_expr.callee).unwrap();
         let func = self.gen_or_get_function(function);
         // 構造体を返す関数を呼ぶ場合、第一引数にスタックポインタを渡す

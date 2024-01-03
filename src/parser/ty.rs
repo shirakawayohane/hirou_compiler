@@ -54,7 +54,7 @@ pub(super) fn parse_generic_arguments(
 
 fn parse_ptr(input: Span) -> ParseResult<UnresolvedType> {
     located(map(preceded(asterisk, parse_type), |ty| {
-        UnresolvedType::Ptr(Box::new(ty.value))
+        UnresolvedType::Ptr(Box::new(ty))
     }))(input)
 }
 
@@ -65,7 +65,7 @@ fn parse_typeref(input: Span) -> ParseResult<UnresolvedType> {
             UnresolvedType::TypeRef(TypeRef {
                 name: ident,
                 generic_args: generics_args
-                    .map(|args| args.into_iter().map(|arg| arg.value).collect::<Vec<_>>()),
+                    .map(|args| args.into_iter().map(|arg| arg).collect::<Vec<_>>()),
             })
         },
     ))(input)
@@ -82,7 +82,7 @@ fn test_parse_type() {
     let (rest, ty) = result.unwrap();
     assert!(match ty.value {
         UnresolvedType::Ptr(ptr) => {
-            match *ptr {
+            match &ptr.value {
                 UnresolvedType::TypeRef(TypeRef { name, generic_args }) => {
                     name == "i32" && generic_args.is_none()
                 }

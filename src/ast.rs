@@ -21,6 +21,48 @@ pub struct Located<T> {
     pub value: T,
 }
 
+impl<T, U> Located<T>
+where
+    T: Deref<Target = U>,
+{
+    pub fn as_inner_deref(&self) -> Located<&U> {
+        Located {
+            range: self.range,
+            value: &self.value.deref(),
+        }
+    }
+}
+
+impl<T> Located<T> {
+    pub fn default_from(value: T) -> Self {
+        Self {
+            range: Default::default(),
+            value,
+        }
+    }
+    pub fn map(self, f: impl FnOnce(T) -> T) -> Self {
+        Self {
+            range: self.range,
+            value: f(self.value),
+        }
+    }
+    pub fn as_ref(&self) -> Located<&T> {
+        Located {
+            range: self.range,
+            value: &self.value,
+        }
+    }
+    pub fn as_deref(&self) -> Located<&T::Target>
+    where
+        T: Deref,
+    {
+        Located {
+            range: self.range,
+            value: self.value.deref(),
+        }
+    }
+}
+
 impl Deref for Range {
     type Target = Position;
     fn deref(&self) -> &Self::Target {
@@ -126,16 +168,16 @@ pub enum Expression {
     FieldAccess(FieldAccessExpr),
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Hash, Clone)]
 pub struct TypeRef {
     pub name: String,
-    pub generic_args: Option<Vec<UnresolvedType>>,
+    pub generic_args: Option<Vec<Located<UnresolvedType>>>,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Hash, Clone)]
 pub enum UnresolvedType {
     TypeRef(TypeRef),
-    Ptr(Box<UnresolvedType>),
+    Ptr(Box<Located<UnresolvedType>>),
 }
 
 impl Display for UnresolvedType {
@@ -146,14 +188,14 @@ impl Display for UnresolvedType {
                 if let Some(args) = &typeref.generic_args {
                     f.write_char('<')?;
                     for arg in args {
-                        write!(f, "{}", arg)?;
+                        write!(f, "{}", arg.value)?;
                     }
                     f.write_char('>')?;
                 }
             }
             UnresolvedType::Ptr(inner_type) => {
                 f.write_char('[')?;
-                write!(f, "{}", inner_type)?;
+                write!(f, "{}", inner_type.value)?;
                 f.write_char(']')?;
             }
         }
@@ -223,7 +265,7 @@ pub struct Function {
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructTypeDef {
     pub generic_args: Option<Vec<Located<GenericArgument>>>,
-    pub fields: Vec<(String, UnresolvedType)>,
+    pub fields: Vec<(String, Located<UnresolvedType>)>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
