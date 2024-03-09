@@ -101,6 +101,10 @@ impl LLVMCodeGenerator<'_> {
                 ResolvedType::U8 => (None, None),
                 _ => panic!("Invalid type for binary expression"),
             },
+            ResolvedType::Bool => match rhs {
+                ResolvedType::Bool => (None, None),
+                _ => panic!("Invalid type for binary expression"),
+            },
             ResolvedType::Ptr(_) => panic!("Invalid type for binary expression"),
             ResolvedType::Void => panic!("Invalid type for binary expression"),
             ResolvedType::Unknown => panic!("Invalid type for binary expression"),
@@ -150,6 +154,7 @@ impl LLVMCodeGenerator<'_> {
                 .as_basic_value_enum(),
             ResolvedType::Unknown => unreachable!(),
             ResolvedType::Struct(_) => unreachable!(),
+            ResolvedType::Bool => unreachable!(),
         }
     }
 }

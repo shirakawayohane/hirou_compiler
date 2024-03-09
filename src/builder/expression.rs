@@ -55,7 +55,16 @@ impl LLVMCodeGenerator<'_> {
             ResolvedType::Void => unreachable!(),
             ResolvedType::Unknown => unreachable!(),
             ResolvedType::Struct(_) => unreachable!(),
+            ResolvedType::Bool => unreachable!(),
         })
+    }
+    fn eval_bool_literal(
+        &self,
+        bool_literal: &BoolLiteral,
+    ) -> Result<BasicValueEnum, BuilderError> {
+        let value = bool_literal.value;
+        let bool_value = self.llvm_context.bool_type().const_int(value as u64, false);
+        Ok(bool_value.into())
     }
     fn eval_string_literal(
         &self,
@@ -290,6 +299,9 @@ impl LLVMCodeGenerator<'_> {
                 .eval_field_access(field_access_expr, &expr.ty)
                 .map(Some),
             ExpressionKind::Unknown => unreachable!(),
+            ExpressionKind::BoolLiteral(bool_literal) => {
+                self.eval_bool_literal(bool_literal).map(Some)
+            }
         }
     }
 }

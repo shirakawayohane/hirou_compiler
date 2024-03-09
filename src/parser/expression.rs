@@ -180,6 +180,14 @@ fn parse_field(input: Span) -> NotLocatedParseResult<(String, LocatedExpr)> {
     )(input)
 }
 
+fn parse_bool_literal(input: Span) -> NotLocatedParseResult<Expression> {
+    map(alt((tag("true"), tag("false"))), |str: Span| {
+        Expression::BoolLiteral(BoolLiteralExpr {
+            value: str.fragment() == &"true",
+        })
+    })(input)
+}
+
 fn parse_struct_literal(input: Span) -> NotLocatedParseResult<Expression> {
     fn parse_fields(input: Span) -> NotLocatedParseResult<Vec<(String, LocatedExpr)>> {
         let mut fields = Vec::new();
@@ -276,6 +284,7 @@ pub(super) fn parse_boxed_expression(input: Span) -> ParseResult<Box<Expression>
             context("deref", parse_deref_expression),
             context("string_literal", parse_string_literal),
             context("number_literal", parse_number_literal),
+            context("bool_literal", parse_bool_literal),
             context("struct_literal", parse_struct_literal),
             context("variable_ref", parse_variable_ref),
             context("call", parse_function_call_expression),

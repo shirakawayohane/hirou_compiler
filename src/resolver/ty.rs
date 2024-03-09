@@ -66,7 +66,7 @@ pub(super) fn resolve_type<'a>(
                                                     match resolve_type(
                                                         errors,
                                                         type_scopes.borrow_mut().deref_mut(),
-                                                        type_defs.borrow().deref(),
+                                                        type_defs,
                                                         unresolved_ty,
                                                     ) {
                                                         Ok(resolved_ty) => {
@@ -113,7 +113,7 @@ pub(super) fn resolve_type<'a>(
                                             match resolve_type(
                                                 errors,
                                                 type_scopes.borrow_mut().deref_mut(),
-                                                type_defs.borrow().deref(),
+                                                type_defs,
                                                 unresolved_ty,
                                             ) {
                                                 Ok(resolved_ty) => {

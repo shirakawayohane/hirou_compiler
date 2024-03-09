@@ -123,6 +123,11 @@ pub struct StringLiteralExpr {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct BoolLiteralExpr {
+    pub value: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct StructLiteralExpr {
     pub name: String,
     pub generic_args: Option<Vec<Located<UnresolvedType>>>,
@@ -161,6 +166,7 @@ pub enum Expression {
     VariableRef(VariableRefExpr),
     NumberLiteral(NumberLiteralExpr),
     StringLiteral(StringLiteralExpr),
+    BoolLiteral(BoolLiteralExpr),
     StructLiteral(StructLiteralExpr),
     BinaryExpr(BinaryExpr),
     Call(CallExpr),

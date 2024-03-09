@@ -231,6 +231,14 @@ pub(crate) fn resolve_expression(
                 ty: ResolvedType::Ptr(Box::new(ResolvedType::U8)),
             });
         }
+        Expression::BoolLiteral(bool_literal) => {
+            return Ok(resolved_ast::ResolvedExpression {
+                kind: resolved_ast::ExpressionKind::BoolLiteral(resolved_ast::BoolLiteral {
+                    value: bool_literal.value,
+                }),
+                ty: ResolvedType::Bool,
+            });
+        }
         Expression::StructLiteral(struct_literal_expr) => {
             let mut resolved_fields = Vec::new();
             let mut resolved_generic_args = Vec::new();

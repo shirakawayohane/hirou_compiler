@@ -57,6 +57,14 @@ fn test_struct_vector(): void {
   (printf "%d, %d\n" v2_2.x v2_2.y)
 }
 
+fn test_condition(): void {
+  let t = true
+  let f = false
+  (printf "%d" t)
+  (printf "%d" f)
+  // => 10
+}
+
 fn main(): void {
-  (test_struct_vector)
+  (test_condition)
 }

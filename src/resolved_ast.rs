@@ -9,6 +9,7 @@ pub const U64_TYPE_NAME: &str = "u64";
 pub const I32_TYPE_NAME: &str = "i32";
 pub const I64_TYPE_NAME: &str = "i64";
 pub const USIZE_TYPE_NAME: &str = "usize";
+pub const BOOL_TYPE_NAME: &str = "bool";
 pub const UNKNOWN_TYPE_NAME: &str = "unknown";
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -27,6 +28,7 @@ pub enum ResolvedType {
     U64,
     USize,
     U8,
+    Bool,
     Ptr(Box<ResolvedType>),
     Void,
     Unknown,
@@ -46,6 +48,7 @@ impl ResolvedType {
             ResolvedType::Void => false,
             ResolvedType::Unknown => false,
             ResolvedType::Struct(_) => false,
+            ResolvedType::Bool => false,
         }
     }
     pub fn is_struct_type(&self) -> bool {
@@ -104,6 +107,7 @@ impl Display for ResolvedType {
                     ResolvedType::U64 => U64_TYPE_NAME,
                     ResolvedType::USize => USIZE_TYPE_NAME,
                     ResolvedType::U8 => U8_TYPE_NAME,
+                    ResolvedType::Bool => BOOL_TYPE_NAME,
                     ResolvedType::Void => VOID_TYPE_NAME,
                     ResolvedType::Ptr(inner) => {
                         return write!(f, "*{}", inner);
@@ -146,6 +150,11 @@ pub struct StringLiteral {
 }
 
 #[derive(Debug, Clone)]
+pub struct BoolLiteral {
+    pub value: bool,
+}
+
+#[derive(Debug, Clone)]
 pub struct StructLiteral {
     pub fields: Vec<(String, ResolvedExpression)>,
 }
@@ -181,6 +190,7 @@ pub enum ExpressionKind {
     NumberLiteral(NumberLiteral),
     StringLiteral(StringLiteral),
     StructLiteral(StructLiteral),
+    BoolLiteral(BoolLiteral),
     BinaryExpr(BinaryExpr),
     CallExpr(CallExpr),
     Deref(DerefExpr),

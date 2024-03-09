@@ -33,6 +33,7 @@ impl<'a> LLVMCodeGenerator<'a> {
                         .ptr_type(AddressSpace::default())
                 },
             ),
+            ResolvedType::Bool => BasicMetadataTypeEnum::IntType(self.llvm_context.bool_type()),
             ResolvedType::Void => return None,
             ResolvedType::Unknown => unimplemented!(),
             ResolvedType::Struct(ResolvedStructType {
