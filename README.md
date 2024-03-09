@@ -26,9 +26,17 @@ echo export LLVM_SYS_160_PREFIX=/opt/homebrew/Cellar/llvm@16/16.0.6 >> ~/.bashrc
 set -Ux LLVM_SYS_160_PREFIX /opt/homebrew/Cellar/llvm@16/16.0.6
 ```
 
+## ロードマップ
+- 基本的な言語機能の実装 <- 今ココ
+    - リージョンベースのメモリ管理
+- VSCodeでのシンタックスハイライト
+- テストフレームワークの実装
+- 標準ライブラリの実装
+
 ## TODOリスト
+- boolおよび演算の実装
+- 使用箇所からのジェネリクス引数の推論
 - indexがintであるかの検証
 - structのフィールドにVoidを入れることは出来ないことの検証
-- boolおよび演算の実装
 - panic!, todo!, unreachable!の実装
 - annotationをOption<&ResolvedType>にできるか検討
