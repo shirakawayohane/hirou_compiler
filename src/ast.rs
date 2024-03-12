@@ -161,6 +161,13 @@ pub struct FieldAccessExpr {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct IfExpr {
+    pub cond: LocatedExpr,
+    pub then: LocatedExpr,
+    pub els: LocatedExpr,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
     SizeOf(SizeOfExpr),
     VariableRef(VariableRefExpr),
@@ -173,6 +180,7 @@ pub enum Expression {
     DerefExpr(DerefExpr),
     IndexAccess(IndexAccessExpr),
     FieldAccess(FieldAccessExpr),
+    If(IfExpr),
 }
 
 #[derive(Debug, PartialEq, Hash, Clone)]

@@ -271,6 +271,48 @@ impl LLVMCodeGenerator<'_> {
         let value = self.llvm_builder.build_call(func, &args, "").unwrap();
         Ok(value.try_as_basic_value().left())
     }
+    pub(super) fn eval_if_expr<'a>(
+        &'a self,
+        if_expr: &IfExpr,
+        ty: &ResolvedType,
+    ) -> Result<Option<BasicValueEnum<'a>>, BuilderError> {
+        // condがboolであることはresolverで保証されている
+        let cond = self
+            .gen_expression(&if_expr.cond)?
+            .unwrap()
+            .into_int_value();
+        let function: inkwell::values::FunctionValue<'_> = self
+            .llvm_builder
+            .get_insert_block()
+            .unwrap()
+            .get_parent()
+            .unwrap();
+        let then_block = self.llvm_context.append_basic_block(function, "then");
+        let else_block = self.llvm_context.append_basic_block(function, "else");
+        let merge_block = self.llvm_context.append_basic_block(function, "ifcont");
+        self.llvm_builder
+            .build_conditional_branch(cond, then_block, else_block)?;
+        self.llvm_builder.position_at_end(then_block);
+        let then_value = self.gen_expression(&if_expr.then)?.unwrap();
+        self.llvm_builder.build_unconditional_branch(merge_block)?;
+        let then_block = self.llvm_builder.get_insert_block().unwrap();
+        self.llvm_builder.position_at_end(else_block);
+        let else_value = self.gen_expression(&if_expr.els)?.unwrap();
+        self.llvm_builder.build_unconditional_branch(merge_block)?;
+        let else_block = self.llvm_builder.get_insert_block().unwrap();
+        self.llvm_builder.position_at_end(merge_block);
+        if matches!(ty, ResolvedType::Void) {
+            self.llvm_builder
+                .build_conditional_branch(cond, then_block, else_block)?;
+            Ok(None)
+        } else {
+            let phi = self
+                .llvm_builder
+                .build_phi(self.type_to_basic_type_enum(ty).unwrap(), "iftmp")?;
+            phi.add_incoming(&[(&then_value, then_block), (&else_value, else_block)]);
+            Ok(Some(phi.as_basic_value()))
+        }
+    }
     pub(super) fn gen_expression<'a>(
         &'a self,
         expr: &ResolvedExpression,
@@ -302,6 +344,7 @@ impl LLVMCodeGenerator<'_> {
             ExpressionKind::BoolLiteral(bool_literal) => {
                 self.eval_bool_literal(bool_literal).map(Some)
             }
+            ExpressionKind::If(if_expr) => self.eval_if_expr(if_expr, &expr.ty),
         }
     }
 }

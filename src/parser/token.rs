@@ -61,6 +61,7 @@ token_tag!(return_token, "return");
 token_tag!(doublequote, "\"");
 token_tag!(threedots, "...");
 token_tag!(sizeof_token, "sizeof");
+token_tag!(if_token, "if");
 
 #[inline(always)]
 pub(super) fn parse_identifier(input: Span) -> NotLocatedParseResult<String> {

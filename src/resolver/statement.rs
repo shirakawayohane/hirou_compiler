@@ -6,7 +6,7 @@ use std::rc::Rc;
 use clap::error;
 
 use crate::ast::{Located, Statement};
-use crate::resolved_ast::{self, ExpressionKind, ResolvedExpression};
+use crate::resolved_ast::{self, ExpressionKind, ResolvedExpression, ResolvedType};
 use crate::resolver::error::CompileErrorKind;
 use crate::{ast, in_new_scope};
 
@@ -47,7 +47,7 @@ pub fn resolve_statement(
                     function_by_name,
                     resolved_functions,
                     decl.value.as_ref(),
-                    resolved_annotation.clone(),
+                    resolved_annotation.as_ref(),
                 )?;
                 if let Some(resolved_annotation) = resolved_annotation {
                     if !resolved_annotation.can_insert(&resolved_expr.ty) {
@@ -138,7 +138,7 @@ pub fn resolve_statement(
                             function_by_name,
                             resolved_functions,
                             x.as_ref(),
-                            Some(resolved_ast::ResolvedType::USize),
+                            Some(&ResolvedType::USize),
                         )
                     })
                     .transpose()?,

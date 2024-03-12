@@ -12,11 +12,8 @@ use crate::ast::{
 };
 
 use super::{
-    expression::{parse_boxed_expression, parse_function_call_expression},
-    token::*,
-    ty::parse_type,
-    util::*,
-    NotLocatedParseResult, ParseResult, Span,
+    expression::parse_boxed_expression, token::*, ty::parse_type, util::*, NotLocatedParseResult,
+    ParseResult, Span,
 };
 
 fn parse_asignment(input: Span) -> NotLocatedParseResult<Statement> {
@@ -68,14 +65,6 @@ fn parse_variable_decl(input: Span) -> NotLocatedParseResult<Statement> {
     )(input)
 }
 
-fn parse_function_call_statement(input: Span) -> NotLocatedParseResult<Statement> {
-    map(located(parse_function_call_expression), |loc_expr| {
-        Statement::Effect(EffectStatement {
-            expression: loc_expr,
-        })
-    })(input)
-}
-
 fn parse_return_statement(input: Span) -> NotLocatedParseResult<Statement> {
     map(
         tuple((return_token, skip1, opt(parse_boxed_expression))),
@@ -97,7 +86,6 @@ fn parse_effect_statement(input: Span) -> NotLocatedParseResult<Statement> {
 
 pub(super) fn parse_statement(input: Span) -> ParseResult<Statement> {
     located(alt((
-        context("function_call_statement", parse_function_call_statement),
         context("return_statement", parse_return_statement),
         context("variable_decl_statement", parse_variable_decl),
         context("assign_statement", parse_asignment),

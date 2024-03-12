@@ -126,6 +126,52 @@ fn test_parse_function_call_expression() {
     }
 }
 
+fn parse_if_expression(input: Span) -> NotLocatedParseResult<Expression> {
+    map(
+        delimited(
+            lparen,
+            tuple((
+                if_token,
+                parse_boxed_expression,
+                parse_boxed_expression,
+                parse_boxed_expression,
+            )),
+            rparen,
+        ),
+        |(_, cond, then, els)| Expression::If(IfExpr { cond, then, els }),
+    )(input)
+}
+
+#[test]
+fn test_parse_if_expression() {
+    let result = parse_if_expression(Span::new("(if a b c)"));
+    assert!(result.is_ok());
+    let (rest, expr) = result.unwrap();
+    assert_eq!(rest.to_string().as_str(), "");
+    if let Expression::If(if_expr) = expr {
+        assert_eq!(
+            *if_expr.cond.value,
+            Expression::VariableRef(VariableRefExpr {
+                name: "a".to_string()
+            })
+        );
+        assert_eq!(
+            *if_expr.then.value,
+            Expression::VariableRef(VariableRefExpr {
+                name: "b".to_string()
+            })
+        );
+        assert_eq!(
+            *if_expr.els.value,
+            Expression::VariableRef(VariableRefExpr {
+                name: "c".to_string()
+            })
+        );
+    } else {
+        panic!();
+    }
+}
+
 fn parse_deref_expression(input: Span) -> NotLocatedParseResult<Expression> {
     map(preceded(asterisk, parse_boxed_expression), |expr| {
         Expression::DerefExpr(DerefExpr { target: expr })
@@ -287,6 +333,7 @@ pub(super) fn parse_boxed_expression(input: Span) -> ParseResult<Box<Expression>
             context("bool_literal", parse_bool_literal),
             context("struct_literal", parse_struct_literal),
             context("variable_ref", parse_variable_ref),
+            context("if", parse_if_expression),
             context("call", parse_function_call_expression),
             context("binop", parse_intrinsic_op_expression),
         )),

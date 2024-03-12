@@ -40,3 +40,15 @@ set -Ux LLVM_SYS_160_PREFIX /opt/homebrew/Cellar/llvm@16/16.0.6
 - structのフィールドにVoidを入れることは出来ないことの検証
 - panic!, todo!, unreachable!の実装
 - annotationをOption<&ResolvedType>にできるか検討
+- メモリ管理終わったら
+    - ベクタリテラル []
+    - マップリテラル {}
+    - セットリテラル #{}
+- 変数定義をS式に変える
+
+変数定義こうしようと思ってる
+```
+(:= a 1)
+(:= v  [] :- Vec<i32>
+    v2 [] :- Vec<u32>)
+```

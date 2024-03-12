@@ -1,5 +1,3 @@
-use clap::error;
-
 use crate::ast::UnresolvedType;
 
 use super::*;
@@ -326,7 +324,7 @@ pub fn resolve_call_expr(
     function_by_name: &HashMap<String, ast::Function>,
     resolved_functions: &mut HashMap<String, resolved_ast::Function>,
     call_expr: &Located<&ast::CallExpr>,
-    annotation: Option<ResolvedType>,
+    annotation: Option<&ResolvedType>,
 ) -> Result<ResolvedExpression, FaitalError> {
     let callee = match function_by_name.get(&call_expr.name) {
         Some(callee) => callee,
@@ -371,7 +369,7 @@ pub fn resolve_call_expr(
         resolved_functions,
         call_expr,
         callee,
-        annotation.as_ref(),
+        annotation,
     )? {
         inferred = false;
     }
@@ -424,7 +422,7 @@ pub fn resolve_call_expr(
                     function_by_name,
                     resolved_functions,
                     arg.as_inner_deref(),
-                    Some(resolved_ty.clone()),
+                    Some(&resolved_ty),
                 )?;
                 if !resolved_ty.can_insert(&resolved_arg.ty) {
                     dbg!(errors.push(CompileError::new(
@@ -479,7 +477,7 @@ pub fn resolve_call_expr(
         &callee.decl.return_type,
     )?;
     // void* はアノテーションがあればその型として扱う
-    if let Some(annotation) = &annotation {
+    if let Some(annotation) = annotation {
         if let ResolvedType::Ptr(inner) = &resolved_return_ty {
             if let ResolvedType::Void = **inner {
                 resolved_return_ty = annotation.clone();

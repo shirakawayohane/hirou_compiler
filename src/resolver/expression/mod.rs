@@ -21,7 +21,7 @@ pub(crate) fn resolve_expression(
     function_by_name: &HashMap<String, ast::Function>,
     resolved_functions: &mut HashMap<String, resolved_ast::Function>,
     loc_expr: Located<&ast::Expression>,
-    annotation: Option<ResolvedType>,
+    annotation: Option<&ResolvedType>,
 ) -> Result<resolved_ast::ResolvedExpression, FaitalError> {
     match loc_expr.value {
         Expression::VariableRef(variable_ref) => {
@@ -34,11 +34,11 @@ pub(crate) fn resolve_expression(
                 let resolved_type = if let Some(annotation) = annotation {
                     annotation
                 } else {
-                    ty.clone()
+                    &ty
                 };
 
                 return Ok(resolved_ast::ResolvedExpression {
-                    ty: resolved_type,
+                    ty: resolved_type.clone(),
                     kind: expr_kind,
                 });
             } else {
@@ -59,7 +59,7 @@ pub(crate) fn resolve_expression(
                 value: number_literal.value.clone(),
             });
             let ty = if let Some(annotation) = annotation {
-                annotation
+                annotation.clone()
             } else {
                 if number_literal.value.parse::<i32>().is_ok() {
                     ResolvedType::I32
@@ -156,7 +156,7 @@ pub(crate) fn resolve_expression(
                 function_by_name,
                 resolved_functions,
                 index_access_expr.index.as_deref(),
-                Some(ResolvedType::USize),
+                Some(&ResolvedType::USize),
             )?;
             let resolved_ty = if let ResolvedType::Ptr(ptr) = &target.ty {
                 *ptr.clone()
@@ -317,7 +317,7 @@ pub(crate) fn resolve_expression(
                         function_by_name,
                         resolved_functions,
                         field_in_expr.1.as_deref(),
-                        Some(expected_ty.clone()),
+                        Some(&expected_ty.clone()),
                     )?;
 
                     if !expected_ty.can_insert(&resolved_field.ty) {
@@ -371,6 +371,64 @@ pub(crate) fn resolve_expression(
             return Ok(resolved_ast::ResolvedExpression {
                 kind: resolved_ast::ExpressionKind::SizeOf(resolved_ty),
                 ty: ResolvedType::USize,
+            });
+        }
+        Expression::If(if_expr) => {
+            let condition_expr = resolve_expression(
+                errors,
+                types.clone(),
+                scopes.clone(),
+                type_defs,
+                function_by_name,
+                resolved_functions,
+                if_expr.cond.as_deref(),
+                Some(&ResolvedType::Bool),
+            )?;
+            if !matches!(condition_expr.ty, ResolvedType::Bool) {
+                errors.push(CompileError::new(
+                    loc_expr.range,
+                    CompileErrorKind::TypeMismatch {
+                        expected: ResolvedType::Bool,
+                        actual: condition_expr.ty.clone(),
+                    },
+                ));
+            }
+            let then_expr = resolve_expression(
+                errors,
+                types.clone(),
+                scopes.clone(),
+                type_defs,
+                function_by_name,
+                resolved_functions,
+                if_expr.then.as_deref(),
+                annotation,
+            )?;
+            let else_expr = resolve_expression(
+                errors,
+                types.clone(),
+                scopes.clone(),
+                type_defs,
+                function_by_name,
+                resolved_functions,
+                if_expr.els.as_deref(),
+                annotation,
+            )?;
+            if then_expr.ty != else_expr.ty {
+                errors.push(CompileError::new(
+                    loc_expr.range,
+                    CompileErrorKind::TypeMismatch {
+                        expected: then_expr.ty.clone(),
+                        actual: else_expr.ty.clone(),
+                    },
+                ));
+            }
+            return Ok(resolved_ast::ResolvedExpression {
+                ty: then_expr.ty.clone(),
+                kind: resolved_ast::ExpressionKind::If(resolved_ast::IfExpr {
+                    cond: Box::new(condition_expr),
+                    then: Box::new(then_expr),
+                    els: Box::new(else_expr),
+                }),
             });
         }
     };

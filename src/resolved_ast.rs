@@ -184,6 +184,13 @@ pub struct FieldAccessExpr {
 }
 
 #[derive(Debug, Clone)]
+pub struct IfExpr {
+    pub cond: Box<ResolvedExpression>,
+    pub then: Box<ResolvedExpression>,
+    pub els: Box<ResolvedExpression>,
+}
+
+#[derive(Debug, Clone)]
 pub enum ExpressionKind {
     SizeOf(ResolvedType),
     VariableRef(VariableRefExpr),
@@ -196,6 +203,7 @@ pub enum ExpressionKind {
     Deref(DerefExpr),
     IndexAccess(IndexAccessExor),
     FieldAccess(FieldAccessExpr),
+    If(IfExpr),
     Unknown,
 }
 
