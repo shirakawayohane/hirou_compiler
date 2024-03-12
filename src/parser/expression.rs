@@ -142,6 +142,17 @@ fn parse_if_expression(input: Span) -> NotLocatedParseResult<Expression> {
     )(input)
 }
 
+fn parse_when_expression(input: Span) -> NotLocatedParseResult<Expression> {
+    map(
+        delimited(
+            lparen,
+            tuple((when_token, parse_boxed_expression, parse_boxed_expression)),
+            rparen,
+        ),
+        |(_, cond, then)| Expression::When(WhenExpr { cond, then }),
+    )(input)
+}
+
 #[test]
 fn test_parse_if_expression() {
     let result = parse_if_expression(Span::new("(if a b c)"));
@@ -334,6 +345,7 @@ pub(super) fn parse_boxed_expression(input: Span) -> ParseResult<Box<Expression>
             context("struct_literal", parse_struct_literal),
             context("variable_ref", parse_variable_ref),
             context("if", parse_if_expression),
+            context("when", parse_when_expression),
             context("call", parse_function_call_expression),
             context("binop", parse_intrinsic_op_expression),
         )),

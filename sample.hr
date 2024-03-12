@@ -59,9 +59,8 @@ fn test_struct_vector(): void {
 
 fn test_condition(): void {
   let t = true
-  let v = (if t "true" "false")
-  (printf "%s" v)
-  (if t (printf "true2") (printf "false2"))
+  (when t
+    (printf "true in when"))
 }
 
 fn main(): void {

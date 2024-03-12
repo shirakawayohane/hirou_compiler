@@ -168,6 +168,12 @@ pub struct IfExpr {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct WhenExpr {
+    pub cond: LocatedExpr,
+    pub then: LocatedExpr,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
     SizeOf(SizeOfExpr),
     VariableRef(VariableRefExpr),
@@ -181,6 +187,7 @@ pub enum Expression {
     IndexAccess(IndexAccessExpr),
     FieldAccess(FieldAccessExpr),
     If(IfExpr),
+    When(WhenExpr),
 }
 
 #[derive(Debug, PartialEq, Hash, Clone)]

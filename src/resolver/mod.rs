@@ -154,7 +154,7 @@ macro_rules! in_new_scope {
 }
 
 // ジェネリック関数の場合は事前に型を登録しておく必要がある
-fn resolve_function<'a>(
+fn resolve_function(
     errors: &mut Vec<CompileError>,
     type_scopes: Rc<RefCell<TypeScopes>>,
     scopes: Rc<RefCell<VariableScopes>>,

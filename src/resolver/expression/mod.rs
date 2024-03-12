@@ -102,21 +102,19 @@ pub(crate) fn resolve_expression(
                 ty: ResolvedType::I32,
             })
         }
-        Expression::Call(call_expr) => {
-            resolve_call_expr(
-                errors,
-                types,
-                scopes,
-                type_defs,
-                function_by_name,
-                resolved_functions,
-                &Located {
-                    range: loc_expr.range,
-                    value: call_expr,
-                },
-                annotation,
-            )
-        }
+        Expression::Call(call_expr) => resolve_call_expr(
+            errors,
+            types,
+            scopes,
+            type_defs,
+            function_by_name,
+            resolved_functions,
+            &Located {
+                range: loc_expr.range,
+                value: call_expr,
+            },
+            annotation,
+        ),
         Expression::DerefExpr(deref_expr) => {
             let target = resolve_expression(
                 errors,
@@ -221,22 +219,18 @@ pub(crate) fn resolve_expression(
                 ty: resolved_ty,
             })
         }
-        Expression::StringLiteral(str_literal) => {
-            Ok(resolved_ast::ResolvedExpression {
-                kind: resolved_ast::ExpressionKind::StringLiteral(resolved_ast::StringLiteral {
-                    value: str_literal.value.clone(),
-                }),
-                ty: ResolvedType::Ptr(Box::new(ResolvedType::U8)),
-            })
-        }
-        Expression::BoolLiteral(bool_literal) => {
-            Ok(resolved_ast::ResolvedExpression {
-                kind: resolved_ast::ExpressionKind::BoolLiteral(resolved_ast::BoolLiteral {
-                    value: bool_literal.value,
-                }),
-                ty: ResolvedType::Bool,
-            })
-        }
+        Expression::StringLiteral(str_literal) => Ok(resolved_ast::ResolvedExpression {
+            kind: resolved_ast::ExpressionKind::StringLiteral(resolved_ast::StringLiteral {
+                value: str_literal.value.clone(),
+            }),
+            ty: ResolvedType::Ptr(Box::new(ResolvedType::U8)),
+        }),
+        Expression::BoolLiteral(bool_literal) => Ok(resolved_ast::ResolvedExpression {
+            kind: resolved_ast::ExpressionKind::BoolLiteral(resolved_ast::BoolLiteral {
+                value: bool_literal.value,
+            }),
+            ty: ResolvedType::Bool,
+        }),
         Expression::StructLiteral(struct_literal_expr) => {
             let mut resolved_fields = Vec::new();
             let mut resolved_generic_args = Vec::new();
@@ -426,6 +420,44 @@ pub(crate) fn resolve_expression(
                     cond: Box::new(condition_expr),
                     then: Box::new(then_expr),
                     els: Box::new(else_expr),
+                }),
+            })
+        }
+        Expression::When(when_expr) => {
+            let condition_expr = resolve_expression(
+                errors,
+                types.clone(),
+                scopes.clone(),
+                type_defs,
+                function_by_name,
+                resolved_functions,
+                when_expr.cond.as_deref(),
+                Some(&ResolvedType::Bool),
+            )?;
+            if !matches!(condition_expr.ty, ResolvedType::Bool) {
+                errors.push(CompileError::new(
+                    loc_expr.range,
+                    CompileErrorKind::TypeMismatch {
+                        expected: ResolvedType::Bool,
+                        actual: condition_expr.ty.clone(),
+                    },
+                ));
+            }
+            let then_expr = resolve_expression(
+                errors,
+                types.clone(),
+                scopes.clone(),
+                type_defs,
+                function_by_name,
+                resolved_functions,
+                when_expr.then.as_deref(),
+                annotation,
+            )?;
+            Ok(resolved_ast::ResolvedExpression {
+                ty: ResolvedType::Void,
+                kind: resolved_ast::ExpressionKind::When(resolved_ast::WhenExpr {
+                    cond: Box::new(condition_expr),
+                    then: Box::new(then_expr),
                 }),
             })
         }

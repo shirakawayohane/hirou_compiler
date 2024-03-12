@@ -7,7 +7,7 @@ use resolved_ast::{I32_TYPE_NAME, USIZE_TYPE_NAME};
 
 use super::*;
 
-pub(super) fn resolve_type<'a>(
+pub(super) fn resolve_type(
     errors: &mut Vec<CompileError>,
     type_scopes: &mut TypeScopes,
     type_defs: &HashMap<String, ast::TypeDef>,

@@ -76,9 +76,10 @@ fn infer_generic_args_recursively(
     match current_callee_return_ty {
         UnresolvedType::TypeRef(return_ty_typeref) => {
             if return_ty_typeref.generic_args.is_none() {
-                if let Some(generic_arg) = callee_generic_args.iter().find(|x| {
-                    x.value.name == return_ty_typeref.name
-                }) {
+                if let Some(generic_arg) = callee_generic_args
+                    .iter()
+                    .find(|x| x.value.name == return_ty_typeref.name)
+                {
                     types
                         .borrow_mut()
                         .add(generic_arg.value.name.clone(), current_annotation.clone());
@@ -176,11 +177,7 @@ pub fn resolve_infer_generic_from_arguments(
         .decl
         .args
         .iter()
-        .find(|x| match x {
-            ast::Argument::VarArgs => true,
-            ast::Argument::Normal(_, _) => false,
-        })
-        .is_some()
+        .any(|x| matches!(x, ast::Argument::VarArgs))
     {
         return Ok(false);
     }
@@ -435,7 +432,8 @@ pub fn resolve_call_expr(
         }
     }
 
-    if !inferred && !resolve_infer_generic_from_arguments(
+    if !inferred
+        && !resolve_infer_generic_from_arguments(
             errors,
             types.clone(),
             scopes.clone(),
@@ -445,7 +443,8 @@ pub fn resolve_call_expr(
             call_expr,
             callee,
             &resolved_args,
-        )? {
+        )?
+    {
         dbg!(errors.push(CompileError::new(
             call_expr.range,
             CompileErrorKind::CannotInferGenericArgs {

@@ -191,6 +191,12 @@ pub struct IfExpr {
 }
 
 #[derive(Debug, Clone)]
+pub struct WhenExpr {
+    pub cond: Box<ResolvedExpression>,
+    pub then: Box<ResolvedExpression>,
+}
+
+#[derive(Debug, Clone)]
 pub enum ExpressionKind {
     SizeOf(ResolvedType),
     VariableRef(VariableRefExpr),
@@ -204,6 +210,7 @@ pub enum ExpressionKind {
     IndexAccess(IndexAccessExor),
     FieldAccess(FieldAccessExpr),
     If(IfExpr),
+    When(WhenExpr),
     Unknown,
 }
 
