@@ -28,7 +28,7 @@ where
     pub fn as_inner_deref(&self) -> Located<&U> {
         Located {
             range: self.range,
-            value: &self.value.deref(),
+            value: self.value.deref(),
         }
     }
 }

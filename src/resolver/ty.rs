@@ -30,7 +30,7 @@ pub(super) fn resolve_type<'a>(
                                             actual: generic_args.len(),
                                         },
                                     )));
-                                    return Ok(ResolvedType::Unknown);
+                                    Ok(ResolvedType::Unknown)
                                 } else {
                                     in_new_scope!(type_scopes, {
                                         for (i, generic_arg) in generic_args.iter().enumerate() {
@@ -85,41 +85,39 @@ pub(super) fn resolve_type<'a>(
                                         name: typ_ref.name.clone(),
                                     },
                                 )));
-                                return Ok(ResolvedType::Unknown);
+                                Ok(ResolvedType::Unknown)
                             }
+                        } else if struct_def.generic_args.is_some() {
+                            dbg!(errors.push(CompileError::new(
+                                loc_ty.range,
+                                error::CompileErrorKind::NoGenericArgs {
+                                    name: typ_ref.name.clone(),
+                                },
+                            )));
+                            Ok(ResolvedType::Unknown)
                         } else {
-                            if struct_def.generic_args.is_some() {
-                                dbg!(errors.push(CompileError::new(
-                                    loc_ty.range,
-                                    error::CompileErrorKind::NoGenericArgs {
-                                        name: typ_ref.name.clone(),
-                                    },
-                                )));
-                                return Ok(ResolvedType::Unknown);
-                            } else {
-                                return Ok(ResolvedType::Struct(ResolvedStructType {
-                                    name: get_resolved_struct_name(&type_def.name, None),
-                                    fields: struct_def
-                                        .fields
-                                        .iter()
-                                        .map(|(name, unresolved_ty)| {
-                                            match resolve_type(
-                                                errors,
-                                                type_scopes.borrow_mut().deref_mut(),
-                                                type_defs,
-                                                unresolved_ty,
-                                            ) {
-                                                Ok(resolved_ty) => {
-                                                    Ok((name.clone(), resolved_ty.clone()))
-                                                }
-                                                Err(err) => Err(err),
+                            Ok(ResolvedType::Struct(ResolvedStructType {
+                                name: get_resolved_struct_name(&type_def.name, None),
+                                fields: struct_def
+                                    .fields
+                                    .iter()
+                                    .map(|(name, unresolved_ty)| {
+                                        match resolve_type(
+                                            errors,
+                                            type_scopes.borrow_mut().deref_mut(),
+                                            type_defs,
+                                            unresolved_ty,
+                                        ) {
+                                            Ok(resolved_ty) => {
+                                                Ok((name.clone(), resolved_ty.clone()))
                                             }
-                                        })
-                                        .collect::<Result<Vec<_>>>()?,
-                                    generic_args: None,
-                                    non_generic_name: type_def.name.clone(),
-                                }));
-                            }
+                                            Err(err) => Err(err),
+                                        }
+                                    })
+                                    .collect::<Result<Vec<_>>>()?,
+                                generic_args: None,
+                                non_generic_name: type_def.name.clone(),
+                            }))
                         }
                     }
                 }
@@ -131,14 +129,14 @@ pub(super) fn resolve_type<'a>(
                             name: typ_ref.name.clone(),
                         },
                     )));
-                    &&ResolvedType::Unknown
+                    &ResolvedType::Unknown
                 });
                 Ok(resolved_type.clone())
             }
         }
         UnresolvedType::Ptr(inner_type) => {
             let inner_type: ResolvedType =
-                resolve_type(errors, type_scopes, type_defs, &inner_type)?;
+                resolve_type(errors, type_scopes, type_defs, inner_type)?;
             Ok(ResolvedType::Ptr(Box::new(inner_type)))
         }
     }

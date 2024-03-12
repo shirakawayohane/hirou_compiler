@@ -38,7 +38,7 @@ pub fn resolve_call_with_generic_args(
                             errors,
                             types.borrow_mut().deref_mut(),
                             type_defs,
-                            &actual_arg,
+                            actual_arg,
                         )?;
                         types
                             .borrow_mut()
@@ -77,11 +77,7 @@ fn infer_generic_args_recursively(
         UnresolvedType::TypeRef(return_ty_typeref) => {
             if return_ty_typeref.generic_args.is_none() {
                 if let Some(generic_arg) = callee_generic_args.iter().find(|x| {
-                    if x.value.name == return_ty_typeref.name {
-                        true
-                    } else {
-                        false
-                    }
+                    x.value.name == return_ty_typeref.name
                 }) {
                     types
                         .borrow_mut()
@@ -136,7 +132,7 @@ fn infer_generic_args_recursively(
                     function_by_name,
                     resolved_functions,
                     callee,
-                    &return_ty_pointer_ty,
+                    return_ty_pointer_ty,
                     inner,
                 )? {
                     resolve_function(
@@ -253,7 +249,7 @@ pub fn resolve_infer_generic_from_annotation(
         return Ok(false);
     }
     if let Some(annotation) = &annotation {
-        return in_global_scope!(scopes, {
+        in_global_scope!(scopes, {
             in_global_scope!(types, {
                 let mut temp_errors = Vec::new();
                 let inferred = infer_generic_args_recursively(
@@ -265,7 +261,7 @@ pub fn resolve_infer_generic_from_annotation(
                     resolved_functions,
                     callee,
                     &callee.decl.return_type.value,
-                    *annotation,
+                    annotation,
                 )?;
                 if inferred {
                     errors.extend(temp_errors);
@@ -281,7 +277,7 @@ pub fn resolve_infer_generic_from_annotation(
                 }
                 Ok(inferred)
             })
-        });
+        })
     } else {
         Ok(false)
     }
@@ -439,8 +435,7 @@ pub fn resolve_call_expr(
         }
     }
 
-    if !inferred {
-        if !resolve_infer_generic_from_arguments(
+    if !inferred && !resolve_infer_generic_from_arguments(
             errors,
             types.clone(),
             scopes.clone(),
@@ -451,23 +446,22 @@ pub fn resolve_call_expr(
             callee,
             &resolved_args,
         )? {
-            dbg!(errors.push(CompileError::new(
-                call_expr.range,
-                CompileErrorKind::CannotInferGenericArgs {
-                    name: call_expr.name.to_owned(),
-                    message: "".to_string()
-                },
-            )));
-            return Ok(ResolvedExpression {
-                ty: resolve_type(
-                    &mut Vec::new(),
-                    types.borrow_mut().deref_mut(),
-                    type_defs,
-                    &callee.decl.return_type,
-                )?,
-                kind: ExpressionKind::Unknown,
-            });
-        }
+        dbg!(errors.push(CompileError::new(
+            call_expr.range,
+            CompileErrorKind::CannotInferGenericArgs {
+                name: call_expr.name.to_owned(),
+                message: "".to_string()
+            },
+        )));
+        return Ok(ResolvedExpression {
+            ty: resolve_type(
+                &mut Vec::new(),
+                types.borrow_mut().deref_mut(),
+                type_defs,
+                &callee.decl.return_type,
+            )?,
+            kind: ExpressionKind::Unknown,
+        });
     }
 
     let mut resolved_return_ty = resolve_type(

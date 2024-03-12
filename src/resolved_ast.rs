@@ -92,7 +92,7 @@ impl Display for ResolvedType {
         if self.is_pointer_type() {
             f.write_char('&')?;
             if let ResolvedType::Ptr(inner_type) = self {
-                return write!(f, "{}", inner_type);
+                write!(f, "{}", inner_type)
             } else {
                 unreachable!()
             }

@@ -11,7 +11,7 @@ use nom::{
     Parser,
 };
 
-fn comment<'a>(s: Span<'a>) -> IResult<Span<'a>, (), VerboseError<Span<'a>>> {
+fn comment(s: Span<'_>) -> IResult<Span<'_>, (), VerboseError<Span<'_>>> {
     map(
         tuple((
             tag("//"),
@@ -22,7 +22,7 @@ fn comment<'a>(s: Span<'a>) -> IResult<Span<'a>, (), VerboseError<Span<'a>>> {
     )(s)
 }
 
-pub(super) fn skip0<'a>(input: Span<'a>) -> IResult<Span<'a>, (), VerboseError<Span<'a>>> {
+pub(super) fn skip0(input: Span<'_>) -> IResult<Span<'_>, (), VerboseError<Span<'_>>> {
     map(
         many0(alt((
             comment,
@@ -33,7 +33,7 @@ pub(super) fn skip0<'a>(input: Span<'a>) -> IResult<Span<'a>, (), VerboseError<S
     )(input)
 }
 
-pub(super) fn skip1<'a>(input: Span<'a>) -> IResult<Span<'a>, (), VerboseError<Span<'a>>> {
+pub(super) fn skip1(input: Span<'_>) -> IResult<Span<'_>, (), VerboseError<Span<'_>>> {
     map(
         many1(alt((comment, map(comma, |_| ()), map(multispace1, |_| ())))),
         |_| (),
@@ -69,10 +69,10 @@ pub(super) fn located<'a, O>(
     }
 }
 
-pub(super) fn index_access<'a>(input: Span<'a>) -> ParseResult<Box<Expression>> {
+pub(super) fn index_access(input: Span<'_>) -> ParseResult<Box<Expression>> {
     delimited(lsqrbracket, parse_boxed_expression, rsqrbracket)(input)
 }
 
-pub(super) fn field_access<'a>(input: Span<'a>) -> NotLocatedParseResult<String> {
+pub(super) fn field_access(input: Span<'_>) -> NotLocatedParseResult<String> {
     preceded(dot, parse_identifier)(input)
 }

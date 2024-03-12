@@ -10,8 +10,8 @@ use crate::ast::*;
 use super::*;
 use super::{token::*, util::located};
 
-pub(super) fn parse_generic_argument_decls<'a>(
-    input: Span<'a>,
+pub(super) fn parse_generic_argument_decls(
+    input: Span<'_>,
 ) -> NotLocatedParseResult<Vec<Located<GenericArgument>>> {
     fn parse_generic_argument(input: Span) -> ParseResult<GenericArgument> {
         located(context(
@@ -23,7 +23,7 @@ pub(super) fn parse_generic_argument_decls<'a>(
     let (mut rest, _) = langlebracket(input)?;
     loop {
         (rest, _) = skip0(rest)?;
-        if rest.starts_with(">") {
+        if rest.starts_with('>') {
             break;
         }
         let arg;
@@ -41,7 +41,7 @@ pub(super) fn parse_generic_arguments(
     let (mut rest, _) = langlebracket(input)?;
     loop {
         (rest, _) = skip0(rest)?;
-        if rest.starts_with(">") {
+        if rest.starts_with('>') {
             break;
         }
         let arg;
@@ -65,7 +65,7 @@ fn parse_typeref(input: Span) -> ParseResult<UnresolvedType> {
             UnresolvedType::TypeRef(TypeRef {
                 name: ident,
                 generic_args: generics_args
-                    .map(|args| args.into_iter().map(|arg| arg).collect::<Vec<_>>()),
+                    .map(|args| args.into_iter().collect::<Vec<_>>()),
             })
         },
     ))(input)

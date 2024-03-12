@@ -77,7 +77,7 @@ impl<'a> LLVMCodeGenerator<'a> {
                 &triple,
                 host_cpu.to_str().unwrap(),
                 features.to_str().unwrap(),
-                optimization_level.into(),
+                optimization_level,
                 RelocMode::Default,
                 CodeModel::Default,
             )

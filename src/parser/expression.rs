@@ -69,7 +69,7 @@ pub(super) fn parse_intrinsic_op_expression(input: Span) -> NotLocatedParseResul
         |(binop, lhs, rhs)| {
             Expression::BinaryExpr(BinaryExpr {
                 op: binop,
-                lhs: lhs,
+                lhs,
                 rhs,
             })
         },
@@ -240,7 +240,7 @@ fn parse_struct_literal(input: Span) -> NotLocatedParseResult<Expression> {
         let mut rest = input;
         loop {
             (rest, _) = skip0(rest)?;
-            if rest.starts_with("}") {
+            if rest.starts_with('}') {
                 break;
             }
             let field;
@@ -337,7 +337,7 @@ pub(super) fn parse_boxed_expression(input: Span) -> ParseResult<Box<Expression>
             context("call", parse_function_call_expression),
             context("binop", parse_intrinsic_op_expression),
         )),
-        |x| Box::new(x),
+        Box::new,
     ))(input)?;
 
     {

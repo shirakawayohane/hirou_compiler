@@ -68,7 +68,7 @@ pub(super) fn parse_identifier(input: Span) -> NotLocatedParseResult<String> {
     let (s, _) = not(digit1)(input)?;
     let (s, _) = skip0(s)?;
     map(
-        take_till1(|x: char| !x.is_alphabetic() && !x.is_digit(10) && !['-', '_'].contains(&x)),
+        take_till1(|x: char| !x.is_alphabetic() && !x.is_ascii_digit() && !['-', '_'].contains(&x)),
         |s: Span| s.to_string(),
     )(s)
 }

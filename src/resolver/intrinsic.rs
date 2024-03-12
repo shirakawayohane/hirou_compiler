@@ -13,7 +13,7 @@ use crate::{
 
 use super::TypeScopes;
 
-const INTRINSIC_DECLS: &'static str = r#"
+const INTRINSIC_DECLS: &str = r#"
 fn malloc(size: usize) : *void {}
 fn free(ptr: *void) : *void {}
 fn memcpy(dst: *void, src: *void, size: usize) : void {}

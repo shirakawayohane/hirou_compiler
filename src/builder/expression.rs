@@ -241,7 +241,7 @@ impl LLVMCodeGenerator<'_> {
             .args
             .iter()
             .map(|arg| {
-                self.gen_expression(&arg).map(|x| {
+                self.gen_expression(arg).map(|x| {
                     if arg.ty.is_struct_type() {
                         let ty = self.type_to_basic_type_enum(&arg.ty).unwrap();
                         self.llvm_builder

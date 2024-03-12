@@ -34,13 +34,13 @@ pub(crate) fn resolve_expression(
                 let resolved_type = if let Some(annotation) = annotation {
                     annotation
                 } else {
-                    &ty
+                    ty
                 };
 
-                return Ok(resolved_ast::ResolvedExpression {
+                Ok(resolved_ast::ResolvedExpression {
                     ty: resolved_type.clone(),
                     kind: expr_kind,
-                });
+                })
             } else {
                 errors.push(CompileError::new(
                     loc_expr.range,
@@ -48,10 +48,10 @@ pub(crate) fn resolve_expression(
                         name: variable_ref.name.to_owned(),
                     },
                 ));
-                return Ok(ResolvedExpression {
+                Ok(ResolvedExpression {
                     ty: ResolvedType::Unknown,
                     kind: expr_kind,
-                });
+                })
             }
         }
         Expression::NumberLiteral(number_literal) => {
@@ -60,19 +60,17 @@ pub(crate) fn resolve_expression(
             });
             let ty = if let Some(annotation) = annotation {
                 annotation.clone()
+            } else if number_literal.value.parse::<i32>().is_ok() {
+                ResolvedType::I32
+            } else if number_literal.value.parse::<i64>().is_ok() {
+                ResolvedType::I64
+            } else if number_literal.value.parse::<u64>().is_ok() {
+                ResolvedType::U64
             } else {
-                if number_literal.value.parse::<i32>().is_ok() {
-                    ResolvedType::I32
-                } else if number_literal.value.parse::<i64>().is_ok() {
-                    ResolvedType::I64
-                } else if number_literal.value.parse::<u64>().is_ok() {
-                    ResolvedType::U64
-                } else {
-                    unreachable!()
-                }
+                unreachable!()
             };
 
-            return Ok(ResolvedExpression { ty, kind });
+            Ok(ResolvedExpression { ty, kind })
         }
         Expression::BinaryExpr(bin_expr) => {
             let lhs = resolve_expression(
@@ -95,17 +93,17 @@ pub(crate) fn resolve_expression(
                 bin_expr.rhs.as_deref(),
                 None,
             )?;
-            return Ok(resolved_ast::ResolvedExpression {
+            Ok(resolved_ast::ResolvedExpression {
                 kind: resolved_ast::ExpressionKind::BinaryExpr(resolved_ast::BinaryExpr {
                     op: bin_expr.op,
                     lhs: Box::new(lhs),
                     rhs: Box::new(rhs),
                 }),
                 ty: ResolvedType::I32,
-            });
+            })
         }
         Expression::Call(call_expr) => {
-            return resolve_call_expr(
+            resolve_call_expr(
                 errors,
                 types,
                 scopes,
@@ -130,12 +128,12 @@ pub(crate) fn resolve_expression(
                 deref_expr.target.as_deref(),
                 None,
             )?;
-            return Ok(resolved_ast::ResolvedExpression {
+            Ok(resolved_ast::ResolvedExpression {
                 kind: resolved_ast::ExpressionKind::Deref(resolved_ast::DerefExpr {
                     target: Box::new(target),
                 }),
                 ty: ResolvedType::I32,
-            });
+            })
         }
         Expression::IndexAccess(index_access_expr) => {
             let target = resolve_expression(
@@ -169,13 +167,13 @@ pub(crate) fn resolve_expression(
                 ));
                 ResolvedType::Unknown
             };
-            return Ok(resolved_ast::ResolvedExpression {
+            Ok(resolved_ast::ResolvedExpression {
                 kind: resolved_ast::ExpressionKind::IndexAccess(resolved_ast::IndexAccessExor {
                     target: Box::new(target),
                     index: Box::new(index),
                 }),
                 ty: resolved_ty,
-            });
+            })
         }
         Expression::FieldAccess(field_access_expr) => {
             let target = resolve_expression(
@@ -215,29 +213,29 @@ pub(crate) fn resolve_expression(
                 ));
                 ResolvedType::Unknown
             };
-            return Ok(resolved_ast::ResolvedExpression {
+            Ok(resolved_ast::ResolvedExpression {
                 kind: resolved_ast::ExpressionKind::FieldAccess(resolved_ast::FieldAccessExpr {
                     target: Box::new(target),
                     field_name: field_access_expr.field_name.clone(),
                 }),
                 ty: resolved_ty,
-            });
+            })
         }
         Expression::StringLiteral(str_literal) => {
-            return Ok(resolved_ast::ResolvedExpression {
+            Ok(resolved_ast::ResolvedExpression {
                 kind: resolved_ast::ExpressionKind::StringLiteral(resolved_ast::StringLiteral {
                     value: str_literal.value.clone(),
                 }),
                 ty: ResolvedType::Ptr(Box::new(ResolvedType::U8)),
-            });
+            })
         }
         Expression::BoolLiteral(bool_literal) => {
-            return Ok(resolved_ast::ResolvedExpression {
+            Ok(resolved_ast::ResolvedExpression {
                 kind: resolved_ast::ExpressionKind::BoolLiteral(resolved_ast::BoolLiteral {
                     value: bool_literal.value,
                 }),
                 ty: ResolvedType::Bool,
-            });
+            })
         }
         Expression::StructLiteral(struct_literal_expr) => {
             let mut resolved_fields = Vec::new();
@@ -368,10 +366,10 @@ pub(crate) fn resolve_expression(
                 type_defs,
                 &sizeof_expr.ty,
             )?;
-            return Ok(resolved_ast::ResolvedExpression {
+            Ok(resolved_ast::ResolvedExpression {
                 kind: resolved_ast::ExpressionKind::SizeOf(resolved_ty),
                 ty: ResolvedType::USize,
-            });
+            })
         }
         Expression::If(if_expr) => {
             let condition_expr = resolve_expression(
@@ -422,14 +420,14 @@ pub(crate) fn resolve_expression(
                     },
                 ));
             }
-            return Ok(resolved_ast::ResolvedExpression {
+            Ok(resolved_ast::ResolvedExpression {
                 ty: then_expr.ty.clone(),
                 kind: resolved_ast::ExpressionKind::If(resolved_ast::IfExpr {
                     cond: Box::new(condition_expr),
                     then: Box::new(then_expr),
                     els: Box::new(else_expr),
                 }),
-            });
+            })
         }
-    };
+    }
 }

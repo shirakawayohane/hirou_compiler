@@ -46,7 +46,7 @@ fn parse_arguments(input: Span) -> NotLocatedParseResult<Vec<Argument>> {
     let (mut rest, _) = lparen(input)?;
     loop {
         (rest, _) = skip0(rest)?;
-        if rest.starts_with(")") {
+        if rest.starts_with(')') {
             break;
         }
         let arg;
@@ -143,7 +143,7 @@ fn parse_function_decl(input: Span) -> ParseResult<FunctionDecl> {
                 ),
             )),
             |(_, name, generic_args, params, ty)| FunctionDecl {
-                name: name.into(),
+                name,
                 generic_args,
                 args: params,
                 return_type: ty,
@@ -159,7 +159,7 @@ pub fn parse_block(input: Span) -> NotLocatedParseResult<Vec<Located<Statement>>
     let (s, _) = skip0(s)?;
     let mut statements = Vec::new();
     let mut s = s;
-    while !s.starts_with("}") {
+    while !s.starts_with('}') {
         let (rest, stmt) = parse_statement(s)?;
         statements.push(stmt);
         (s, _) = skip0(rest)?;
@@ -195,7 +195,7 @@ fn parse_struct(input: Span) -> ParseResult<TopLevel> {
         let mut rest = input;
         loop {
             (rest, _) = skip0(rest)?;
-            if rest.starts_with("}") {
+            if rest.starts_with('}') {
                 break;
             }
             let field;

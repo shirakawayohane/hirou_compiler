@@ -65,7 +65,7 @@ fn main() {
                 .fmt_with_source(
                     &mut stdout,
                     relative_path.to_str().unwrap(),
-                    &input.fragment(),
+                    input.fragment(),
                 )
                 .unwrap();
         }

@@ -28,7 +28,7 @@ pub(crate) fn mangle_fn_name(
     ret: &ResolvedType,
 ) -> String {
     let mut mangled_name = name.to_owned();
-    mangled_name.push_str("(");
+    mangled_name.push('(');
     // for arg in arg_type_scopes {
     //     mangled_name.push_str(&arg.to_string());
     //     mangled_name.push_str(",");
@@ -40,7 +40,7 @@ pub(crate) fn mangle_fn_name(
             .collect::<Vec<_>>()
             .join(","),
     );
-    mangled_name.push_str(")");
+    mangled_name.push(')');
     mangled_name.push_str("->");
     mangled_name.push_str(&ret.to_string());
     mangled_name
@@ -181,7 +181,7 @@ fn resolve_function<'a>(
                         errors,
                         type_scopes.borrow_mut().deref_mut(),
                         type_defs,
-                        &arg_ty,
+                        arg_ty,
                     )?;
                     scopes.borrow_mut().add(arg_name.clone(), arg_type.clone());
                     resolved_args.push(resolved_ast::Argument::Normal(arg_type, arg_name.clone()));
@@ -220,7 +220,7 @@ fn resolve_function<'a>(
         }
         // 必ずReturnするための特別な処理
         if !current_fn.decl.is_intrinsic {
-            if resolved_statements.len() == 0 {
+            if resolved_statements.is_empty() {
                 resolved_statements.push(resolved_ast::Statement::Return(resolved_ast::Return {
                     expression: None,
                 }));

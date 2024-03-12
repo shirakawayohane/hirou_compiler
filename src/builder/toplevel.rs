@@ -43,11 +43,7 @@ impl<'a> LLVMCodeGenerator<'a> {
             }
         }
 
-        let return_ty = if let Some(ty) = self.type_to_basic_type_enum(&function.decl.return_type) {
-            Some(ty)
-        } else {
-            None
-        };
+        let return_ty = self.type_to_basic_type_enum(&function.decl.return_type);
         let function = self.llvm_module.add_function(
             &function.decl.name,
             if let Some(return_ty) = return_ty {
@@ -89,7 +85,7 @@ impl<'a> LLVMCodeGenerator<'a> {
     }
 
     pub(super) fn gen_function_body(&mut self, function: &'a Function) -> Result<(), BuilderError> {
-        if function.body.len() == 0 {
+        if function.body.is_empty() {
             return Ok(());
         }
         let returns_struct = match function.decl.return_type {
@@ -129,7 +125,7 @@ impl<'a> LLVMCodeGenerator<'a> {
                 parameter.set_name(name.as_str());
                 let allocated_pointer = self
                     .llvm_builder
-                    .build_alloca(parameter.get_type(), &name)
+                    .build_alloca(parameter.get_type(), name)
                     .unwrap();
                 self.llvm_builder
                     .build_store(allocated_pointer, parameter)
@@ -163,7 +159,7 @@ impl<'a> LLVMCodeGenerator<'a> {
                                     8,
                                     struct_ptr,
                                     8,
-                                    struct_ty.size_of().unwrap().into(),
+                                    struct_ty.size_of().unwrap(),
                                 )?;
                                 self.llvm_builder.build_return(None)?;
                                 continue;
@@ -172,7 +168,7 @@ impl<'a> LLVMCodeGenerator<'a> {
                         }
                     }
                 }
-                self.gen_statement(&statement)?;
+                self.gen_statement(statement)?;
             }
         }
         self.pop_scope();
