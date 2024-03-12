@@ -2,10 +2,10 @@ use nom::{
     branch::alt,
     bytes::complete::tag,
     character::complete::{digit1, none_of},
-    combinator::{cut, map, opt},
+    combinator::{cut, opt},
     error::context,
     multi::many0,
-    sequence::{delimited, preceded, tuple},
+    sequence::{preceded, tuple},
 };
 
 use crate::ast::*;

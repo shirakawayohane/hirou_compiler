@@ -1,6 +1,6 @@
 use nom::{
     branch::alt,
-    combinator::{map, opt},
+    combinator::opt,
     error::context,
     sequence::{pair, preceded},
 };
@@ -8,7 +8,7 @@ use nom::{
 use crate::ast::*;
 
 use super::*;
-use super::{token::*, util::located, NotLocatedParseResult, ParseResult, Span};
+use super::{token::*, util::located};
 
 pub(super) fn parse_generic_argument_decls<'a>(
     input: Span<'a>,

@@ -1,12 +1,11 @@
-use crate::ast::{Expression, Located, Position, Range};
+use crate::ast::{Expression, Position, Range};
 
 use super::{expression::parse_boxed_expression, token::*, *};
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_till},
     character::complete::{line_ending, multispace1},
-    combinator::{eof, map},
-    error::VerboseError,
+    combinator::eof,
     multi::many0,
     sequence::{preceded, tuple},
     Parser,

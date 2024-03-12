@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs::read_to_string, io::Write, path::Path};
+use std::{collections::HashMap, fs::read_to_string, path::Path};
 mod ast;
 mod builder;
 mod parser;
@@ -6,7 +6,7 @@ mod resolved_ast;
 mod resolver;
 
 use builder::TargetPlatform;
-use clap::{command, error, Parser};
+use clap::{command, Parser};
 use inkwell::{context::Context as LLVMContext, OptimizationLevel};
 use nom::{
     error::{convert_error, VerboseError},

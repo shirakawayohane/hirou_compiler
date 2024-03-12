@@ -26,20 +26,6 @@ pub enum ScopeKind {
 }
 
 #[derive(Debug)]
-pub struct VariableRegistration<'a> {
-    pub ns: String,
-    pub resolved_ty: ResolvedType,
-    pub value: PointerValue<'a>,
-}
-
-#[derive(Debug)]
-pub struct TypeRegistration<'a> {
-    pub ns: String,
-    pub name: String,
-    pub resolved_ty: &'a ResolvedType,
-}
-
-#[derive(Debug)]
 pub struct Scope<'a> {
     pub kind: ScopeKind,
     pub values: HashMap<String, PointerValue<'a>>,

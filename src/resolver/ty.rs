@@ -1,13 +1,6 @@
-use std::{
-    borrow::{Borrow, BorrowMut},
-    ops::Deref,
-};
+use std::borrow::BorrowMut;
 
-use crate::{
-    ast::{self, UnresolvedType},
-    in_new_scope,
-    resolved_ast::{ResolvedStructType, ResolvedType},
-};
+use crate::{in_new_scope, resolved_ast::ResolvedStructType};
 
 #[cfg(test)]
 use resolved_ast::{I32_TYPE_NAME, USIZE_TYPE_NAME};

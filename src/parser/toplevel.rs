@@ -8,9 +8,9 @@ use super::{statement::parse_statement, token::*, util::*, *};
 use nom::{
     branch::alt,
     character::complete::space0,
-    combinator::{cut, map, opt},
+    combinator::{cut, opt},
     error::context,
-    sequence::{delimited, tuple},
+    sequence::tuple,
 };
 
 #[test]
