@@ -34,7 +34,6 @@ set -Ux LLVM_SYS_160_PREFIX /opt/homebrew/Cellar/llvm@16/16.0.6
 - 標準ライブラリの実装
 
 ## TODOリスト
-- boolおよび演算の実装
 - 使用箇所からのジェネリクス引数の推論
 - indexがintであるかの検証
 - structのフィールドにVoidを入れることは出来ないことの検証
@@ -44,7 +43,6 @@ set -Ux LLVM_SYS_160_PREFIX /opt/homebrew/Cellar/llvm@16/16.0.6
     - ベクタリテラル []
     - マップリテラル {}
     - セットリテラル #{}
-- 変数定義をS式に変える
 
 変数定義こうしようと思ってる
 ```
