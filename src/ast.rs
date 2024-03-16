@@ -3,6 +3,8 @@ use std::{
     ops::Deref,
 };
 
+use crate::common::StructKind;
+
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Default)]
 pub struct Position {
     pub line: u32,
@@ -327,14 +329,15 @@ pub struct Function {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct StructTypeDef {
+pub struct StructLikeTypeDef {
+    pub struct_kind: StructKind,
     pub generic_args: Option<Vec<Located<GenericArgument>>>,
     pub fields: Vec<(String, Located<UnresolvedType>)>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeDefKind {
-    Struct(StructTypeDef),
+    StructLike(StructLikeTypeDef),
 }
 
 #[derive(Debug, Clone, PartialEq)]

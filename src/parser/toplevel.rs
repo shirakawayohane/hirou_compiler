@@ -1,5 +1,6 @@
 use crate::{
     ast::*,
+    common::StructKind,
     parser::ty::{parse_generic_argument_decls, parse_type},
 };
 
@@ -183,39 +184,44 @@ fn parse_function(input: Span) -> ParseResult<TopLevel> {
     ))(input)
 }
 
-fn parse_struct(input: Span) -> ParseResult<TopLevel> {
-    fn parse_field(input: Span) -> NotLocatedParseResult<(String, Located<UnresolvedType>)> {
-        map(
-            tuple((parse_identifier, colon, located(parse_type))),
-            |(name, _, ty)| (name, ty.value),
-        )(input)
-    }
-    fn parse_fields(input: Span) -> NotLocatedParseResult<Vec<(String, Located<UnresolvedType>)>> {
-        let mut fields = Vec::new();
-        let mut rest = input;
-        loop {
-            (rest, _) = skip0(rest)?;
-            if rest.starts_with('}') {
-                break;
-            }
-            let field;
-            (rest, field) = parse_field(rest)?;
-            fields.push(field);
+fn parse_field(input: Span) -> NotLocatedParseResult<(String, Located<UnresolvedType>)> {
+    map(
+        tuple((parse_identifier, colon, located(parse_type))),
+        |(name, _, ty)| (name, ty.value),
+    )(input)
+}
+fn parse_fields(input: Span) -> NotLocatedParseResult<Vec<(String, Located<UnresolvedType>)>> {
+    let mut fields = Vec::new();
+    let mut rest = input;
+    loop {
+        (rest, _) = skip0(rest)?;
+        if rest.starts_with('}') {
+            break;
         }
-        Ok((rest, fields))
+        let field;
+        (rest, field) = parse_field(rest)?;
+        fields.push(field);
     }
+    Ok((rest, fields))
+}
+
+fn parse_struct(input: Span) -> ParseResult<TopLevel> {
     context(
         "struct",
         located(map(
             tuple((
-                struct_token,
+                alt((
+                    map(struct_token, |_| StructKind::Struct),
+                    map(record_token, |_| StructKind::Record),
+                )),
                 parse_identifier,
                 opt(parse_generic_argument_decls),
                 delimited(lbracket, parse_fields, rbracket),
             )),
-            |(_, name, generic_args, fields)| {
+            |(struct_kind, name, generic_args, fields)| {
                 TopLevel::TypeDef(TypeDef {
-                    kind: TypeDefKind::Struct(StructTypeDef {
+                    kind: TypeDefKind::StructLike(StructLikeTypeDef {
+                        struct_kind,
                         generic_args,
                         fields,
                     }),
@@ -252,4 +258,22 @@ fn print-i32(s: *u8, n: i32): void {
         .into(),
     );
     assert!(result.is_ok())
+}
+
+#[test]
+fn test_parse_record() {
+    assert!(matches!(
+        parse_toplevel(r#"record A { v: i32 }"#.into())
+            .unwrap()
+            .1
+            .value,
+        TopLevel::TypeDef(TypeDef {
+            name: _,
+            kind: TypeDefKind::StructLike(StructLikeTypeDef {
+                struct_kind: StructKind::Record,
+                generic_args: _,
+                fields: _
+            })
+        })
+    ))
 }

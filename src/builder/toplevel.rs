@@ -15,7 +15,7 @@ impl<'a> LLVMCodeGenerator<'a> {
         }
 
         let returns_struct = match function.decl.return_type {
-            ResolvedType::Struct(_) => true,
+            ResolvedType::StructLike(_) => true,
             _ => false,
         };
 
@@ -89,7 +89,7 @@ impl<'a> LLVMCodeGenerator<'a> {
             return Ok(());
         }
         let returns_struct = match function.decl.return_type {
-            ResolvedType::Struct(_) => true,
+            ResolvedType::StructLike(_) => true,
             _ => false,
         };
         let function_value = self.llvm_module.get_function(&function.decl.name).unwrap();

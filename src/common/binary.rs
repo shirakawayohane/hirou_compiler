@@ -104,6 +104,6 @@ pub(crate) fn get_cast_type(
         ResolvedType::Ptr(_) => panic!("Invalid type for binary expression"),
         ResolvedType::Void => panic!("Invalid type for binary expression"),
         ResolvedType::Unknown => panic!("Invalid type for binary expression"),
-        ResolvedType::Struct(_) => panic!("Invalid type for binary expression"),
+        ResolvedType::StructLike(_) => panic!("Invalid type for binary expression"),
     }
 }

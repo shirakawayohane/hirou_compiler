@@ -70,7 +70,7 @@ fn infer_generic_args_recursively(
             }
             if let Some(generic_args) = &return_ty_typeref.generic_args {
                 match current_annotation {
-                    ResolvedType::Struct(resolved_struct) => {
+                    ResolvedType::StructLike(resolved_struct) => {
                         if resolved_struct.non_generic_name == return_ty_typeref.name {
                             let mut generic_arg_inferred = false;
                             for (i, resolved_generic_ty) in

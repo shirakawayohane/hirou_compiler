@@ -46,7 +46,7 @@ impl LLVMCodeGenerator<'_> {
                 .unwrap()
                 .as_basic_value_enum(),
             ResolvedType::Unknown => unreachable!(),
-            ResolvedType::Struct(_) => unreachable!(),
+            ResolvedType::StructLike(_) => unreachable!(),
             ResolvedType::Bool => unreachable!(),
         }
     }

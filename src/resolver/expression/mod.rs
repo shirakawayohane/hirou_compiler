@@ -165,7 +165,7 @@ pub(crate) fn resolve_expression(
         }
         Expression::FieldAccess(field_access_expr) => {
             let target = resolve_expression(context, field_access_expr.target.as_deref(), None)?;
-            let resolved_ty = if let ResolvedType::Struct(struct_ty) = &target.ty {
+            let resolved_ty = if let ResolvedType::StructLike(struct_ty) = &target.ty {
                 if let Some((_name, ty)) = struct_ty
                     .fields
                     .iter()
@@ -236,7 +236,7 @@ pub(crate) fn resolve_expression(
                 });
             };
             let typedef = typedef.unwrap();
-            let TypeDefKind::Struct(struct_def) = &typedef.kind;
+            let TypeDefKind::StructLike(struct_def) = &typedef.kind;
 
             in_new_scope!(context.types, {
                 if let Some(generic_args_in_def) = &struct_def.generic_args {
@@ -312,7 +312,7 @@ pub(crate) fn resolve_expression(
                 },
             );
             Ok(resolved_ast::ResolvedExpression {
-                ty: ResolvedType::Struct(ResolvedStructType {
+                ty: ResolvedType::StructLike(ResolvedStructType {
                     name: struct_name,
                     non_generic_name: typedef.name.clone(),
                     fields: resolved_fields

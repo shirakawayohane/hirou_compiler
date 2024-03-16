@@ -58,7 +58,7 @@ impl LLVMCodeGenerator<'_> {
             ResolvedType::Ptr(_) => unreachable!(),
             ResolvedType::Void => unreachable!(),
             ResolvedType::Unknown => unreachable!(),
-            ResolvedType::Struct(_) => unreachable!(),
+            ResolvedType::StructLike(_) => unreachable!(),
             ResolvedType::Bool => unreachable!(),
         })
     }
@@ -134,7 +134,7 @@ impl LLVMCodeGenerator<'_> {
         field_access: &FieldAccessExpr,
         ty: &ResolvedType,
     ) -> Result<BasicValueEnum, BuilderError> {
-        if let ResolvedType::Struct(struct_ty) = &field_access.target.ty {
+        if let ResolvedType::StructLike(struct_ty) = &field_access.target.ty {
             let ty_enum = self.type_to_basic_type_enum(ty).unwrap();
             let index: usize = struct_ty
                 .fields
@@ -204,7 +204,7 @@ impl LLVMCodeGenerator<'_> {
         let function = *self.function_by_name.get(&call_expr.callee).unwrap();
         let func = self.gen_or_get_function(function);
         // 構造体を返す関数を呼ぶ場合、第一引数にスタックポインタを渡す
-        if let ResolvedType::Struct(_) = &function.decl.return_type {
+        if let ResolvedType::StructLike(_) = &function.decl.return_type {
             let return_ty = self
                 .type_to_basic_type_enum(&function.decl.return_type)
                 .unwrap();

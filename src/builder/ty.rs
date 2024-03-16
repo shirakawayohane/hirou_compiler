@@ -36,7 +36,7 @@ impl<'a> LLVMCodeGenerator<'a> {
             ResolvedType::Bool => BasicMetadataTypeEnum::IntType(self.llvm_context.bool_type()),
             ResolvedType::Void => return None,
             ResolvedType::Unknown => unimplemented!(),
-            ResolvedType::Struct(ResolvedStructType {
+            ResolvedType::StructLike(ResolvedStructType {
                 name,
                 fields,
                 generic_args: _,

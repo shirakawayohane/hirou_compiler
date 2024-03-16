@@ -32,7 +32,7 @@ pub enum ResolvedType {
     Ptr(Box<ResolvedType>),
     Void,
     Unknown,
-    Struct(ResolvedStructType),
+    StructLike(ResolvedStructType),
 }
 
 impl ResolvedType {
@@ -47,7 +47,7 @@ impl ResolvedType {
             ResolvedType::Ptr(_) => false,
             ResolvedType::Void => false,
             ResolvedType::Unknown => false,
-            ResolvedType::Struct(_) => false,
+            ResolvedType::StructLike(_) => false,
             ResolvedType::Bool => false,
         }
     }
@@ -59,7 +59,7 @@ impl ResolvedType {
         }
     }
     pub fn is_struct_type(&self) -> bool {
-        if let ResolvedType::Struct(_) = self {
+        if let ResolvedType::StructLike(_) = self {
             true
         } else {
             false
@@ -120,7 +120,7 @@ impl Display for ResolvedType {
                         return write!(f, "*{}", inner);
                     }
                     ResolvedType::Unknown => UNKNOWN_TYPE_NAME,
-                    ResolvedType::Struct(ResolvedStructType {
+                    ResolvedType::StructLike(ResolvedStructType {
                         name,
                         fields: _,
                         generic_args: _,

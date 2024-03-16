@@ -9,6 +9,10 @@ struct Vec<T> {
   buf: *T,
 }
 
+record Person {
+  age: i32,
+}
+
 fn g_malloc<T>(size: usize) : *T {
   (:= mem_size (* size (sizeof T)))
   (:= result: *T (malloc mem_size))
@@ -72,4 +76,3 @@ fn test_compare(): void {
 fn main(): void {
   (test_annotation_inference)
 }
- 

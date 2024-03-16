@@ -55,6 +55,7 @@ token_char!(slash, '/');
 token_char!(dot, '.');
 token_tag!(fn_token, "fn");
 token_tag!(struct_token, "struct");
+token_tag!(record_token, "record");
 token_tag!(return_token, "return");
 token_tag!(doublequote, "\"");
 token_tag!(threedots, "...");

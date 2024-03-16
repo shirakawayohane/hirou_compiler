@@ -1,4 +1,4 @@
-use crate::{in_new_scope, resolved_ast::ResolvedStructType};
+use crate::{common::StructKind, in_new_scope, resolved_ast::ResolvedStructType};
 
 #[cfg(test)]
 use resolved_ast::{I32_TYPE_NAME, USIZE_TYPE_NAME};
@@ -13,7 +13,7 @@ pub(super) fn resolve_type(
         UnresolvedType::TypeRef(typ_ref) => {
             if let Some(type_def) = context.type_defs.borrow().get(&typ_ref.name) {
                 match &type_def.kind {
-                    TypeDefKind::Struct(struct_def) => {
+                    TypeDefKind::StructLike(struct_def) => {
                         let mut resolved_generic_args = Vec::new();
                         if let Some(generic_args) = &typ_ref.generic_args {
                             if let Some(generic_args_in_def) = &struct_def.generic_args {
@@ -39,7 +39,7 @@ pub(super) fn resolve_type(
                                                 resolved_generic_arg.clone(),
                                             )
                                         }
-                                        Ok(ResolvedType::Struct(ResolvedStructType {
+                                        Ok(ResolvedType::StructLike(ResolvedStructType {
                                             name: get_resolved_struct_name(
                                                 &type_def.name,
                                                 Some(&resolved_generic_args),
@@ -83,7 +83,7 @@ pub(super) fn resolve_type(
                             ));
                             Ok(ResolvedType::Unknown)
                         } else {
-                            Ok(ResolvedType::Struct(ResolvedStructType {
+                            Ok(ResolvedType::StructLike(ResolvedStructType {
                                 name: get_resolved_struct_name(&type_def.name, None),
                                 fields: struct_def
                                     .fields
@@ -154,7 +154,8 @@ fn test_resolve_type() {
         "Vec".to_string(),
         TypeDef {
             name: "Vec".to_string(),
-            kind: TypeDefKind::Struct(StructTypeDef {
+            kind: TypeDefKind::StructLike(StructLikeTypeDef {
+                struct_kind: StructKind::Struct,
                 fields: vec![
                     (
                         "ptr".to_string(),
@@ -206,7 +207,7 @@ fn test_resolve_type() {
     assert_eq!(context.errors.borrow().len(), 0);
     assert_eq!(
         resolved_ty,
-        ResolvedType::Struct(ResolvedStructType {
+        ResolvedType::StructLike(ResolvedStructType {
             name: "Vec<i32>".to_string(),
             non_generic_name: "Vec".to_string(),
             fields: vec![
