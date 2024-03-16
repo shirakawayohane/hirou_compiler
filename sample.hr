@@ -63,6 +63,13 @@ fn test_condition(): void {
     (printf "true in when"))
 }
 
-fn main(): void {
-  (test_condition)
+fn test_compare(): void {
+  (if (or (and (not (= 1 0)) (> 20 10) (< 20 30) (>= 10 10) (<= 10 10)) false)
+    (printf "true!")
+    (printf "unreachable\n"))
 }
+
+fn main(): void {
+  (test_compare)
+}
+ 

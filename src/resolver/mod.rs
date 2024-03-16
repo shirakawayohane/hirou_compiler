@@ -7,7 +7,8 @@ mod ty;
 use std::{cell::RefCell, collections::HashMap, ops::DerefMut, rc::Rc};
 
 use crate::{
-    ast::{self},
+    ast,
+    common::target::PointerSizedIntWidth,
     resolved_ast::{self, ResolvedType},
     resolver::ty::resolve_type,
 };
@@ -162,6 +163,7 @@ fn resolve_function(
     function_by_name: &HashMap<String, ast::Function>,
     resolved_functions: &mut HashMap<String, resolved_ast::Function>,
     current_fn: &ast::Function,
+    ptr_sized_int_type: PointerSizedIntWidth,
 ) -> Result<(), FaitalError> {
     let result_type = resolve_type(
         errors,
@@ -216,6 +218,7 @@ fn resolve_function(
                 function_by_name,
                 resolved_functions,
                 statement,
+                ptr_sized_int_type,
             )?);
         }
         // 必ずReturnするための特別な処理
@@ -288,6 +291,7 @@ pub(crate) fn resolve_module(
     resolved_functions: &mut HashMap<String, resolved_ast::Function>,
     module: &crate::ast::Module,
     is_build_only: bool,
+    ptr_sized_int_type: PointerSizedIntWidth,
 ) -> Result<crate::resolved_ast::Module, FaitalError> {
     let mut function_by_name = HashMap::new();
     let mut type_defs = HashMap::new();
@@ -326,6 +330,7 @@ pub(crate) fn resolve_module(
         &function_by_name,
         resolved_functions,
         main_fn,
+        ptr_sized_int_type,
     )?;
 
     for resolved_function in resolved_functions.values() {
@@ -352,6 +357,7 @@ pub(crate) fn resolve_module(
                         &function_by_name,
                         resolved_functions,
                         unresolved_function,
+                        ptr_sized_int_type,
                     )?;
                     for resolved_function in resolved_functions.values() {
                         resolved_toplevels

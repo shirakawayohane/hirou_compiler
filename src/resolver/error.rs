@@ -20,9 +20,9 @@ pub enum CompileErrorKind {
     IsNotType { name: String },
     #[error("`{name:?}` is not a variable")]
     IsNotVariable { name: String },
-    #[error("Invalid operand.")]
-    InvalidOperand(String),
-    #[error("Invalid operand.")]
+    #[error("Invalid operand. Expected numeric value, but got `{actual:?}`")]
+    InvalidNumericOperand { actual: ResolvedType },
+    #[error("Invalid argument.")]
     InvalidArgument,
     #[error("Type does not match. expected `{expected}`, but got `{actual}`")]
     TypeMismatch {

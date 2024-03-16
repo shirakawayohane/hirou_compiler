@@ -1,4 +1,5 @@
 mod assignment;
+mod binary;
 mod call;
 mod variable_decl;
 
@@ -6,16 +7,21 @@ use std::ops::DerefMut;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::ast::{Expression, Located, TypeDefKind};
+use crate::common::target::PointerSizedIntWidth;
 use crate::resolved_ast::{ExpressionKind, ResolvedExpression, ResolvedStructType, ResolvedType};
 use crate::resolver::ty::resolve_type;
 use crate::{ast, in_global_scope, in_new_scope, resolved_ast};
 
 use self::assignment::resolve_assignment;
+use self::binary::resolve_binary_expression;
 use self::call::resolve_call_expr;
 use self::variable_decl::resolve_variable_decl;
 
 use super::ty::get_resolved_struct_name;
-use super::{error::*, mangle_fn_name, resolve_function, TypeScopes, VariableScopes};
+use super::{
+    error::*, mangle_fn_name, resolve_function, BinaryOp, MultiOp, TypeScopes, UnaryOp,
+    VariableScopes,
+};
 
 pub(crate) fn resolve_expression(
     errors: &mut Vec<CompileError>,
@@ -26,6 +32,7 @@ pub(crate) fn resolve_expression(
     resolved_functions: &mut HashMap<String, resolved_ast::Function>,
     loc_expr: Located<&ast::Expression>,
     annotation: Option<&ResolvedType>,
+    ptr_sized_int_type: PointerSizedIntWidth,
 ) -> Result<resolved_ast::ResolvedExpression, FaitalError> {
     match loc_expr.value {
         Expression::VariableRef(variable_ref) => {
@@ -76,35 +83,83 @@ pub(crate) fn resolve_expression(
 
             Ok(ResolvedExpression { ty, kind })
         }
-        Expression::BinaryExpr(bin_expr) => {
-            let lhs = resolve_expression(
+        Expression::Binary(bin_expr) => resolve_binary_expression(
+            errors,
+            types.clone(),
+            scopes.clone(),
+            type_defs,
+            function_by_name,
+            resolved_functions,
+            &Located::transfer(loc_expr, bin_expr),
+            ptr_sized_int_type,
+        ),
+        Expression::Unary(unary_expr) => {
+            let operand = resolve_expression(
                 errors,
                 types.clone(),
                 scopes.clone(),
                 type_defs,
                 function_by_name,
                 resolved_functions,
-                bin_expr.lhs.as_deref(),
+                unary_expr.operand.as_deref(),
                 None,
+                ptr_sized_int_type,
             )?;
-            let rhs = resolve_expression(
-                errors,
-                types.clone(),
-                scopes.clone(),
-                type_defs,
-                function_by_name,
-                resolved_functions,
-                bin_expr.rhs.as_deref(),
-                None,
-            )?;
+            if matches!(unary_expr.op, UnaryOp::Not) && !matches!(operand.ty, ResolvedType::Bool) {
+                errors.push(CompileError::new(
+                    loc_expr.range,
+                    CompileErrorKind::TypeMismatch {
+                        expected: ResolvedType::Bool,
+                        actual: operand.ty.clone(),
+                    },
+                ));
+            }
             Ok(resolved_ast::ResolvedExpression {
-                kind: resolved_ast::ExpressionKind::BinaryExpr(resolved_ast::BinaryExpr {
-                    op: bin_expr.op,
-                    lhs: Box::new(lhs),
-                    rhs: Box::new(rhs),
+                kind: resolved_ast::ExpressionKind::Unary(resolved_ast::UnaryExpr {
+                    op: unary_expr.op,
+                    operand: Box::new(operand),
                 }),
-                ty: ResolvedType::I32,
+                ty: ResolvedType::Bool,
             })
+        }
+        Expression::Multi(multi_expr) => {
+            let mut resolved_operands = Vec::new();
+            for operand in &multi_expr.operands {
+                let resolved_operand = resolve_expression(
+                    errors,
+                    types.clone(),
+                    scopes.clone(),
+                    type_defs,
+                    function_by_name,
+                    resolved_functions,
+                    operand.as_deref(),
+                    None,
+                    ptr_sized_int_type,
+                )?;
+                resolved_operands.push(resolved_operand);
+            }
+            match multi_expr.op {
+                MultiOp::And | MultiOp::Or => {
+                    for operand in &resolved_operands {
+                        if !matches!(operand.ty, ResolvedType::Bool) {
+                            errors.push(CompileError::new(
+                                loc_expr.range,
+                                CompileErrorKind::TypeMismatch {
+                                    expected: ResolvedType::Bool,
+                                    actual: operand.ty.clone(),
+                                },
+                            ));
+                        }
+                    }
+                    Ok(resolved_ast::ResolvedExpression {
+                        kind: resolved_ast::ExpressionKind::Multi(resolved_ast::MultiExpr {
+                            op: multi_expr.op,
+                            operands: resolved_operands,
+                        }),
+                        ty: ResolvedType::Bool,
+                    })
+                }
+            }
         }
         Expression::Call(call_expr) => resolve_call_expr(
             errors,
@@ -115,6 +170,7 @@ pub(crate) fn resolve_expression(
             resolved_functions,
             &Located::transfer(loc_expr, call_expr),
             annotation,
+            ptr_sized_int_type,
         ),
         Expression::DerefExpr(deref_expr) => {
             let target = resolve_expression(
@@ -126,6 +182,7 @@ pub(crate) fn resolve_expression(
                 resolved_functions,
                 deref_expr.target.as_deref(),
                 None,
+                ptr_sized_int_type,
             )?;
             Ok(resolved_ast::ResolvedExpression {
                 kind: resolved_ast::ExpressionKind::Deref(resolved_ast::DerefExpr {
@@ -144,6 +201,7 @@ pub(crate) fn resolve_expression(
                 resolved_functions,
                 index_access_expr.target.as_deref(),
                 None,
+                ptr_sized_int_type,
             )?;
             let index = resolve_expression(
                 errors,
@@ -154,6 +212,7 @@ pub(crate) fn resolve_expression(
                 resolved_functions,
                 index_access_expr.index.as_deref(),
                 Some(&ResolvedType::USize),
+                ptr_sized_int_type,
             )?;
             let resolved_ty = if let ResolvedType::Ptr(ptr) = &target.ty {
                 *ptr.clone()
@@ -184,6 +243,7 @@ pub(crate) fn resolve_expression(
                 resolved_functions,
                 field_access_expr.target.as_deref(),
                 None,
+                ptr_sized_int_type,
             )?;
             let resolved_ty = if let ResolvedType::Struct(struct_ty) = &target.ty {
                 if let Some((_name, ty)) = struct_ty
@@ -311,6 +371,7 @@ pub(crate) fn resolve_expression(
                         resolved_functions,
                         field_in_expr.1.as_deref(),
                         Some(&expected_ty.clone()),
+                        ptr_sized_int_type,
                     )?;
 
                     if !expected_ty.can_insert(&resolved_field.ty) {
@@ -376,6 +437,7 @@ pub(crate) fn resolve_expression(
                 resolved_functions,
                 if_expr.cond.as_deref(),
                 Some(&ResolvedType::Bool),
+                ptr_sized_int_type,
             )?;
             if !matches!(condition_expr.ty, ResolvedType::Bool) {
                 errors.push(CompileError::new(
@@ -395,6 +457,7 @@ pub(crate) fn resolve_expression(
                 resolved_functions,
                 if_expr.then.as_deref(),
                 annotation,
+                ptr_sized_int_type,
             )?;
             let else_expr = resolve_expression(
                 errors,
@@ -405,6 +468,7 @@ pub(crate) fn resolve_expression(
                 resolved_functions,
                 if_expr.els.as_deref(),
                 annotation,
+                ptr_sized_int_type,
             )?;
             if then_expr.ty != else_expr.ty {
                 errors.push(CompileError::new(
@@ -434,6 +498,7 @@ pub(crate) fn resolve_expression(
                 resolved_functions,
                 when_expr.cond.as_deref(),
                 Some(&ResolvedType::Bool),
+                ptr_sized_int_type,
             )?;
             if !matches!(condition_expr.ty, ResolvedType::Bool) {
                 errors.push(CompileError::new(
@@ -453,6 +518,7 @@ pub(crate) fn resolve_expression(
                 resolved_functions,
                 when_expr.then.as_deref(),
                 annotation,
+                ptr_sized_int_type,
             )?;
             Ok(resolved_ast::ResolvedExpression {
                 ty: ResolvedType::Void,
@@ -470,6 +536,7 @@ pub(crate) fn resolve_expression(
             function_by_name,
             resolved_functions,
             &Located::transfer(loc_expr, assign_expr),
+            ptr_sized_int_type,
         ),
         Expression::VariableDecl(variable_decl_expr) => resolve_variable_decl(
             errors,
@@ -479,6 +546,7 @@ pub(crate) fn resolve_expression(
             function_by_name,
             resolved_functions,
             &Located::transfer(loc_expr, variable_decl_expr),
+            ptr_sized_int_type,
         ),
     }
 }

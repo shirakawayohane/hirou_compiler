@@ -1,4 +1,4 @@
-use crate::ast::UnresolvedType;
+use crate::{ast::UnresolvedType, common::target::PointerSizedIntWidth};
 
 use super::*;
 
@@ -11,6 +11,7 @@ pub fn resolve_call_with_generic_args(
     resolved_functions: &mut HashMap<String, resolved_ast::Function>,
     call_expr: &Located<&ast::CallExpr>,
     callee: &ast::Function,
+    ptr_sized_int_type: PointerSizedIntWidth,
     // 推論に成功した場合のみtrueを返す
 ) -> Result<bool, FaitalError> {
     if let Some(generic_args) = &callee.decl.generic_args {
@@ -52,6 +53,7 @@ pub fn resolve_call_with_generic_args(
                         function_by_name,
                         resolved_functions,
                         callee,
+                        ptr_sized_int_type,
                     )?;
                 });
             });
@@ -71,6 +73,7 @@ fn infer_generic_args_recursively(
     callee: &ast::Function,
     current_callee_return_ty: &UnresolvedType,
     current_annotation: &ResolvedType,
+    ptr_sized_int_type: PointerSizedIntWidth,
 ) -> Result<bool, FaitalError> {
     let callee_generic_args = callee.decl.generic_args.as_ref().unwrap();
     match current_callee_return_ty {
@@ -106,6 +109,7 @@ fn infer_generic_args_recursively(
                                     callee,
                                     &generic_args[i],
                                     &resolved_generic_ty[i],
+                                    ptr_sized_int_type,
                                 )? {
                                     generic_arg_inferred = true;
                                 }
@@ -135,6 +139,7 @@ fn infer_generic_args_recursively(
                     callee,
                     return_ty_pointer_ty,
                     inner,
+                    ptr_sized_int_type,
                 )? {
                     resolve_function(
                         errors,
@@ -144,6 +149,7 @@ fn infer_generic_args_recursively(
                         function_by_name,
                         resolved_functions,
                         callee,
+                        ptr_sized_int_type,
                     )?;
                     return Ok(true);
                 }
@@ -166,6 +172,7 @@ pub fn resolve_infer_generic_from_arguments(
     call_expr: &Located<&ast::CallExpr>,
     callee: &ast::Function,
     resolved_args: &[ResolvedExpression], // 推論に成功した場合のみtrueを返す
+    ptr_sized_int_type: PointerSizedIntWidth,
 ) -> Result<bool, FaitalError> {
     if call_expr.generic_args.is_some() {
         return Ok(false);
@@ -202,6 +209,7 @@ pub fn resolve_infer_generic_from_arguments(
                             callee,
                             callee_ty,
                             &resolved_args[arg_idx].ty.clone(),
+                            ptr_sized_int_type,
                         )? {
                             inferred = true;
                         }
@@ -216,6 +224,7 @@ pub fn resolve_infer_generic_from_arguments(
                 function_by_name,
                 resolved_functions,
                 callee,
+                ptr_sized_int_type,
             )?;
         });
     });
@@ -237,6 +246,7 @@ pub fn resolve_infer_generic_from_annotation(
     call_expr: &Located<&ast::CallExpr>,
     callee: &ast::Function,
     annotation: Option<&ResolvedType>,
+    ptr_sized_int_type: PointerSizedIntWidth,
     // 推論に成功した場合のみtrueを返す
 ) -> Result<bool, FaitalError> {
     if call_expr.generic_args.is_some() {
@@ -259,6 +269,7 @@ pub fn resolve_infer_generic_from_annotation(
                     callee,
                     &callee.decl.return_type.value,
                     annotation,
+                    ptr_sized_int_type,
                 )?;
                 if inferred {
                     errors.extend(temp_errors);
@@ -270,6 +281,7 @@ pub fn resolve_infer_generic_from_annotation(
                         function_by_name,
                         resolved_functions,
                         callee,
+                        ptr_sized_int_type,
                     )?;
                 }
                 Ok(inferred)
@@ -288,6 +300,7 @@ pub fn resolve_non_generic_function(
     function_by_name: &HashMap<String, ast::Function>,
     resolved_functions: &mut HashMap<String, resolved_ast::Function>,
     callee: &ast::Function,
+    ptr_sized_int_type: PointerSizedIntWidth,
     // 推論に成功した場合のみtrueを返す
 ) -> Result<bool, FaitalError> {
     if callee.decl.generic_args.is_some() {
@@ -303,6 +316,7 @@ pub fn resolve_non_generic_function(
                 function_by_name,
                 resolved_functions,
                 callee,
+                ptr_sized_int_type,
             )?;
         });
     });
@@ -318,6 +332,7 @@ pub fn resolve_call_expr(
     resolved_functions: &mut HashMap<String, resolved_ast::Function>,
     call_expr: &Located<&ast::CallExpr>,
     annotation: Option<&ResolvedType>,
+    ptr_sized_int_type: PointerSizedIntWidth,
 ) -> Result<ResolvedExpression, FaitalError> {
     let callee = match function_by_name.get(&call_expr.name) {
         Some(callee) => callee,
@@ -344,6 +359,7 @@ pub fn resolve_call_expr(
         function_by_name,
         resolved_functions,
         callee,
+        ptr_sized_int_type,
     )? && !resolve_call_with_generic_args(
         errors,
         types.clone(),
@@ -353,6 +369,7 @@ pub fn resolve_call_expr(
         resolved_functions,
         call_expr,
         callee,
+        ptr_sized_int_type,
     )? && !resolve_infer_generic_from_annotation(
         errors,
         types.clone(),
@@ -363,6 +380,7 @@ pub fn resolve_call_expr(
         call_expr,
         callee,
         annotation,
+        ptr_sized_int_type,
     )? {
         inferred = false;
     }
@@ -402,6 +420,7 @@ pub fn resolve_call_expr(
                     resolved_functions,
                     arg.as_inner_deref(),
                     None,
+                    ptr_sized_int_type,
                 )?);
             }
             ast::Argument::Normal(ty, _name) => {
@@ -416,6 +435,7 @@ pub fn resolve_call_expr(
                     resolved_functions,
                     arg.as_inner_deref(),
                     Some(&resolved_ty),
+                    ptr_sized_int_type,
                 )?;
                 if !resolved_ty.can_insert(&resolved_arg.ty) {
                     dbg!(errors.push(CompileError::new(
@@ -443,6 +463,7 @@ pub fn resolve_call_expr(
             call_expr,
             callee,
             &resolved_args,
+            ptr_sized_int_type,
         )?
     {
         dbg!(errors.push(CompileError::new(

@@ -48,7 +48,6 @@ token_char!(langlebracket, '<');
 token_char!(ranglebracket, '>');
 token_char!(comma, ',');
 token_char!(colon, ':');
-token_char!(equals, '=');
 token_char!(plus, '+');
 token_char!(minus, '-');
 token_char!(asterisk, '*');
@@ -64,6 +63,15 @@ token_tag!(if_token, "if");
 token_tag!(when_token, "when");
 token_tag!(var_decl_token, ":=");
 token_tag!(assign_token, ":=<");
+token_tag!(and_token, "and");
+token_tag!(or_token, "or");
+token_tag!(not_token, "not");
+token_tag!(eq_token, "=");
+token_tag!(neq_token, "!=");
+token_tag!(gte_token, ">=");
+token_tag!(lte_token, "<=");
+token_tag!(gt_token, ">");
+token_tag!(lt_token, "<");
 
 #[inline(always)]
 pub(super) fn parse_identifier(input: Span) -> NotLocatedParseResult<String> {

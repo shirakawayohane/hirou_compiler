@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::ast::{Located, Statement};
+use crate::common::target::PointerSizedIntWidth;
 use crate::resolved_ast::{self};
 
 use crate::ast;
@@ -21,6 +22,7 @@ pub fn resolve_statement(
     function_by_name: &HashMap<String, ast::Function>,
     resolved_functions: &mut HashMap<String, resolved_ast::Function>,
     loc_statement: &Located<ast::Statement>,
+    ptr_sized_int_type: PointerSizedIntWidth,
 ) -> Result<resolved_ast::Statement, FaitalError> {
     Ok(match &loc_statement.value {
         Statement::Return(ret) => {
@@ -35,6 +37,7 @@ pub fn resolve_statement(
                         resolved_functions,
                         expr.as_ref(),
                         None,
+                        ptr_sized_int_type,
                     )?),
                 })
             } else {
@@ -51,6 +54,7 @@ pub fn resolve_statement(
                 resolved_functions,
                 effect.expression.as_ref(),
                 None,
+                ptr_sized_int_type,
             )?,
         }),
     })

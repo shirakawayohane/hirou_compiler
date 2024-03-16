@@ -1,12 +1,15 @@
+mod binary;
+mod multi;
+mod unary;
+
+use super::*;
+use crate::resolved_ast::*;
 use inkwell::{
     builder::BuilderError,
     types::BasicType,
     values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum},
     AddressSpace,
 };
-
-use super::*;
-use crate::{ast::BinaryOp, resolved_ast::*};
 
 impl LLVMCodeGenerator<'_> {
     fn eval_u8(&self, value_str: &str) -> BasicValueEnum {
@@ -171,64 +174,6 @@ impl LLVMCodeGenerator<'_> {
             .llvm_builder
             .build_load(pointee_ty, ptr.into_pointer_value(), "")?;
         Ok(value)
-    }
-    fn eval_binary_expr(&self, binary_expr: &BinaryExpr) -> Result<BasicValueEnum, BuilderError> {
-        let mut left = self.gen_expression(&binary_expr.lhs)?.unwrap();
-        let mut right = self.gen_expression(&binary_expr.rhs)?.unwrap();
-
-        let (lhs_cast_type, rhs_cast_type) =
-            self.get_cast_type(&binary_expr.lhs.ty, &binary_expr.rhs.ty);
-
-        let mut result_type = ResolvedType::I32;
-        if let Some(lhs_cast_type) = lhs_cast_type {
-            left = self.gen_try_cast(left, &lhs_cast_type);
-            result_type = lhs_cast_type;
-        }
-        if let Some(rhs_cast_type) = rhs_cast_type {
-            right = self.gen_try_cast(right, &rhs_cast_type);
-            result_type = rhs_cast_type;
-        };
-
-        let value = match binary_expr.op {
-            BinaryOp::Add => {
-                if result_type.is_integer_type() {
-                    self.llvm_builder
-                        .build_int_add(left.into_int_value(), right.into_int_value(), "")
-                        .unwrap()
-                } else {
-                    unimplemented!()
-                }
-            }
-            BinaryOp::Sub => {
-                if result_type.is_integer_type() {
-                    self.llvm_builder
-                        .build_int_sub(left.into_int_value(), right.into_int_value(), "")
-                        .unwrap()
-                } else {
-                    unimplemented!()
-                }
-            }
-            BinaryOp::Mul => {
-                if result_type.is_integer_type() {
-                    self.llvm_builder
-                        .build_int_mul(left.into_int_value(), right.into_int_value(), "")
-                        .unwrap()
-                } else {
-                    unimplemented!()
-                }
-            }
-            BinaryOp::Div => {
-                if result_type.is_integer_type() {
-                    self.llvm_builder
-                        .build_int_unsigned_div(left.into_int_value(), right.into_int_value(), "")
-                        .unwrap()
-                } else {
-                    unimplemented!()
-                }
-            }
-        };
-
-        Ok(value.as_basic_value_enum())
     }
     fn eval_sizeof(&self, ty: &ResolvedType) -> BasicValueEnum {
         let size = self.type_to_basic_type_enum(ty).unwrap().size_of().unwrap();
@@ -415,7 +360,9 @@ impl LLVMCodeGenerator<'_> {
                 self.eval_index_access(index_access, &expr.ty).map(Some)
             }
             ExpressionKind::Deref(deref) => self.eval_deref(deref, &expr.ty).map(Some),
-            ExpressionKind::BinaryExpr(binary_expr) => self.eval_binary_expr(binary_expr).map(Some),
+            ExpressionKind::Binary(binary_expr) => self.eval_binary_expr(binary_expr).map(Some),
+            ExpressionKind::Unary(unary_expr) => self.eval_unary_expr(unary_expr).map(Some),
+            ExpressionKind::Multi(multi_expr) => self.eval_multi_expr(multi_expr).map(Some),
             ExpressionKind::CallExpr(call_expr) => self.eval_call_expr(call_expr),
             ExpressionKind::StringLiteral(string_literal) => {
                 self.eval_string_literal(string_literal).map(Some)

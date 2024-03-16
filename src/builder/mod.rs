@@ -1,14 +1,12 @@
 mod expression;
 mod statement;
-mod target;
 mod toplevel;
 mod ty;
-mod util;
 
 use inkwell::types::IntType;
 use inkwell::OptimizationLevel;
-pub use target::TargetPlatform;
 
+use crate::common::target::TargetPlatform;
 use crate::resolved_ast::*;
 use inkwell::builder::Builder as LLVMBuilder;
 use inkwell::context::Context as LLVMContext;

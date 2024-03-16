@@ -1,12 +1,13 @@
 use std::{collections::HashMap, fs::read_to_string, path::Path};
 mod ast;
 mod builder;
+mod common;
 mod parser;
 mod resolved_ast;
 mod resolver;
 
-use builder::TargetPlatform;
 use clap::{command, Parser};
+use common::target::{PointerSizedIntWidth, TargetPlatform};
 use inkwell::{context::Context as LLVMContext, OptimizationLevel};
 use nom::{
     error::{convert_error, VerboseError},
@@ -47,14 +48,20 @@ fn main() {
     let llvm_context: LLVMContext = LLVMContext::create();
     let mut errors = Vec::new();
     let mut resolved_functions = HashMap::new();
-    let resolved_module =
-        match resolver::resolve_module(&mut errors, &mut resolved_functions, &module, true) {
-            Ok(module) => module,
-            Err(err) => {
-                dbg!(err);
-                return;
-            }
-        };
+    let target_platform = TargetPlatform::DarwinArm64;
+    let resolved_module = match resolver::resolve_module(
+        &mut errors,
+        &mut resolved_functions,
+        &module,
+        true,
+        PointerSizedIntWidth::from(target_platform),
+    ) {
+        Ok(module) => module,
+        Err(err) => {
+            dbg!(err);
+            return;
+        }
+    };
     if !errors.is_empty() {
         let absolute_path = path.canonicalize().unwrap();
         let current_dir = std::env::current_dir().unwrap();
@@ -73,7 +80,7 @@ fn main() {
     }
     let mut llvm_codegenerator = builder::LLVMCodeGenerator::new(
         &llvm_context,
-        TargetPlatform::DarwinArm64,
+        target_platform,
         OptimizationLevel::None,
         &resolved_module,
     );

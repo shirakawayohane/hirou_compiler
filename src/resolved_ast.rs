@@ -1,6 +1,6 @@
 use std::fmt::{Display, Write};
 
-use crate::ast::BinaryOp;
+use crate::ast::{BinaryOp, MultiOp, UnaryOp};
 
 pub const VOID_TYPE_NAME: &str = "void";
 pub const U8_TYPE_NAME: &str = "u8";
@@ -49,6 +49,13 @@ impl ResolvedType {
             ResolvedType::Unknown => false,
             ResolvedType::Struct(_) => false,
             ResolvedType::Bool => false,
+        }
+    }
+    pub fn is_signed_integer_type(&self) -> bool {
+        match self {
+            ResolvedType::I32 => true,
+            ResolvedType::I64 => true,
+            _ => false,
         }
     }
     pub fn is_struct_type(&self) -> bool {
@@ -167,6 +174,18 @@ pub struct BinaryExpr {
 }
 
 #[derive(Debug, Clone)]
+pub struct UnaryExpr {
+    pub op: UnaryOp,
+    pub operand: Box<ResolvedExpression>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MultiExpr {
+    pub op: MultiOp,
+    pub operands: Vec<ResolvedExpression>,
+}
+
+#[derive(Debug, Clone)]
 pub struct DerefExpr {
     pub target: Box<ResolvedExpression>,
 }
@@ -204,7 +223,9 @@ pub enum ExpressionKind {
     StringLiteral(StringLiteral),
     StructLiteral(StructLiteral),
     BoolLiteral(BoolLiteral),
-    BinaryExpr(BinaryExpr),
+    Binary(BinaryExpr),
+    Unary(UnaryExpr),
+    Multi(MultiExpr),
     CallExpr(CallExpr),
     Deref(DerefExpr),
     IndexAccess(IndexAccessExor),

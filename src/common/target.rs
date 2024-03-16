@@ -1,6 +1,6 @@
 use std::env;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TargetPlatform {
     #[allow(unused)]
     Windows386,
@@ -292,6 +292,32 @@ impl Endianness {
         match self {
             Endianness::Little => "little",
             Endianness::Big => "big",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PointerSizedIntWidth {
+    ThirtyTwo,
+    SixtyFour,
+}
+
+impl From<TargetPlatform> for PointerSizedIntWidth {
+    fn from(target: TargetPlatform) -> Self {
+        match target {
+            TargetPlatform::Windows386
+            | TargetPlatform::Linux386
+            | TargetPlatform::FreeBSD386
+            | TargetPlatform::FreestandingWasm32
+            | TargetPlatform::JsWasm32
+            | TargetPlatform::WasiWasm32 => PointerSizedIntWidth::ThirtyTwo,
+            TargetPlatform::WindowsAmd64
+            | TargetPlatform::LinuxAmd64
+            | TargetPlatform::LinuxArm64
+            | TargetPlatform::DarwinAmd64
+            | TargetPlatform::DarwinArm64
+            | TargetPlatform::FreeBSDAmd64
+            | TargetPlatform::EssenceAmd64 => PointerSizedIntWidth::SixtyFour,
         }
     }
 }

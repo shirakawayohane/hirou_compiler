@@ -1,42 +1,6 @@
 use super::*;
 
-/*
-
-Statement::Assignment(assignment) => {
-            let resolved_expr = resolve_expression(
-                errors,
-                type_scopes.clone(),
-                scopes.clone(),
-                type_defs,
-                function_by_name,
-                resolved_functions,
-                assignment.expression.as_ref(),
-                None,
-            )?;
-            resolved_ast::Statement::Assignment(resolved_ast::Assignment {
-                name: assignment.name.clone(),
-                value: resolved_expr,
-                deref_count: assignment.deref_count as usize,
-                index_access: assignment
-                    .index_access
-                    .as_ref()
-                    .map(|x| {
-                        resolve_expression(
-                            errors,
-                            type_scopes.clone(),
-                            scopes.clone(),
-                            type_defs,
-                            function_by_name,
-                            resolved_functions,
-                            x.as_ref(),
-                            Some(&ResolvedType::USize),
-                        )
-                    })
-                    .transpose()?,
-            })
-        }*/
-
-use crate::resolver::AssignExpr;
+use crate::{common::target::PointerSizedIntWidth, resolver::AssignExpr};
 
 //上記を参考にして、Statementではなく、Effectとして扱うことにする
 pub(super) fn resolve_assignment(
@@ -47,6 +11,7 @@ pub(super) fn resolve_assignment(
     function_by_name: &HashMap<String, ast::Function>,
     resolved_functions: &mut HashMap<String, resolved_ast::Function>,
     assignment_expr: &Located<&AssignExpr>,
+    ptr_sized_int_type: PointerSizedIntWidth,
 ) -> Result<ResolvedExpression, FaitalError> {
     let resolved_expr = resolve_expression(
         errors,
@@ -57,6 +22,7 @@ pub(super) fn resolve_assignment(
         resolved_functions,
         assignment_expr.value.value.as_inner_deref(),
         None,
+        ptr_sized_int_type,
     )?;
     Ok(ResolvedExpression {
         ty: ResolvedType::Void,
@@ -77,6 +43,7 @@ pub(super) fn resolve_assignment(
                         resolved_functions,
                         x.as_inner_deref(),
                         Some(&ResolvedType::USize),
+                        ptr_sized_int_type,
                     )
                 })
                 .transpose()?

@@ -99,6 +99,23 @@ pub enum BinaryOp {
     Sub,
     Mul,
     Div,
+    Equals,
+    NotEquals,
+    LessThan,
+    LessThanOrEquals,
+    GreaterThan,
+    GreaterThanOrEquals,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum UnaryOp {
+    Not,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum MultiOp {
+    And,
+    Or,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -147,6 +164,18 @@ pub struct BinaryExpr {
     pub op: BinaryOp,
     pub lhs: LocatedExpr,
     pub rhs: LocatedExpr,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnaryExpr {
+    pub op: UnaryOp,
+    pub operand: LocatedExpr,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MultiExpr {
+    pub op: MultiOp,
+    pub operands: Vec<LocatedExpr>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -207,7 +236,9 @@ pub enum Expression {
     StringLiteral(StringLiteralExpr),
     BoolLiteral(BoolLiteralExpr),
     StructLiteral(StructLiteralExpr),
-    BinaryExpr(BinaryExpr),
+    Binary(BinaryExpr),
+    Unary(UnaryExpr),
+    Multi(MultiExpr),
     Call(CallExpr),
     DerefExpr(DerefExpr),
     IndexAccess(IndexAccessExpr),

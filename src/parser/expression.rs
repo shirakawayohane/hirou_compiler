@@ -5,7 +5,7 @@ use nom::{
     combinator::{cut, opt},
     error::context,
     multi::many0,
-    sequence::{preceded, tuple},
+    sequence::{pair, preceded, terminated, tuple},
 };
 
 use crate::ast::*;
@@ -46,7 +46,7 @@ fn parse_arguments(input: Span) -> NotLocatedParseResult<Vec<LocatedExpr>> {
     Ok((s, args))
 }
 
-pub(super) fn parse_intrinsic_op_expression(input: Span) -> NotLocatedParseResult<Expression> {
+pub(super) fn parse_intrinsic_binop_expression(input: Span) -> NotLocatedParseResult<Expression> {
     map(
         delimited(
             lparen,
@@ -58,6 +58,12 @@ pub(super) fn parse_intrinsic_op_expression(input: Span) -> NotLocatedParseResul
                         map(minus, |_| BinaryOp::Sub),
                         map(asterisk, |_| BinaryOp::Mul),
                         map(slash, |_| BinaryOp::Div),
+                        map(eq_token, |_| BinaryOp::Equals),
+                        map(neq_token, |_| BinaryOp::NotEquals),
+                        map(lte_token, |_| BinaryOp::LessThanOrEquals),
+                        map(lt_token, |_| BinaryOp::LessThan),
+                        map(gte_token, |_| BinaryOp::GreaterThanOrEquals),
+                        map(gt_token, |_| BinaryOp::GreaterThan),
                     )),
                     parse_boxed_expression,
                     parse_boxed_expression,
@@ -67,7 +73,7 @@ pub(super) fn parse_intrinsic_op_expression(input: Span) -> NotLocatedParseResul
             rparen,
         ),
         |(binop, lhs, rhs)| {
-            Expression::BinaryExpr(BinaryExpr {
+            Expression::Binary(BinaryExpr {
                 op: binop,
                 lhs,
                 rhs,
@@ -75,7 +81,53 @@ pub(super) fn parse_intrinsic_op_expression(input: Span) -> NotLocatedParseResul
         },
     )(input)
 }
+pub(super) fn parse_intrinsic_unary_op_expression(
+    input: Span,
+) -> NotLocatedParseResult<Expression> {
+    map(
+        preceded(
+            lparen,
+            tuple((
+                alt((map(not_token, |_| {
+                    // panic!();
+                    UnaryOp::Not
+                }),)),
+                cut(terminated(parse_boxed_expression, rparen)),
+            )),
+        ),
+        |(op, target)| {
+            Expression::Unary(UnaryExpr {
+                op,
+                operand: target,
+            })
+        },
+    )(input)
+}
 
+#[test]
+fn parse_test_intrinsic_unary_op_expression() {
+    assert!(parse_boxed_expression("(not a b)".into()).is_err());
+    assert!(parse_boxed_expression("(not a)".into()).is_ok());
+}
+
+pub(super) fn parse_intrinsic_multi_op_expression(
+    input: Span,
+) -> NotLocatedParseResult<Expression> {
+    map(
+        delimited(
+            lparen,
+            pair(
+                alt((
+                    map(and_token, |_| MultiOp::And),
+                    map(or_token, |_| MultiOp::Or),
+                )),
+                cut(many1(parse_boxed_expression)),
+            ),
+            rparen,
+        ),
+        |(op, operands)| Expression::Multi(MultiExpr { op, operands }),
+    )(input)
+}
 pub(super) fn parse_function_call_expression(input: Span) -> NotLocatedParseResult<Expression> {
     map(
         delimited(
@@ -306,7 +358,6 @@ fn test_parse_struct_literal() {
     }
 
     let result = parse_struct_literal(Span::new("Vec<T> { buf: a, size: 4 }"));
-    dbg!(&result);
     assert!(result.is_ok());
     let (rest, expr) = result.unwrap();
     assert_eq!(rest.to_string().as_str(), "");
@@ -409,8 +460,10 @@ pub(super) fn parse_boxed_expression(input: Span) -> ParseResult<Box<Expression>
             context("when", parse_when_expression),
             context("assignment", parse_asignment),
             context("variable_decl", parse_variable_decl),
+            context("unary_op", parse_intrinsic_unary_op_expression),
+            context("binop", parse_intrinsic_binop_expression),
+            context("multi_op", parse_intrinsic_multi_op_expression),
             context("call", parse_function_call_expression),
-            context("binop", parse_intrinsic_op_expression),
         )),
         Box::new,
     ))(input)?;

@@ -11,6 +11,7 @@ pub(super) fn resolve_variable_decl(
     function_by_name: &HashMap<String, ast::Function>,
     resolved_functions: &mut HashMap<String, resolved_ast::Function>,
     variable_decls_expr: &Located<&VariableDeclsExpr>,
+    ptr_sized_int_type: PointerSizedIntWidth,
 ) -> Result<ResolvedExpression, FaitalError> {
     in_new_scope!(types, {
         let mut decls = Vec::new();
@@ -36,6 +37,7 @@ pub(super) fn resolve_variable_decl(
                 resolved_functions,
                 variable_decl_expr.value.value.as_deref(),
                 resolved_annotation.as_ref(),
+                ptr_sized_int_type,
             )?;
             if let Some(resolved_annotation) = resolved_annotation {
                 if !resolved_annotation.can_insert(&resolved_expr.ty) {
