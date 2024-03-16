@@ -2,6 +2,7 @@ use inkwell::{
     builder::BuilderError,
     types::BasicType,
     values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum},
+    AddressSpace,
 };
 
 use super::*;
@@ -339,6 +340,66 @@ impl LLVMCodeGenerator<'_> {
         self.llvm_builder.position_at_end(merge_block);
         Ok(None)
     }
+    pub(super) fn eval_variable_decls(&self, decls: &VariableDecls) -> Result<(), BuilderError> {
+        for decl in &decls.decls {
+            let ty = self.type_to_basic_type_enum(&decl.value.ty).unwrap();
+            let value = self.gen_expression(&decl.value)?.unwrap();
+            if ty.is_struct_type() {
+                let ptr = self.llvm_builder.build_alloca(ty, "")?;
+                self.llvm_builder.build_memcpy(
+                    ptr,
+                    8,
+                    value.into_pointer_value(),
+                    8,
+                    ty.size_of().unwrap(),
+                )?;
+                self.add_variable(&decl.name, ptr);
+            } else {
+                let ptr = self.llvm_builder.build_alloca(ty, "")?;
+                self.llvm_builder.build_store(ptr, value)?;
+                self.add_variable(&decl.name, ptr);
+            }
+        }
+        Ok(())
+    }
+    pub(super) fn eval_assignment(&self, assignment: &Assignment) -> Result<(), BuilderError> {
+        let value = self.gen_expression(&assignment.value)?.unwrap();
+        let pointee_type = value.get_type();
+        let mut ptr = self.get_variable(&assignment.name);
+        for _ in 0..assignment.deref_count {
+            ptr = self
+                .llvm_builder
+                .build_load(pointee_type, ptr, "")
+                .unwrap()
+                .into_pointer_value();
+        }
+        if let Some(index_access) = &assignment.index_access {
+            let index = self.gen_expression(index_access)?.unwrap();
+            ptr = self
+                .llvm_builder
+                .build_load(pointee_type.ptr_type(AddressSpace::default()), ptr, "")
+                .unwrap()
+                .into_pointer_value();
+
+            ptr = unsafe {
+                self.llvm_builder
+                    .build_in_bounds_gep(pointee_type, ptr, &[index.into_int_value()], "")
+                    .unwrap()
+            };
+            if assignment.value.ty.is_struct_type() {
+                self.llvm_builder.build_memcpy(
+                    ptr,
+                    8,
+                    value.into_pointer_value(),
+                    8,
+                    pointee_type.size_of().unwrap(),
+                )?;
+                return Ok(());
+            }
+        }
+        self.llvm_builder.build_store(ptr, value)?;
+        Ok(())
+    }
     pub(super) fn gen_expression<'a>(
         &'a self,
         expr: &ResolvedExpression,
@@ -372,6 +433,13 @@ impl LLVMCodeGenerator<'_> {
             }
             ExpressionKind::If(if_expr) => self.eval_if_expr(if_expr, &expr.ty),
             ExpressionKind::When(when_expr) => self.eval_when_expr(when_expr),
+            ExpressionKind::VariableDecls(decls) => {
+                self.eval_variable_decls(decls)?;
+                Ok(None)
+            }
+            ExpressionKind::Assignment(assignment) => {
+                self.eval_assignment(assignment).map(|_| None)
+            }
         }
     }
 }

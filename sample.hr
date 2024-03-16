@@ -10,8 +10,8 @@ struct Vec<T> {
 }
 
 fn g_malloc<T>(size: usize) : *T {
-  let mem_size = (* size (sizeof T))
-  let result: *T = (malloc mem_size)
+  (:= mem_size (* size (sizeof T)))
+  (:= result: *T (malloc mem_size))
   result
 }
 
@@ -24,12 +24,12 @@ fn vec<T>(): Vec<T> {
 }
 
 fn set<T>(vec: Vec<T>, index: usize, value: T): void {
-  let buf = vec.buf
-  buf[index] = value
+  (:= buf vec.buf)
+  (:=< buf[index] value)
 }
 
 fn get<T>(vec: Vec<T>, index: usize): T {
-  let buf = vec.buf
+  (:= buf vec.buf)
   buf[index]
 }
 
@@ -42,23 +42,23 @@ fn print-i32(n: i32): void {
 }
 
 fn test_annotation_inference(): void {
-  let v2: Vec<i32> = (vec)
-  let vv2: Vec<Vec<i32>> = (vec)
+  (:= v2 : Vec<i32> (vec)
+      vv2 : Vec<Vec<i32>> (vec))
   (set<Vec<i32>> vv2 0 v2)
-  let v2_2 = (get<Vec<i32>> vv2 0)
+  (:= v2_2 (get<Vec<i32>> vv2 0))
   (printf "%d\n" v2_2.capacity)
 }
 
 fn test_struct_vector(): void {
-  let v2 = Vector2 { x: 10, y: 20 }
-  let vv2: Vec<Vector2> = (vec)
+  (:= v2 Vector2 { x: 10, y: 20 }
+      vv2 : Vec<Vector2> (vec))
   (set vv2 0 v2)
-  let v2_2 = (get<Vector2> vv2 0)
+  (:= v2_2 (get<Vector2> vv2 0))
   (printf "%d, %d\n" v2_2.x v2_2.y)
 }
 
 fn test_condition(): void {
-  let t = true
+  (:= t true)
   (when t
     (printf "true in when"))
 }

@@ -9,6 +9,7 @@ version = "0.1.0"
 anyhow = "1.0.68"
 clap = {version = "4.1.3", features = ["derive"]}
 inkwell = {git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm16-0"]}
+itertools = "0.12.1"
 llvm-sys = "160"
 nom = {version = "7.1.2", features = ["alloc"]}
 nom_locate = "4.0.0"

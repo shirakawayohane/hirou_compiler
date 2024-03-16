@@ -211,6 +211,8 @@ pub enum ExpressionKind {
     FieldAccess(FieldAccessExpr),
     If(IfExpr),
     When(WhenExpr),
+    VariableDecls(VariableDecls),
+    Assignment(Assignment),
     Unknown,
 }
 
@@ -223,15 +225,20 @@ pub struct ResolvedExpression {
 #[derive(Debug, Clone)]
 pub struct Assignment {
     pub name: String,
-    pub expression: ResolvedExpression,
+    pub value: Box<ResolvedExpression>,
     pub deref_count: usize,
-    pub index_access: Option<ResolvedExpression>,
+    pub index_access: Option<Box<ResolvedExpression>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct VariableDecl {
     pub name: String,
-    pub value: ResolvedExpression,
+    pub value: Box<ResolvedExpression>,
+}
+
+#[derive(Debug, Clone)]
+pub struct VariableDecls {
+    pub decls: Vec<VariableDecl>,
 }
 
 #[derive(Debug, Clone)]
@@ -246,9 +253,7 @@ pub struct Effect {
 
 #[derive(Debug, Clone)]
 pub enum Statement {
-    VariableDecl(VariableDecl),
     Return(Return),
-    Assignment(Assignment),
     Effect(Effect),
 }
 

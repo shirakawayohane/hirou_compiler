@@ -17,6 +17,7 @@ use inkwell::targets::{
     CodeModel, InitializationConfig, RelocMode, Target, TargetMachine, TargetTriple,
 };
 use inkwell::values::PointerValue;
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -45,7 +46,7 @@ pub struct LLVMCodeGenerator<'a> {
     llvm_builder: LLVMBuilder<'a>,
     llvm_context: &'a LLVMContext,
     ptr_sized_int_type: IntType<'a>,
-    scopes: Vec<Scope<'a>>,
+    scopes: Vec<RefCell<Scope<'a>>>,
     function_by_name: HashMap<String, &'a Function>,
 }
 
@@ -103,7 +104,8 @@ impl<'a> LLVMCodeGenerator<'a> {
         }
     }
     pub fn gen_module(&mut self, module: &'a Module) {
-        self.scopes.push(Scope::new(ScopeKind::Global));
+        self.scopes
+            .push(RefCell::new(Scope::new(ScopeKind::Global)));
 
         // self.gen_intrinsic_functions_on_llvm();
         for top in &module.toplevels {
@@ -121,20 +123,28 @@ impl<'a> LLVMCodeGenerator<'a> {
     pub fn get_module(self) -> LLVMModule<'a> {
         self.llvm_module
     }
-    fn add_variable(&mut self, name: &str, value: PointerValue<'a>) {
+    fn add_variable(&self, name: &str, value: PointerValue<'a>) {
         self.scopes
-            .last_mut()
+            .last()
             .unwrap()
+            .borrow_mut()
             .values
             .insert(name.into(), value);
     }
     fn get_variable(&self, name: &str) -> PointerValue<'a> {
-        *self.scopes.last().unwrap().values.get(name).unwrap()
+        *self
+            .scopes
+            .last()
+            .unwrap()
+            .borrow()
+            .values
+            .get(name)
+            .unwrap()
     }
     fn pop_scope(&mut self) {
         self.scopes.pop();
     }
     fn push_scope(&mut self, scope: Scope<'a>) {
-        self.scopes.push(scope);
+        self.scopes.push(RefCell::new(scope));
     }
 }

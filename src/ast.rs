@@ -62,6 +62,12 @@ impl<T> Located<T> {
             value: self.value.deref(),
         }
     }
+    pub fn transfer<U>(from: Located<T>, to: U) -> Located<U> {
+        Located {
+            range: from.range,
+            value: to,
+        }
+    }
 }
 
 impl Deref for Range {
@@ -174,6 +180,26 @@ pub struct WhenExpr {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct AssignExpr {
+    pub deref_count: u32,
+    pub index_access: Option<LocatedExpr>,
+    pub name: String,
+    pub value: LocatedExpr,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct VariableDecl {
+    pub name: String,
+    pub ty: Option<Located<UnresolvedType>>,
+    pub value: LocatedExpr,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct VariableDeclsExpr {
+    pub decls: Vec<Located<VariableDecl>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
     SizeOf(SizeOfExpr),
     VariableRef(VariableRefExpr),
@@ -188,6 +214,8 @@ pub enum Expression {
     FieldAccess(FieldAccessExpr),
     If(IfExpr),
     When(WhenExpr),
+    Assignment(AssignExpr),
+    VariableDecl(VariableDeclsExpr),
 }
 
 #[derive(Debug, PartialEq, Hash, Clone)]
@@ -226,21 +254,6 @@ impl Display for UnresolvedType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct AssignmentStatement {
-    pub deref_count: u32,
-    pub index_access: Option<Located<Expression>>,
-    pub name: String,
-    pub expression: Located<Expression>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct VariableDeclStatement {
-    pub ty: Option<Located<UnresolvedType>>,
-    pub name: String,
-    pub value: Located<Expression>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
 pub struct ReturnStatement {
     pub expression: Option<Located<Expression>>,
 }
@@ -252,8 +265,6 @@ pub struct EffectStatement {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
-    Assignment(AssignmentStatement),
-    VariableDecl(VariableDeclStatement),
     Return(ReturnStatement),
     Effect(EffectStatement),
 }

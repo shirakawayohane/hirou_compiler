@@ -334,6 +334,67 @@ fn parse_sizeof(input: Span) -> NotLocatedParseResult<Expression> {
     )(input)
 }
 
+fn parse_asignment(input: Span) -> NotLocatedParseResult<Expression> {
+    map(
+        delimited(
+            lparen,
+            tuple((
+                assign_token,
+                many0(asterisk),
+                parse_identifier,
+                opt(index_access),
+                parse_boxed_expression,
+            )),
+            rparen,
+        ),
+        |(_, asterisks, name, index_access, value_expr)| {
+            Expression::Assignment(AssignExpr {
+                deref_count: asterisks.len() as u32,
+                index_access,
+                name,
+                value: value_expr,
+            })
+        },
+    )(input)
+}
+
+#[test]
+fn test_parse_assignment() {
+    assert!(parse_asignment(Span::new("(:=< a 1)")).is_ok());
+    assert!(parse_asignment(Span::new("(:=< buf[index] value)")).is_ok());
+}
+
+fn parse_variable_decl(input: Span) -> NotLocatedParseResult<Expression> {
+    delimited(
+        lparen,
+        preceded(
+            var_decl_token,
+            cut(map(
+                many1(located(map(
+                    tuple((
+                        parse_identifier,
+                        opt(context(
+                            "type_annotation",
+                            map(
+                                tuple((skip0, colon, skip0, cut(parse_type))),
+                                |(_, _, _, ty)| ty,
+                            ),
+                        )),
+                        preceded(skip0, parse_boxed_expression),
+                    )),
+                    |(name, ty, expression)| VariableDecl {
+                        ty,
+                        name,
+                        value: expression,
+                    },
+                ))),
+                |decls| Expression::VariableDecl(VariableDeclsExpr { decls }),
+            )),
+        ),
+        rparen,
+    )(input)
+}
+
 pub(super) fn parse_boxed_expression(input: Span) -> ParseResult<Box<Expression>> {
     let (rest, expr) = located(map(
         alt((
@@ -346,6 +407,8 @@ pub(super) fn parse_boxed_expression(input: Span) -> ParseResult<Box<Expression>
             context("variable_ref", parse_variable_ref),
             context("if", parse_if_expression),
             context("when", parse_when_expression),
+            context("assignment", parse_asignment),
+            context("variable_decl", parse_variable_decl),
             context("call", parse_function_call_expression),
             context("binop", parse_intrinsic_op_expression),
         )),

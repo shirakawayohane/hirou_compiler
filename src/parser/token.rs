@@ -56,17 +56,19 @@ token_char!(slash, '/');
 token_char!(dot, '.');
 token_tag!(fn_token, "fn");
 token_tag!(struct_token, "struct");
-token_tag!(let_token, "let");
 token_tag!(return_token, "return");
 token_tag!(doublequote, "\"");
 token_tag!(threedots, "...");
 token_tag!(sizeof_token, "sizeof");
 token_tag!(if_token, "if");
 token_tag!(when_token, "when");
+token_tag!(var_decl_token, ":=");
+token_tag!(assign_token, ":=<");
 
 #[inline(always)]
 pub(super) fn parse_identifier(input: Span) -> NotLocatedParseResult<String> {
-    let (s, _) = not(digit1)(input)?;
+    let (s, _) = skip0(input)?;
+    let (s, _) = not(digit1)(s)?;
     let (s, _) = skip0(s)?;
     map(
         take_till1(|x: char| !x.is_alphabetic() && !x.is_ascii_digit() && !['-', '_'].contains(&x)),

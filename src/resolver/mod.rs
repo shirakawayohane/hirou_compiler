@@ -248,12 +248,6 @@ fn resolve_function(
                             ));
                         }
                     }
-                    _ => {
-                        resolved_statements.push(last_stmt);
-                        resolved_statements.push(resolved_ast::Statement::Return(
-                            resolved_ast::Return { expression: None },
-                        ));
-                    }
                 }
             }
         }

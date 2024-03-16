@@ -1,4 +1,6 @@
+mod assignment;
 mod call;
+mod variable_decl;
 
 use std::ops::DerefMut;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
@@ -8,7 +10,9 @@ use crate::resolved_ast::{ExpressionKind, ResolvedExpression, ResolvedStructType
 use crate::resolver::ty::resolve_type;
 use crate::{ast, in_global_scope, in_new_scope, resolved_ast};
 
+use self::assignment::resolve_assignment;
 use self::call::resolve_call_expr;
+use self::variable_decl::resolve_variable_decl;
 
 use super::ty::get_resolved_struct_name;
 use super::{error::*, mangle_fn_name, resolve_function, TypeScopes, VariableScopes};
@@ -109,10 +113,7 @@ pub(crate) fn resolve_expression(
             type_defs,
             function_by_name,
             resolved_functions,
-            &Located {
-                range: loc_expr.range,
-                value: call_expr,
-            },
+            &Located::transfer(loc_expr, call_expr),
             annotation,
         ),
         Expression::DerefExpr(deref_expr) => {
@@ -334,7 +335,7 @@ pub(crate) fn resolve_expression(
                     None
                 },
             );
-            return Ok(resolved_ast::ResolvedExpression {
+            Ok(resolved_ast::ResolvedExpression {
                 ty: ResolvedType::Struct(ResolvedStructType {
                     name: struct_name,
                     non_generic_name: typedef.name.clone(),
@@ -351,7 +352,7 @@ pub(crate) fn resolve_expression(
                 kind: resolved_ast::ExpressionKind::StructLiteral(resolved_ast::StructLiteral {
                     fields: resolved_fields,
                 }),
-            });
+            })
         }
         Expression::SizeOf(sizeof_expr) => {
             let resolved_ty = resolve_type(
@@ -461,5 +462,23 @@ pub(crate) fn resolve_expression(
                 }),
             })
         }
+        Expression::Assignment(assign_expr) => resolve_assignment(
+            errors,
+            types,
+            scopes,
+            type_defs,
+            function_by_name,
+            resolved_functions,
+            &Located::transfer(loc_expr, assign_expr),
+        ),
+        Expression::VariableDecl(variable_decl_expr) => resolve_variable_decl(
+            errors,
+            types,
+            scopes,
+            type_defs,
+            function_by_name,
+            resolved_functions,
+            &Located::transfer(loc_expr, variable_decl_expr),
+        ),
     }
 }
