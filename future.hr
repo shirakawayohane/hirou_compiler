@@ -1,0 +1,27 @@
+record Person {
+  age: i32,
+  name: String
+}
+
+fn create_big_person(age: i32): Person {
+  Person {
+    age: age
+    name: "very long long name",
+  }
+}
+
+// alloc/salloc function can only return sturct or scalar value.
+salloc fn compare_person_age(): i32 {
+  (:= a (create_person 10)
+      b (create_person 20))
+  (if (= a.age b.age)
+    0
+    (if (> a.age b.age)
+      1
+      -1))
+  // all allocated person will be disposed here.
+}
+
+fn main(): void {
+  (compare_person_age)
+}

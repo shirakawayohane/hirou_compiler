@@ -3,7 +3,7 @@ use std::{
     ops::Deref,
 };
 
-use crate::common::StructKind;
+use crate::common::{AllocMode, StructKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Default)]
 pub struct Position {
@@ -315,6 +315,7 @@ pub enum Argument {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionDecl {
+    pub alloc_mode: Option<AllocMode>,
     pub name: String,
     pub generic_args: Option<Vec<Located<GenericArgument>>>,
     pub args: Vec<Argument>,

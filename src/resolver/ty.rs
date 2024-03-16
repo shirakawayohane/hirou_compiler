@@ -1,4 +1,4 @@
-use crate::{common::StructKind, in_new_scope, resolved_ast::ResolvedStructType};
+use crate::{in_new_scope, resolved_ast::ResolvedStructType};
 
 #[cfg(test)]
 use resolved_ast::{I32_TYPE_NAME, USIZE_TYPE_NAME};
@@ -147,77 +147,83 @@ pub(crate) fn get_resolved_struct_name(
     }
 }
 
-#[test]
-fn test_resolve_type() {
-    let context = ResolverContext::new(PointerSizedIntWidth::SixtyFour);
-    context.type_defs.borrow_mut().insert(
-        "Vec".to_string(),
-        TypeDef {
-            name: "Vec".to_string(),
-            kind: TypeDefKind::StructLike(StructLikeTypeDef {
-                struct_kind: StructKind::Struct,
+#[allow(unused_imports)]
+mod tests {
+    use super::*;
+    use crate::common::StructKind;
+
+    #[test]
+    fn test_resolve_type() {
+        let context = ResolverContext::new(PointerSizedIntWidth::SixtyFour);
+        context.type_defs.borrow_mut().insert(
+            "Vec".to_string(),
+            TypeDef {
+                name: "Vec".to_string(),
+                kind: TypeDefKind::StructLike(StructLikeTypeDef {
+                    struct_kind: StructKind::Struct,
+                    fields: vec![
+                        (
+                            "ptr".to_string(),
+                            Located::default_from(UnresolvedType::Ptr(Box::new(
+                                Located::default_from(UnresolvedType::TypeRef(TypeRef {
+                                    name: "T".to_string(),
+                                    generic_args: None,
+                                })),
+                            ))),
+                        ),
+                        (
+                            "len".to_string(),
+                            Located::default_from(UnresolvedType::TypeRef(TypeRef {
+                                name: "usize".to_string(),
+                                generic_args: None,
+                            })),
+                        ),
+                    ],
+                    generic_args: Some(vec![Located {
+                        range: Range::default(),
+                        value: GenericArgument {
+                            name: "T".to_string(),
+                        },
+                    }]),
+                }),
+            },
+        );
+        context.types.borrow_mut().push(
+            [
+                (I32_TYPE_NAME.to_string(), ResolvedType::I32),
+                (USIZE_TYPE_NAME.to_string(), ResolvedType::USize),
+            ]
+            .into_iter()
+            .collect::<HashMap<_, _>>(),
+        );
+        let resolved_ty = resolve_type(
+            &context,
+            &Located::default_from(UnresolvedType::TypeRef(TypeRef {
+                name: "Vec".to_string(),
+                generic_args: Some(vec![Located::default_from(UnresolvedType::TypeRef(
+                    TypeRef {
+                        name: I32_TYPE_NAME.to_string(),
+                        generic_args: None,
+                    },
+                ))]),
+            })),
+        )
+        .unwrap();
+        assert_eq!(context.errors.borrow().len(), 0);
+        assert_eq!(
+            resolved_ty,
+            ResolvedType::StructLike(ResolvedStructType {
+                name: "Vec<i32>".to_string(),
+                non_generic_name: "Vec".to_string(),
                 fields: vec![
                     (
                         "ptr".to_string(),
-                        Located::default_from(UnresolvedType::Ptr(Box::new(
-                            Located::default_from(UnresolvedType::TypeRef(TypeRef {
-                                name: "T".to_string(),
-                                generic_args: None,
-                            })),
-                        ))),
+                        ResolvedType::Ptr(Box::new(ResolvedType::I32))
                     ),
-                    (
-                        "len".to_string(),
-                        Located::default_from(UnresolvedType::TypeRef(TypeRef {
-                            name: "usize".to_string(),
-                            generic_args: None,
-                        })),
-                    ),
+                    ("len".to_string(), ResolvedType::USize),
                 ],
-                generic_args: Some(vec![Located {
-                    range: Range::default(),
-                    value: GenericArgument {
-                        name: "T".to_string(),
-                    },
-                }]),
-            }),
-        },
-    );
-    context.types.borrow_mut().push(
-        [
-            (I32_TYPE_NAME.to_string(), ResolvedType::I32),
-            (USIZE_TYPE_NAME.to_string(), ResolvedType::USize),
-        ]
-        .into_iter()
-        .collect::<HashMap<_, _>>(),
-    );
-    let resolved_ty = resolve_type(
-        &context,
-        &Located::default_from(UnresolvedType::TypeRef(TypeRef {
-            name: "Vec".to_string(),
-            generic_args: Some(vec![Located::default_from(UnresolvedType::TypeRef(
-                TypeRef {
-                    name: I32_TYPE_NAME.to_string(),
-                    generic_args: None,
-                },
-            ))]),
-        })),
-    )
-    .unwrap();
-    assert_eq!(context.errors.borrow().len(), 0);
-    assert_eq!(
-        resolved_ty,
-        ResolvedType::StructLike(ResolvedStructType {
-            name: "Vec<i32>".to_string(),
-            non_generic_name: "Vec".to_string(),
-            fields: vec![
-                (
-                    "ptr".to_string(),
-                    ResolvedType::Ptr(Box::new(ResolvedType::I32))
-                ),
-                ("len".to_string(), ResolvedType::USize),
-            ],
-            generic_args: Some(vec![ResolvedType::I32]),
-        })
-    )
+                generic_args: Some(vec![ResolvedType::I32]),
+            })
+        )
+    }
 }

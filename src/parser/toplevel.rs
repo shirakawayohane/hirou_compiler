@@ -1,6 +1,6 @@
 use crate::{
     ast::*,
-    common::StructKind,
+    common::{AllocMode, StructKind},
     parser::ty::{parse_generic_argument_decls, parse_type},
 };
 
@@ -8,7 +8,6 @@ use super::{statement::parse_statement, token::*, util::*, *};
 
 use nom::{
     branch::alt,
-    character::complete::space0,
     combinator::{cut, opt},
     error::context,
     sequence::tuple,
@@ -133,17 +132,19 @@ fn parse_function_decl(input: Span) -> ParseResult<FunctionDecl> {
         "function_decl",
         located(map(
             tuple((
+                opt(alt((
+                    map(alloc_token, |_| AllocMode::Heap),
+                    map(salloc_token, |_| AllocMode::Stack),
+                ))),
                 fn_token,
                 parse_identifier,
                 opt(parse_generic_argument_decls),
                 // params
                 parse_arguments,
-                map(
-                    tuple((space0, colon, space0, parse_type)),
-                    |(_, _, _, ty)| ty,
-                ),
+                map(tuple((colon, parse_type)), |(_, ty)| ty),
             )),
-            |(_, name, generic_args, params, ty)| FunctionDecl {
+            |(alloc_mode, _, name, generic_args, params, ty)| FunctionDecl {
+                alloc_mode,
                 name,
                 generic_args,
                 args: params,

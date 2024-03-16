@@ -73,6 +73,8 @@ token_tag!(gte_token, ">=");
 token_tag!(lte_token, "<=");
 token_tag!(gt_token, ">");
 token_tag!(lt_token, "<");
+token_tag!(alloc_token, "alloc");
+token_tag!(salloc_token, "salloc");
 
 #[inline(always)]
 pub(super) fn parse_identifier(input: Span) -> NotLocatedParseResult<String> {

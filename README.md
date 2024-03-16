@@ -34,6 +34,7 @@ set -Ux LLVM_SYS_160_PREFIX /opt/homebrew/Cellar/llvm@16/16.0.6
 - 標準ライブラリの実装
 
 ## TODOリスト
+- トレイト（アロケーターの実装のために必要（stack, heapで挙動が違うため))
 - 使用箇所からのジェネリクス引数の推論
 - indexがintであるかの検証
 - structのフィールドにVoidを入れることは出来ないことの検証
@@ -41,8 +42,9 @@ set -Ux LLVM_SYS_160_PREFIX /opt/homebrew/Cellar/llvm@16/16.0.6
 - annotationをOption<&ResolvedType>にできるか検討
 - メモリ管理終わったら
     - ベクタリテラル []
-    - マップリテラル {}
+    - マップリテラル {} (Structとの相互変換を実装したい)
     - セットリテラル #{}
+- リージョンって実は推論できるかも cf. https://github.com/melsman/mlkit
 
 変数定義こうしようと思ってる
 ```
