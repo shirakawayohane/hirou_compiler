@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs::read_to_string, path::Path};
+use std::{fs::read_to_string, path::Path};
 mod ast;
 mod builder;
 mod common;
@@ -13,6 +13,7 @@ use nom::{
     error::{convert_error, VerboseError},
     Finish,
 };
+use resolver::ResolverContext;
 
 #[derive(clap::Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -21,6 +22,8 @@ struct Args {
     target: String,
     #[clap(short, long)]
     output: Option<String>,
+    #[clap(long)]
+    parse: bool,
 }
 
 fn main() {
@@ -44,30 +47,27 @@ fn main() {
             return;
         }
     };
+    if args.parse {
+        dbg!(module);
+        return;
+    }
 
     let llvm_context: LLVMContext = LLVMContext::create();
-    let mut errors = Vec::new();
-    let mut resolved_functions = HashMap::new();
     let target_platform = TargetPlatform::DarwinArm64;
-    let resolved_module = match resolver::resolve_module(
-        &mut errors,
-        &mut resolved_functions,
-        &module,
-        true,
-        PointerSizedIntWidth::from(target_platform),
-    ) {
+    let resolver_context = ResolverContext::new(PointerSizedIntWidth::from(target_platform));
+    let resolved_module = match resolver::resolve_module(&resolver_context, &module, true) {
         Ok(module) => module,
         Err(err) => {
             dbg!(err);
             return;
         }
     };
-    if !errors.is_empty() {
+    if !resolver_context.errors.borrow().is_empty() {
         let absolute_path = path.canonicalize().unwrap();
         let current_dir = std::env::current_dir().unwrap();
         let relative_path = absolute_path.strip_prefix(current_dir).unwrap();
         let mut stdout = std::io::stdout();
-        for error in errors {
+        for error in resolver_context.errors.borrow().iter() {
             error
                 .fmt_with_source(
                     &mut stdout,

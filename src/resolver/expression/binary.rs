@@ -1,61 +1,35 @@
-use crate::common::{binary::get_cast_type, target::PointerSizedIntWidth};
+use crate::{common::binary::get_cast_type, resolver::ResolverContext};
 
 use self::ast::BinaryExpr;
 
 use super::*;
 
 pub(super) fn resolve_binary_expression(
-    errors: &mut Vec<CompileError>,
-    types: Rc<RefCell<TypeScopes>>,
-    scopes: Rc<RefCell<VariableScopes>>,
-    type_defs: &HashMap<String, ast::TypeDef>,
-    function_by_name: &HashMap<String, ast::Function>,
-    resolved_functions: &mut HashMap<String, resolved_ast::Function>,
+    context: &ResolverContext,
     bin_expr: &Located<&BinaryExpr>,
-    ptr_sized_int_type: PointerSizedIntWidth,
 ) -> Result<ResolvedExpression, FaitalError> {
-    let lhs = resolve_expression(
-        errors,
-        types.clone(),
-        scopes.clone(),
-        type_defs,
-        function_by_name,
-        resolved_functions,
-        bin_expr.lhs.as_deref(),
-        None,
-        ptr_sized_int_type,
-    )?;
-    let rhs = resolve_expression(
-        errors,
-        types.clone(),
-        scopes.clone(),
-        type_defs,
-        function_by_name,
-        resolved_functions,
-        bin_expr.rhs.as_deref(),
-        None,
-        ptr_sized_int_type,
-    )?;
+    let lhs = resolve_expression(context, bin_expr.lhs.as_deref(), None)?;
+    let rhs = resolve_expression(context, bin_expr.rhs.as_deref(), None)?;
     match bin_expr.op {
         BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div => {
-            if lhs.ty.is_integer_type() {
-                errors.push(CompileError::new(
+            if !lhs.ty.is_integer_type() {
+                context.errors.borrow_mut().push(CompileError::new(
                     bin_expr.range,
                     CompileErrorKind::InvalidNumericOperand {
                         actual: lhs.ty.clone(),
                     },
                 ));
             }
-            if rhs.ty.is_integer_type() {
-                errors.push(CompileError::new(
+            if !rhs.ty.is_integer_type() {
+                context.errors.borrow_mut().push(CompileError::new(
                     bin_expr.range,
                     CompileErrorKind::InvalidNumericOperand {
                         actual: rhs.ty.clone(),
                     },
                 ));
             }
-            let ty = match get_cast_type(ptr_sized_int_type, &lhs.ty, &rhs.ty) {
-                (None, None) => todo!(),
+            let ty = match get_cast_type(context.ptr_sized_int_type, &lhs.ty, &rhs.ty) {
+                (None, None) => lhs.ty.clone(),
                 (None, Some(t)) => t,
                 (Some(t), None) => t,
                 (Some(_), Some(t)) => t,
@@ -76,7 +50,7 @@ pub(super) fn resolve_binary_expression(
         | BinaryOp::GreaterThan
         | BinaryOp::GreaterThanOrEquals => {
             if lhs.ty != rhs.ty {
-                errors.push(CompileError::new(
+                context.errors.borrow_mut().push(CompileError::new(
                     bin_expr.range,
                     CompileErrorKind::TypeMismatch {
                         expected: lhs.ty.clone(),

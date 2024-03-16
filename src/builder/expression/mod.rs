@@ -109,7 +109,7 @@ impl LLVMCodeGenerator<'_> {
     }
     fn eval_index_access(
         &self,
-        index_access: &IndexAccessExor,
+        index_access: &IndexAccessExpr,
         ty: &ResolvedType,
     ) -> Result<BasicValueEnum, BuilderError> {
         let ptr = self

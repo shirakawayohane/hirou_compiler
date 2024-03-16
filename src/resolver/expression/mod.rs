@@ -3,12 +3,10 @@ mod binary;
 mod call;
 mod variable_decl;
 
-use std::ops::DerefMut;
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
-
 use crate::ast::{Expression, Located, TypeDefKind};
-use crate::common::target::PointerSizedIntWidth;
-use crate::resolved_ast::{ExpressionKind, ResolvedExpression, ResolvedStructType, ResolvedType};
+use crate::resolved_ast::{
+    ExpressionKind, IndexAccessExpr, ResolvedExpression, ResolvedStructType, ResolvedType,
+};
 use crate::resolver::ty::resolve_type;
 use crate::{ast, in_global_scope, in_new_scope, resolved_ast};
 
@@ -19,20 +17,13 @@ use self::variable_decl::resolve_variable_decl;
 
 use super::ty::get_resolved_struct_name;
 use super::{
-    error::*, mangle_fn_name, resolve_function, BinaryOp, MultiOp, TypeScopes, UnaryOp,
-    VariableScopes,
+    error::*, mangle_fn_name, resolve_function, BinaryOp, MultiOp, ResolverContext, UnaryOp,
 };
 
 pub(crate) fn resolve_expression(
-    errors: &mut Vec<CompileError>,
-    types: Rc<RefCell<TypeScopes>>,
-    scopes: Rc<RefCell<VariableScopes>>,
-    type_defs: &HashMap<String, ast::TypeDef>,
-    function_by_name: &HashMap<String, ast::Function>,
-    resolved_functions: &mut HashMap<String, resolved_ast::Function>,
+    context: &ResolverContext,
     loc_expr: Located<&ast::Expression>,
     annotation: Option<&ResolvedType>,
-    ptr_sized_int_type: PointerSizedIntWidth,
 ) -> Result<resolved_ast::ResolvedExpression, FaitalError> {
     match loc_expr.value {
         Expression::VariableRef(variable_ref) => {
@@ -41,7 +32,7 @@ pub(crate) fn resolve_expression(
                     name: variable_ref.name.clone(),
                 });
 
-            if let Some(ty) = scopes.borrow().get(&variable_ref.name) {
+            if let Some(ty) = context.scopes.borrow().get(&variable_ref.name) {
                 let resolved_type = if let Some(annotation) = annotation {
                     annotation
                 } else {
@@ -53,7 +44,7 @@ pub(crate) fn resolve_expression(
                     kind: expr_kind,
                 })
             } else {
-                errors.push(CompileError::new(
+                context.errors.borrow_mut().push(CompileError::new(
                     loc_expr.range,
                     CompileErrorKind::VariableNotFound {
                         name: variable_ref.name.to_owned(),
@@ -83,30 +74,13 @@ pub(crate) fn resolve_expression(
 
             Ok(ResolvedExpression { ty, kind })
         }
-        Expression::Binary(bin_expr) => resolve_binary_expression(
-            errors,
-            types.clone(),
-            scopes.clone(),
-            type_defs,
-            function_by_name,
-            resolved_functions,
-            &Located::transfer(loc_expr, bin_expr),
-            ptr_sized_int_type,
-        ),
+        Expression::Binary(bin_expr) => {
+            resolve_binary_expression(context, &Located::transfer(loc_expr, bin_expr))
+        }
         Expression::Unary(unary_expr) => {
-            let operand = resolve_expression(
-                errors,
-                types.clone(),
-                scopes.clone(),
-                type_defs,
-                function_by_name,
-                resolved_functions,
-                unary_expr.operand.as_deref(),
-                None,
-                ptr_sized_int_type,
-            )?;
+            let operand = resolve_expression(context, unary_expr.operand.as_deref(), None)?;
             if matches!(unary_expr.op, UnaryOp::Not) && !matches!(operand.ty, ResolvedType::Bool) {
-                errors.push(CompileError::new(
+                context.errors.borrow_mut().push(CompileError::new(
                     loc_expr.range,
                     CompileErrorKind::TypeMismatch {
                         expected: ResolvedType::Bool,
@@ -125,24 +99,14 @@ pub(crate) fn resolve_expression(
         Expression::Multi(multi_expr) => {
             let mut resolved_operands = Vec::new();
             for operand in &multi_expr.operands {
-                let resolved_operand = resolve_expression(
-                    errors,
-                    types.clone(),
-                    scopes.clone(),
-                    type_defs,
-                    function_by_name,
-                    resolved_functions,
-                    operand.as_deref(),
-                    None,
-                    ptr_sized_int_type,
-                )?;
+                let resolved_operand = resolve_expression(context, operand.as_deref(), None)?;
                 resolved_operands.push(resolved_operand);
             }
             match multi_expr.op {
                 MultiOp::And | MultiOp::Or => {
                     for operand in &resolved_operands {
                         if !matches!(operand.ty, ResolvedType::Bool) {
-                            errors.push(CompileError::new(
+                            context.errors.borrow_mut().push(CompileError::new(
                                 loc_expr.range,
                                 CompileErrorKind::TypeMismatch {
                                     expected: ResolvedType::Bool,
@@ -161,29 +125,11 @@ pub(crate) fn resolve_expression(
                 }
             }
         }
-        Expression::Call(call_expr) => resolve_call_expr(
-            errors,
-            types,
-            scopes,
-            type_defs,
-            function_by_name,
-            resolved_functions,
-            &Located::transfer(loc_expr, call_expr),
-            annotation,
-            ptr_sized_int_type,
-        ),
+        Expression::Call(call_expr) => {
+            resolve_call_expr(context, &Located::transfer(loc_expr, call_expr), annotation)
+        }
         Expression::DerefExpr(deref_expr) => {
-            let target = resolve_expression(
-                errors,
-                types.clone(),
-                scopes.clone(),
-                type_defs,
-                function_by_name,
-                resolved_functions,
-                deref_expr.target.as_deref(),
-                None,
-                ptr_sized_int_type,
-            )?;
+            let target = resolve_expression(context, deref_expr.target.as_deref(), None)?;
             Ok(resolved_ast::ResolvedExpression {
                 kind: resolved_ast::ExpressionKind::Deref(resolved_ast::DerefExpr {
                     target: Box::new(target),
@@ -192,32 +138,16 @@ pub(crate) fn resolve_expression(
             })
         }
         Expression::IndexAccess(index_access_expr) => {
-            let target = resolve_expression(
-                errors,
-                types.clone(),
-                scopes.clone(),
-                type_defs,
-                function_by_name,
-                resolved_functions,
-                index_access_expr.target.as_deref(),
-                None,
-                ptr_sized_int_type,
-            )?;
+            let target = resolve_expression(context, index_access_expr.target.as_deref(), None)?;
             let index = resolve_expression(
-                errors,
-                types.clone(),
-                scopes.clone(),
-                type_defs,
-                function_by_name,
-                resolved_functions,
+                context,
                 index_access_expr.index.as_deref(),
                 Some(&ResolvedType::USize),
-                ptr_sized_int_type,
             )?;
             let resolved_ty = if let ResolvedType::Ptr(ptr) = &target.ty {
                 *ptr.clone()
             } else {
-                errors.push(CompileError::new(
+                context.errors.borrow_mut().push(CompileError::new(
                     loc_expr.range,
                     CompileErrorKind::InvalidIndexAccess {
                         ty: target.clone().ty,
@@ -226,7 +156,7 @@ pub(crate) fn resolve_expression(
                 ResolvedType::Unknown
             };
             Ok(resolved_ast::ResolvedExpression {
-                kind: resolved_ast::ExpressionKind::IndexAccess(resolved_ast::IndexAccessExor {
+                kind: resolved_ast::ExpressionKind::IndexAccess(IndexAccessExpr {
                     target: Box::new(target),
                     index: Box::new(index),
                 }),
@@ -234,17 +164,7 @@ pub(crate) fn resolve_expression(
             })
         }
         Expression::FieldAccess(field_access_expr) => {
-            let target = resolve_expression(
-                errors,
-                types.clone(),
-                scopes.clone(),
-                type_defs,
-                function_by_name,
-                resolved_functions,
-                field_access_expr.target.as_deref(),
-                None,
-                ptr_sized_int_type,
-            )?;
+            let target = resolve_expression(context, field_access_expr.target.as_deref(), None)?;
             let resolved_ty = if let ResolvedType::Struct(struct_ty) = &target.ty {
                 if let Some((_name, ty)) = struct_ty
                     .fields
@@ -253,7 +173,7 @@ pub(crate) fn resolve_expression(
                 {
                     ty.clone()
                 } else {
-                    errors.push(CompileError::new(
+                    context.errors.borrow_mut().push(CompileError::new(
                         loc_expr.range,
                         CompileErrorKind::FieldNotFound {
                             field_name: field_access_expr.field_name.clone(),
@@ -263,7 +183,7 @@ pub(crate) fn resolve_expression(
                     ResolvedType::Unknown
                 }
             } else {
-                errors.push(CompileError::new(
+                context.errors.borrow_mut().push(CompileError::new(
                     loc_expr.range,
                     CompileErrorKind::InvalidFieldAccess {
                         ty: target.clone().ty,
@@ -296,10 +216,13 @@ pub(crate) fn resolve_expression(
             let mut resolved_fields = Vec::new();
             let mut resolved_generic_args = Vec::new();
 
-            let typedef = if let Some(typedef) = type_defs.get(&struct_literal_expr.name) {
-                typedef
-            } else {
-                errors.push(CompileError::new(
+            let typedef = context
+                .type_defs
+                .borrow()
+                .get(&struct_literal_expr.name)
+                .cloned();
+            if typedef.is_none() {
+                context.errors.borrow_mut().push(CompileError::new(
                     loc_expr.range,
                     CompileErrorKind::TypeNotFound {
                         name: struct_literal_expr.name.clone(),
@@ -312,19 +235,19 @@ pub(crate) fn resolve_expression(
                     ),
                 });
             };
+            let typedef = typedef.unwrap();
             let TypeDefKind::Struct(struct_def) = &typedef.kind;
 
-            in_new_scope!(types, {
+            in_new_scope!(context.types, {
                 if let Some(generic_args_in_def) = &struct_def.generic_args {
                     for (i, generic_arg) in generic_args_in_def.iter().enumerate() {
                         let resolved_generic_arg = resolve_type(
-                            errors,
-                            types.borrow_mut().deref_mut(),
-                            type_defs,
+                            context,
                             &struct_literal_expr.generic_args.as_ref().unwrap()[i],
                         )?;
                         resolved_generic_args.push(resolved_generic_arg.clone());
-                        types
+                        context
+                            .types
                             .borrow_mut()
                             .add(generic_arg.name.clone(), resolved_generic_arg);
                     }
@@ -337,7 +260,7 @@ pub(crate) fn resolve_expression(
                     {
                         expr
                     } else {
-                        errors.push(CompileError::new(
+                        context.errors.borrow_mut().push(CompileError::new(
                             loc_expr.range,
                             CompileErrorKind::FieldNotFound {
                                 field_name: field_name.clone(),
@@ -349,39 +272,31 @@ pub(crate) fn resolve_expression(
                     if let Some(generic_args) = &struct_def.generic_args {
                         for (i, generic_arg) in generic_args.iter().enumerate() {
                             let resolved_type = resolve_type(
-                                errors,
-                                types.borrow_mut().deref_mut(),
-                                type_defs,
+                                context,
                                 &struct_literal_expr.generic_args.as_ref().unwrap()[i],
                             )?;
-                            types
+                            context
+                                .types
                                 .borrow_mut()
                                 .add(generic_arg.name.clone(), resolved_type);
                         }
                     }
 
-                    let expected_ty =
-                        resolve_type(errors, types.borrow_mut().deref_mut(), type_defs, ty)?;
+                    let expected_ty = resolve_type(context, ty)?;
                     let resolved_field = resolve_expression(
-                        errors,
-                        types.clone(),
-                        scopes.clone(),
-                        type_defs,
-                        function_by_name,
-                        resolved_functions,
+                        context,
                         field_in_expr.1.as_deref(),
                         Some(&expected_ty.clone()),
-                        ptr_sized_int_type,
                     )?;
 
                     if !expected_ty.can_insert(&resolved_field.ty) {
-                        dbg!(errors.push(CompileError::new(
+                        context.errors.borrow_mut().push(CompileError::new(
                             loc_expr.range,
                             CompileErrorKind::TypeMismatch {
                                 expected: expected_ty.clone(),
                                 actual: resolved_field.ty.clone(),
                             },
-                        )));
+                        ));
                     }
 
                     resolved_fields.push((field_name.clone(), resolved_field));
@@ -416,31 +331,17 @@ pub(crate) fn resolve_expression(
             })
         }
         Expression::SizeOf(sizeof_expr) => {
-            let resolved_ty = resolve_type(
-                errors,
-                types.borrow_mut().deref_mut(),
-                type_defs,
-                &sizeof_expr.ty,
-            )?;
+            let resolved_ty = resolve_type(context, &sizeof_expr.ty)?;
             Ok(resolved_ast::ResolvedExpression {
                 kind: resolved_ast::ExpressionKind::SizeOf(resolved_ty),
                 ty: ResolvedType::USize,
             })
         }
         Expression::If(if_expr) => {
-            let condition_expr = resolve_expression(
-                errors,
-                types.clone(),
-                scopes.clone(),
-                type_defs,
-                function_by_name,
-                resolved_functions,
-                if_expr.cond.as_deref(),
-                Some(&ResolvedType::Bool),
-                ptr_sized_int_type,
-            )?;
+            let condition_expr =
+                resolve_expression(context, if_expr.cond.as_deref(), Some(&ResolvedType::Bool))?;
             if !matches!(condition_expr.ty, ResolvedType::Bool) {
-                errors.push(CompileError::new(
+                context.errors.borrow_mut().push(CompileError::new(
                     loc_expr.range,
                     CompileErrorKind::TypeMismatch {
                         expected: ResolvedType::Bool,
@@ -448,30 +349,10 @@ pub(crate) fn resolve_expression(
                     },
                 ));
             }
-            let then_expr = resolve_expression(
-                errors,
-                types.clone(),
-                scopes.clone(),
-                type_defs,
-                function_by_name,
-                resolved_functions,
-                if_expr.then.as_deref(),
-                annotation,
-                ptr_sized_int_type,
-            )?;
-            let else_expr = resolve_expression(
-                errors,
-                types.clone(),
-                scopes.clone(),
-                type_defs,
-                function_by_name,
-                resolved_functions,
-                if_expr.els.as_deref(),
-                annotation,
-                ptr_sized_int_type,
-            )?;
+            let then_expr = resolve_expression(context, if_expr.then.as_deref(), annotation)?;
+            let else_expr = resolve_expression(context, if_expr.els.as_deref(), annotation)?;
             if then_expr.ty != else_expr.ty {
-                errors.push(CompileError::new(
+                context.errors.borrow_mut().push(CompileError::new(
                     loc_expr.range,
                     CompileErrorKind::TypeMismatch {
                         expected: then_expr.ty.clone(),
@@ -490,18 +371,12 @@ pub(crate) fn resolve_expression(
         }
         Expression::When(when_expr) => {
             let condition_expr = resolve_expression(
-                errors,
-                types.clone(),
-                scopes.clone(),
-                type_defs,
-                function_by_name,
-                resolved_functions,
+                context,
                 when_expr.cond.as_deref(),
                 Some(&ResolvedType::Bool),
-                ptr_sized_int_type,
             )?;
             if !matches!(condition_expr.ty, ResolvedType::Bool) {
-                errors.push(CompileError::new(
+                context.errors.borrow_mut().push(CompileError::new(
                     loc_expr.range,
                     CompileErrorKind::TypeMismatch {
                         expected: ResolvedType::Bool,
@@ -509,17 +384,7 @@ pub(crate) fn resolve_expression(
                     },
                 ));
             }
-            let then_expr = resolve_expression(
-                errors,
-                types.clone(),
-                scopes.clone(),
-                type_defs,
-                function_by_name,
-                resolved_functions,
-                when_expr.then.as_deref(),
-                annotation,
-                ptr_sized_int_type,
-            )?;
+            let then_expr = resolve_expression(context, when_expr.then.as_deref(), annotation)?;
             Ok(resolved_ast::ResolvedExpression {
                 ty: ResolvedType::Void,
                 kind: resolved_ast::ExpressionKind::When(resolved_ast::WhenExpr {
@@ -528,25 +393,11 @@ pub(crate) fn resolve_expression(
                 }),
             })
         }
-        Expression::Assignment(assign_expr) => resolve_assignment(
-            errors,
-            types,
-            scopes,
-            type_defs,
-            function_by_name,
-            resolved_functions,
-            &Located::transfer(loc_expr, assign_expr),
-            ptr_sized_int_type,
-        ),
-        Expression::VariableDecl(variable_decl_expr) => resolve_variable_decl(
-            errors,
-            types,
-            scopes,
-            type_defs,
-            function_by_name,
-            resolved_functions,
-            &Located::transfer(loc_expr, variable_decl_expr),
-            ptr_sized_int_type,
-        ),
+        Expression::Assignment(assign_expr) => {
+            resolve_assignment(context, &Located::transfer(loc_expr, assign_expr))
+        }
+        Expression::VariableDecl(variable_decl_expr) => {
+            resolve_variable_decl(context, &Located::transfer(loc_expr, variable_decl_expr))
+        }
     }
 }

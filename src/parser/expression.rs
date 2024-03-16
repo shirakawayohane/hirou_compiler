@@ -455,7 +455,6 @@ pub(super) fn parse_boxed_expression(input: Span) -> ParseResult<Box<Expression>
             context("number_literal", parse_number_literal),
             context("bool_literal", parse_bool_literal),
             context("struct_literal", parse_struct_literal),
-            context("variable_ref", parse_variable_ref),
             context("if", parse_if_expression),
             context("when", parse_when_expression),
             context("assignment", parse_asignment),
@@ -464,6 +463,7 @@ pub(super) fn parse_boxed_expression(input: Span) -> ParseResult<Box<Expression>
             context("binop", parse_intrinsic_binop_expression),
             context("multi_op", parse_intrinsic_multi_op_expression),
             context("call", parse_function_call_expression),
+            context("variable_ref", parse_variable_ref),
         )),
         Box::new,
     ))(input)?;
@@ -500,4 +500,27 @@ pub(super) fn parse_boxed_expression(input: Span) -> ParseResult<Box<Expression>
     }
 
     Ok((rest, expr))
+}
+
+#[test]
+fn test_parse_boxed_expression() {
+    assert_eq!(
+        parse_boxed_expression(
+            r#"
+      (and (:= v2 Vector2 { x: 10, y: 20 }
+          vv2 : Vec<Vector2> (vec))
+          (set vv2 0 v2)
+          (:= v2_2 (get<Vector2> vv2 0))
+          (printf "%d, %d\n" v2_2.x v2_2.y))
+    }"#
+            .into()
+        )
+        .unwrap()
+        .1
+        .value
+        .as_ref(),
+        &Expression::NumberLiteral(NumberLiteralExpr {
+            value: "1".to_string()
+        })
+    )
 }

@@ -70,6 +70,6 @@ fn test_compare(): void {
 }
 
 fn main(): void {
-  (test_compare)
+  (test_annotation_inference)
 }
  

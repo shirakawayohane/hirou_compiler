@@ -191,7 +191,7 @@ pub struct DerefExpr {
 }
 
 #[derive(Debug, Clone)]
-pub struct IndexAccessExor {
+pub struct IndexAccessExpr {
     pub target: Box<ResolvedExpression>,
     pub index: Box<ResolvedExpression>,
 }
@@ -228,7 +228,7 @@ pub enum ExpressionKind {
     Multi(MultiExpr),
     CallExpr(CallExpr),
     Deref(DerefExpr),
-    IndexAccess(IndexAccessExor),
+    IndexAccess(IndexAccessExpr),
     FieldAccess(FieldAccessExpr),
     If(IfExpr),
     When(WhenExpr),

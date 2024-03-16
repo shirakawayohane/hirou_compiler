@@ -23,6 +23,30 @@ pub(crate) type Result<T, E = FaitalError> = std::result::Result<T, E>;
 
 use crate::ast::*;
 
+pub struct ResolverContext {
+    pub errors: Rc<RefCell<Vec<CompileError>>>,
+    pub types: Rc<RefCell<TypeScopes>>,
+    pub scopes: Rc<RefCell<VariableScopes>>,
+    pub type_defs: Rc<RefCell<HashMap<String, ast::TypeDef>>>,
+    pub function_by_name: Rc<RefCell<HashMap<String, ast::Function>>>,
+    pub resolved_functions: Rc<RefCell<HashMap<String, resolved_ast::Function>>>,
+    pub ptr_sized_int_type: PointerSizedIntWidth,
+}
+
+impl ResolverContext {
+    pub fn new(ptr_sized_int_type: PointerSizedIntWidth) -> Self {
+        Self {
+            errors: Rc::new(RefCell::new(Vec::new())),
+            types: Rc::new(RefCell::new(TypeScopes::new())),
+            scopes: Rc::new(RefCell::new(VariableScopes::new())),
+            type_defs: Rc::new(RefCell::new(HashMap::new())),
+            function_by_name: Rc::new(RefCell::new(HashMap::new())),
+            resolved_functions: Rc::new(RefCell::new(HashMap::new())),
+            ptr_sized_int_type,
+        }
+    }
+}
+
 pub(crate) fn mangle_fn_name(
     name: &str,
     arg_types: &[&ResolvedType],
@@ -156,22 +180,11 @@ macro_rules! in_new_scope {
 
 // ジェネリック関数の場合は事前に型を登録しておく必要がある
 fn resolve_function(
-    errors: &mut Vec<CompileError>,
-    type_scopes: Rc<RefCell<TypeScopes>>,
-    scopes: Rc<RefCell<VariableScopes>>,
-    type_defs: &HashMap<String, ast::TypeDef>,
-    function_by_name: &HashMap<String, ast::Function>,
-    resolved_functions: &mut HashMap<String, resolved_ast::Function>,
+    context: &ResolverContext,
     current_fn: &ast::Function,
-    ptr_sized_int_type: PointerSizedIntWidth,
 ) -> Result<(), FaitalError> {
-    let result_type = resolve_type(
-        errors,
-        type_scopes.borrow_mut().deref_mut(),
-        type_defs,
-        &current_fn.decl.return_type,
-    )?;
-    in_new_scope!(scopes, {
+    let result_type = resolve_type(context, &current_fn.decl.return_type)?;
+    in_new_scope!(context.scopes, {
         let mut resolved_args: Vec<resolved_ast::Argument> = Vec::new();
         for arg in &current_fn.decl.args {
             match arg {
@@ -179,13 +192,11 @@ fn resolve_function(
                     resolved_args.push(resolved_ast::Argument::VarArgs);
                 }
                 Argument::Normal(arg_ty, arg_name) => {
-                    let arg_type = resolve_type(
-                        errors,
-                        type_scopes.borrow_mut().deref_mut(),
-                        type_defs,
-                        arg_ty,
-                    )?;
-                    scopes.borrow_mut().add(arg_name.clone(), arg_type.clone());
+                    let arg_type = resolve_type(context, arg_ty)?;
+                    context
+                        .scopes
+                        .borrow_mut()
+                        .add(arg_name.clone(), arg_type.clone());
                     resolved_args.push(resolved_ast::Argument::Normal(arg_type, arg_name.clone()));
                 }
             }
@@ -204,22 +215,13 @@ fn resolve_function(
             current_fn.decl.name.clone()
         };
 
-        if resolved_functions.contains_key(&name) {
+        if context.resolved_functions.borrow().contains_key(&name) {
             return Ok(());
         }
 
         let mut resolved_statements = Vec::new();
         for statement in &current_fn.body {
-            resolved_statements.push(resolve_statement(
-                errors,
-                type_scopes.clone(),
-                scopes.clone(),
-                type_defs,
-                function_by_name,
-                resolved_functions,
-                statement,
-                ptr_sized_int_type,
-            )?);
+            resolved_statements.push(resolve_statement(context, statement)?);
         }
         // 必ずReturnするための特別な処理
         if !current_fn.decl.is_intrinsic {
@@ -262,7 +264,7 @@ fn resolve_function(
                 _ => unreachable!(),
             };
             if !result_type.can_insert(actual_return_ty) {
-                errors.push(CompileError::new(
+                context.errors.borrow_mut().push(CompileError::new(
                     current_fn.body.last().unwrap().range,
                     crate::resolver::error::CompileErrorKind::TypeMismatch {
                         expected: result_type.clone(),
@@ -281,40 +283,48 @@ fn resolve_function(
             body: resolved_statements,
         };
 
-        resolved_functions.insert(name, resolved_function);
+        context
+            .resolved_functions
+            .borrow_mut()
+            .insert(name, resolved_function);
     });
     Ok(())
 }
 
 pub(crate) fn resolve_module(
-    errors: &mut Vec<CompileError>,
-    resolved_functions: &mut HashMap<String, resolved_ast::Function>,
+    context: &ResolverContext,
     module: &crate::ast::Module,
     is_build_only: bool,
-    ptr_sized_int_type: PointerSizedIntWidth,
 ) -> Result<crate::resolved_ast::Module, FaitalError> {
-    let mut function_by_name = HashMap::new();
-    let mut type_defs = HashMap::new();
-    let scopes = Rc::new(RefCell::new(VariableScopes::new()));
-    let type_scopes = Rc::new(RefCell::new(TypeScopes::new()));
-    scopes.borrow_mut().push_new();
-    type_scopes.borrow_mut().push_new();
+    context.scopes.borrow_mut().push_new();
+    context.types.borrow_mut().push_new();
     // 組み込み関数の型を登録する
-    register_intrinsic_functions(&mut function_by_name);
-    register_intrinsic_types(type_scopes.borrow_mut().deref_mut());
+    {
+        let mut function_by_name = context.function_by_name.borrow_mut();
+        register_intrinsic_functions(&mut function_by_name);
+    }
+    register_intrinsic_types(context.types.borrow_mut().deref_mut());
 
     for toplevel in &module.toplevels {
         match &toplevel.value {
             // 関数を名前で引けるようにしておく
             TopLevel::Function(func) => {
-                function_by_name.insert(func.decl.name.clone(), func.clone());
+                context
+                    .function_by_name
+                    .borrow_mut()
+                    .insert(func.decl.name.clone(), func.clone());
             }
             // 型定義を名前で引けるようにしておく
             TopLevel::TypeDef(typedef) => {
-                type_defs.insert(typedef.name.clone(), typedef.clone());
+                context
+                    .type_defs
+                    .borrow_mut()
+                    .insert(typedef.name.clone(), typedef.clone());
             }
         }
     }
+
+    let function_by_name = context.function_by_name.borrow();
     let main_fn = function_by_name
         .get("main")
         .ok_or_else(|| FaitalError("No main function found".into()))?;
@@ -322,18 +332,9 @@ pub(crate) fn resolve_module(
     let resolved_toplevels = RefCell::new(Vec::new());
 
     // main関数から辿れる関数を全て解決する
-    resolve_function(
-        errors,
-        type_scopes.clone(),
-        scopes.clone(),
-        &type_defs,
-        &function_by_name,
-        resolved_functions,
-        main_fn,
-        ptr_sized_int_type,
-    )?;
+    resolve_function(&context, main_fn)?;
 
-    for resolved_function in resolved_functions.values() {
+    for resolved_function in context.resolved_functions.borrow().values() {
         resolved_toplevels
             .borrow_mut()
             .push(resolved_ast::TopLevel::Function(resolved_function.clone()));
@@ -349,17 +350,8 @@ pub(crate) fn resolve_module(
                         // TODO: この部分で出来ない解析は別の場所で行う
                         continue;
                     }
-                    resolve_function(
-                        errors,
-                        type_scopes.clone(),
-                        scopes.clone(),
-                        &type_defs,
-                        &function_by_name,
-                        resolved_functions,
-                        unresolved_function,
-                        ptr_sized_int_type,
-                    )?;
-                    for resolved_function in resolved_functions.values() {
+                    resolve_function(&context, unresolved_function)?;
+                    for resolved_function in context.resolved_functions.borrow().values() {
                         resolved_toplevels
                             .borrow_mut()
                             .push(resolved_ast::TopLevel::Function(resolved_function.clone()));

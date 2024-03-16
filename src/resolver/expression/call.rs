@@ -1,60 +1,41 @@
-use crate::{ast::UnresolvedType, common::target::PointerSizedIntWidth};
+use crate::{ast::UnresolvedType, resolver::ResolverContext};
 
 use super::*;
 
 pub fn resolve_call_with_generic_args(
-    errors: &mut Vec<CompileError>,
-    types: Rc<RefCell<TypeScopes>>,
-    scopes: Rc<RefCell<VariableScopes>>,
-    type_defs: &HashMap<String, ast::TypeDef>,
-    function_by_name: &HashMap<String, ast::Function>,
-    resolved_functions: &mut HashMap<String, resolved_ast::Function>,
+    context: &ResolverContext,
     call_expr: &Located<&ast::CallExpr>,
     callee: &ast::Function,
-    ptr_sized_int_type: PointerSizedIntWidth,
     // 推論に成功した場合のみtrueを返す
 ) -> Result<bool, FaitalError> {
     if let Some(generic_args) = &callee.decl.generic_args {
         // スコープに解決したジェネリックの型を追加する
         if let Some(actual_generic_args) = &call_expr.generic_args {
             if generic_args.len() != actual_generic_args.len() {
-                dbg!(errors.push(CompileError::new(
+                context.errors.borrow_mut().push(CompileError::new(
                     call_expr.range,
                     CompileErrorKind::MismatchGenericArgCount {
                         name: call_expr.name.to_owned(),
                         expected: generic_args.len(),
                         actual: actual_generic_args.len(),
                     },
-                )));
+                ));
                 return Ok(false);
             };
 
-            in_global_scope!(scopes, {
-                in_global_scope!(types, {
+            in_global_scope!(context.scopes, {
+                in_global_scope!(context.types, {
                     // 正常系
                     for i in 0..generic_args.len() {
                         let generic_arg = &generic_args[i];
                         let actual_arg = &actual_generic_args[i];
-                        let resolved_type = resolve_type(
-                            errors,
-                            types.borrow_mut().deref_mut(),
-                            type_defs,
-                            actual_arg,
-                        )?;
-                        types
+                        let resolved_type = resolve_type(context, actual_arg)?;
+                        context
+                            .types
                             .borrow_mut()
                             .add(generic_arg.name.clone(), resolved_type);
                     }
-                    resolve_function(
-                        errors,
-                        types.clone(),
-                        scopes.clone(),
-                        type_defs,
-                        function_by_name,
-                        resolved_functions,
-                        callee,
-                        ptr_sized_int_type,
-                    )?;
+                    resolve_function(context, callee)?;
                 });
             });
             return Ok(true);
@@ -64,16 +45,11 @@ pub fn resolve_call_with_generic_args(
 }
 
 fn infer_generic_args_recursively(
-    errors: &mut Vec<CompileError>,
-    types: Rc<RefCell<TypeScopes>>,
-    scopes: Rc<RefCell<VariableScopes>>,
-    type_defs: &HashMap<String, ast::TypeDef>,
-    function_by_name: &HashMap<String, ast::Function>,
-    resolved_functions: &mut HashMap<String, resolved_ast::Function>,
+    tmp_errors: &mut Vec<CompileError>,
+    context: &ResolverContext,
     callee: &ast::Function,
     current_callee_return_ty: &UnresolvedType,
     current_annotation: &ResolvedType,
-    ptr_sized_int_type: PointerSizedIntWidth,
 ) -> Result<bool, FaitalError> {
     let callee_generic_args = callee.decl.generic_args.as_ref().unwrap();
     match current_callee_return_ty {
@@ -83,7 +59,8 @@ fn infer_generic_args_recursively(
                     .iter()
                     .find(|x| x.value.name == return_ty_typeref.name)
                 {
-                    types
+                    context
+                        .types
                         .borrow_mut()
                         .add(generic_arg.value.name.clone(), current_annotation.clone());
                     return Ok(true);
@@ -100,16 +77,11 @@ fn infer_generic_args_recursively(
                                 resolved_struct.generic_args.iter().enumerate()
                             {
                                 if infer_generic_args_recursively(
-                                    errors,
-                                    types.clone(),
-                                    scopes.clone(),
-                                    type_defs,
-                                    function_by_name,
-                                    resolved_functions,
+                                    tmp_errors,
+                                    context,
                                     callee,
                                     &generic_args[i],
                                     &resolved_generic_ty[i],
-                                    ptr_sized_int_type,
                                 )? {
                                     generic_arg_inferred = true;
                                 }
@@ -130,56 +102,31 @@ fn infer_generic_args_recursively(
         UnresolvedType::Ptr(return_ty_pointer_ty) => {
             if let ResolvedType::Ptr(inner) = current_annotation {
                 if infer_generic_args_recursively(
-                    errors,
-                    types.clone(),
-                    scopes.clone(),
-                    type_defs,
-                    function_by_name,
-                    resolved_functions,
+                    tmp_errors,
+                    context,
                     callee,
                     return_ty_pointer_ty,
                     inner,
-                    ptr_sized_int_type,
                 )? {
-                    resolve_function(
-                        errors,
-                        types.clone(),
-                        scopes.clone(),
-                        type_defs,
-                        function_by_name,
-                        resolved_functions,
-                        callee,
-                        ptr_sized_int_type,
-                    )?;
                     return Ok(true);
                 }
-            } else {
-                return Ok(false);
             }
         }
     }
-
     Ok(false)
 }
-
+// 関数のジェネリック引数を引数から推論する関数
 pub fn resolve_infer_generic_from_arguments(
-    errors: &mut Vec<CompileError>,
-    types: Rc<RefCell<TypeScopes>>,
-    scopes: Rc<RefCell<VariableScopes>>,
-    type_defs: &HashMap<String, ast::TypeDef>,
-    function_by_name: &HashMap<String, ast::Function>,
-    resolved_functions: &mut HashMap<String, resolved_ast::Function>,
+    context: &ResolverContext,
     call_expr: &Located<&ast::CallExpr>,
     callee: &ast::Function,
     resolved_args: &[ResolvedExpression], // 推論に成功した場合のみtrueを返す
-    ptr_sized_int_type: PointerSizedIntWidth,
 ) -> Result<bool, FaitalError> {
-    if call_expr.generic_args.is_some() {
+    // ジェネリック引数が存在しない場合は、推論を行わない
+    if call_expr.generic_args.is_some() || callee.decl.generic_args.is_none() {
         return Ok(false);
     }
-    if callee.decl.generic_args.is_none() {
-        return Ok(false);
-    }
+    // 可変長引数を持つ関数は、推論を行わない
     if callee
         .decl
         .args
@@ -190,8 +137,9 @@ pub fn resolve_infer_generic_from_arguments(
     }
     let mut inferred = false;
     let mut temp_errors = Vec::new();
-    in_global_scope!(scopes, {
-        in_global_scope!(types, {
+    // グローバルスコープで処理を行う
+    in_global_scope!(context.scopes, {
+        in_global_scope!(context.types, {
             for (arg_idx, _arg) in call_expr.args.iter().enumerate() {
                 let callee_arg = &callee.decl.args[arg_idx];
                 // 引数にジェネリクスを含まない場合は推論しない
@@ -201,88 +149,57 @@ pub fn resolve_infer_generic_from_arguments(
                     ast::Argument::Normal(callee_ty, _name) => {
                         if infer_generic_args_recursively(
                             &mut temp_errors,
-                            types.clone(),
-                            scopes.clone(),
-                            type_defs,
-                            function_by_name,
-                            resolved_functions,
+                            context,
                             callee,
                             callee_ty,
                             &resolved_args[arg_idx].ty.clone(),
-                            ptr_sized_int_type,
                         )? {
                             inferred = true;
                         }
                     }
                 }
             }
-            resolve_function(
-                errors,
-                types.clone(),
-                scopes.clone(),
-                type_defs,
-                function_by_name,
-                resolved_functions,
-                callee,
-                ptr_sized_int_type,
-            )?;
+            // 関数の解決を試みる
+            resolve_function(context, callee)?;
         });
     });
 
+    // 推論が成功した場合、一時エラーを追加する
     if inferred {
-        errors.extend(temp_errors);
+        context.errors.borrow_mut().extend(temp_errors);
     }
 
     Ok(inferred)
 }
 
+// 関数のジェネリック引数をアノテーションから推論する関数
 pub fn resolve_infer_generic_from_annotation(
-    errors: &mut Vec<CompileError>,
-    types: Rc<RefCell<TypeScopes>>,
-    scopes: Rc<RefCell<VariableScopes>>,
-    type_defs: &HashMap<String, ast::TypeDef>,
-    function_by_name: &HashMap<String, ast::Function>,
-    resolved_functions: &mut HashMap<String, resolved_ast::Function>,
+    context: &ResolverContext,
     call_expr: &Located<&ast::CallExpr>,
     callee: &ast::Function,
     annotation: Option<&ResolvedType>,
-    ptr_sized_int_type: PointerSizedIntWidth,
     // 推論に成功した場合のみtrueを返す
 ) -> Result<bool, FaitalError> {
-    if call_expr.generic_args.is_some() {
+    // ジェネリック引数が存在しない場合は、推論を行わない
+    if call_expr.generic_args.is_some() || callee.decl.generic_args.is_none() {
         return Ok(false);
     }
-    if callee.decl.generic_args.is_none() {
-        return Ok(false);
-    }
+    // アノテーションが存在する場合、推論を試みる
     if let Some(annotation) = &annotation {
-        in_global_scope!(scopes, {
-            in_global_scope!(types, {
+        in_global_scope!(context.scopes, {
+            in_global_scope!(context.types, {
                 let mut temp_errors = Vec::new();
                 let inferred = infer_generic_args_recursively(
                     &mut temp_errors,
-                    types.clone(),
-                    scopes.clone(),
-                    type_defs,
-                    function_by_name,
-                    resolved_functions,
+                    context,
                     callee,
                     &callee.decl.return_type.value,
                     annotation,
-                    ptr_sized_int_type,
                 )?;
+                // 推論が成功した場合、一時エラーを追加し、関数の解決を試みる
                 if inferred {
-                    errors.extend(temp_errors);
-                    resolve_function(
-                        errors,
-                        types.clone(),
-                        scopes.clone(),
-                        type_defs,
-                        function_by_name,
-                        resolved_functions,
-                        callee,
-                        ptr_sized_int_type,
-                    )?;
+                    context.errors.borrow_mut().extend(temp_errors);
+                    resolve_function(context, callee)?;
                 }
                 Ok(inferred)
             })
@@ -292,57 +209,42 @@ pub fn resolve_infer_generic_from_annotation(
     }
 }
 
+// ジェネリック引数を持たない関数の解決を試みる関数
 pub fn resolve_non_generic_function(
-    errors: &mut Vec<CompileError>,
-    types: Rc<RefCell<TypeScopes>>,
-    scopes: Rc<RefCell<VariableScopes>>,
-    type_defs: &HashMap<String, ast::TypeDef>,
-    function_by_name: &HashMap<String, ast::Function>,
-    resolved_functions: &mut HashMap<String, resolved_ast::Function>,
+    context: &ResolverContext,
     callee: &ast::Function,
-    ptr_sized_int_type: PointerSizedIntWidth,
     // 推論に成功した場合のみtrueを返す
 ) -> Result<bool, FaitalError> {
+    // ジェネリック引数が存在する場合は、解決を行わない
     if callee.decl.generic_args.is_some() {
         return Ok(false);
     }
-    in_global_scope!(scopes, {
-        in_global_scope!(types, {
-            resolve_function(
-                errors,
-                types.clone(),
-                scopes.clone(),
-                type_defs,
-                function_by_name,
-                resolved_functions,
-                callee,
-                ptr_sized_int_type,
-            )?;
+    // グローバルスコープで関数の解決を試みる
+    in_global_scope!(context.scopes, {
+        in_global_scope!(context.types, {
+            resolve_function(context, callee)?;
         });
     });
     Ok(true)
 }
 
+// 関数呼び出し式の解決を試みる関数
 pub fn resolve_call_expr(
-    errors: &mut Vec<CompileError>,
-    types: Rc<RefCell<TypeScopes>>,
-    scopes: Rc<RefCell<VariableScopes>>,
-    type_defs: &HashMap<String, ast::TypeDef>,
-    function_by_name: &HashMap<String, ast::Function>,
-    resolved_functions: &mut HashMap<String, resolved_ast::Function>,
+    context: &ResolverContext,
     call_expr: &Located<&ast::CallExpr>,
     annotation: Option<&ResolvedType>,
-    ptr_sized_int_type: PointerSizedIntWidth,
 ) -> Result<ResolvedExpression, FaitalError> {
-    let callee = match function_by_name.get(&call_expr.name) {
+    // 関数名から関数を取得し、見つからない場合はエラーを返す
+    let binding = context.function_by_name.borrow();
+    let callee = match binding.get(&call_expr.name) {
         Some(callee) => callee,
         None => {
-            dbg!(errors.push(CompileError::new(
+            context.errors.borrow_mut().push(CompileError::new(
                 call_expr.range,
                 CompileErrorKind::FunctionNotFound {
                     name: call_expr.name.to_owned(),
                 },
-            )));
+            ));
             return Ok(ResolvedExpression {
                 ty: ResolvedType::Unknown,
                 kind: ExpressionKind::Unknown,
@@ -350,101 +252,58 @@ pub fn resolve_call_expr(
         }
     };
 
+    // ジェネリック引数を持たない関数、ジェネリック引数を持つ関数、アノテーションからの推論を試みる
     let mut inferred = true;
-    if !resolve_non_generic_function(
-        errors,
-        types.clone(),
-        scopes.clone(),
-        type_defs,
-        function_by_name,
-        resolved_functions,
-        callee,
-        ptr_sized_int_type,
-    )? && !resolve_call_with_generic_args(
-        errors,
-        types.clone(),
-        scopes.clone(),
-        type_defs,
-        function_by_name,
-        resolved_functions,
-        call_expr,
-        callee,
-        ptr_sized_int_type,
-    )? && !resolve_infer_generic_from_annotation(
-        errors,
-        types.clone(),
-        scopes.clone(),
-        type_defs,
-        function_by_name,
-        resolved_functions,
-        call_expr,
-        callee,
-        annotation,
-        ptr_sized_int_type,
-    )? {
+    if !resolve_non_generic_function(context, callee)?
+        && !resolve_call_with_generic_args(context, call_expr, callee)?
+        && !resolve_infer_generic_from_annotation(context, call_expr, callee, annotation)?
+    {
         inferred = false;
     }
 
+    // 引数の解決を試みる
     let mut resolved_args = Vec::new();
     let has_var_args = callee.decl.args.last() == Some(&ast::Argument::VarArgs);
 
+    // 可変長引数を持たない場合、引数の数が一致しなければエラーを返す
     if !has_var_args && callee.decl.args.len() != call_expr.args.len() {
-        dbg!(errors.push(CompileError::new(
+        context.errors.borrow_mut().push(CompileError::new(
             call_expr.range,
             CompileErrorKind::MismatchFunctionArgCount {
                 name: call_expr.name.to_owned(),
                 expected: callee.decl.args.len(),
                 actual: call_expr.args.len(),
             },
-        )));
+        ));
         return Ok(ResolvedExpression {
             ty: ResolvedType::Unknown,
             kind: ExpressionKind::Unknown,
         });
     }
 
+    // 各引数を解決し、型の不一致があればエラーを返す
     for (i, arg) in call_expr.args.iter().enumerate() {
-        let calee_arg = if has_var_args && i >= callee.decl.args.len() {
+        let callee_arg = if has_var_args && i >= callee.decl.args.len() {
             &callee.decl.args[callee.decl.args.len() - 1]
         } else {
             &callee.decl.args[i]
         };
-        match calee_arg {
+        match callee_arg {
             ast::Argument::VarArgs => {
-                resolved_args.push(resolve_expression(
-                    errors,
-                    types.clone(),
-                    scopes.clone(),
-                    type_defs,
-                    function_by_name,
-                    resolved_functions,
-                    arg.as_inner_deref(),
-                    None,
-                    ptr_sized_int_type,
-                )?);
+                resolved_args.push(resolve_expression(context, arg.as_inner_deref(), None)?);
             }
             ast::Argument::Normal(ty, _name) => {
-                let resolved_ty =
-                    resolve_type(errors, types.borrow_mut().deref_mut(), type_defs, ty)?;
-                let resolved_arg = resolve_expression(
-                    errors,
-                    types.clone(),
-                    scopes.clone(),
-                    type_defs,
-                    function_by_name,
-                    resolved_functions,
-                    arg.as_inner_deref(),
-                    Some(&resolved_ty),
-                    ptr_sized_int_type,
-                )?;
+                let resolved_ty = resolve_type(context, ty)?;
+                let resolved_arg =
+                    resolve_expression(context, arg.as_inner_deref(), Some(&resolved_ty))?;
                 if !resolved_ty.can_insert(&resolved_arg.ty) {
-                    dbg!(errors.push(CompileError::new(
+                    context.errors.borrow_mut().push(CompileError::new(
                         arg.range,
                         CompileErrorKind::TypeMismatch {
                             expected: resolved_ty.clone(),
                             actual: resolved_arg.ty.clone(),
                         },
-                    )));
+                    ));
                 }
 
                 resolved_args.push(resolved_arg);
@@ -452,44 +311,25 @@ pub fn resolve_call_expr(
         }
     }
 
+    // 推論が失敗した場合、引数からの推論を試みる
     if !inferred
-        && !resolve_infer_generic_from_arguments(
-            errors,
-            types.clone(),
-            scopes.clone(),
-            type_defs,
-            function_by_name,
-            resolved_functions,
-            call_expr,
-            callee,
-            &resolved_args,
-            ptr_sized_int_type,
-        )?
+        && !resolve_infer_generic_from_arguments(context, call_expr, callee, &resolved_args)?
     {
-        dbg!(errors.push(CompileError::new(
+        context.errors.borrow_mut().push(CompileError::new(
             call_expr.range,
             CompileErrorKind::CannotInferGenericArgs {
                 name: call_expr.name.to_owned(),
-                message: "".to_string()
+                message: "".to_string(),
             },
-        )));
+        ));
         return Ok(ResolvedExpression {
-            ty: resolve_type(
-                &mut Vec::new(),
-                types.borrow_mut().deref_mut(),
-                type_defs,
-                &callee.decl.return_type,
-            )?,
+            ty: resolve_type(context, &callee.decl.return_type)?,
             kind: ExpressionKind::Unknown,
         });
     }
 
-    let mut resolved_return_ty = resolve_type(
-        errors,
-        types.borrow_mut().deref_mut(),
-        type_defs,
-        &callee.decl.return_type,
-    )?;
+    // 戻り値の型を解決する
+    let mut resolved_return_ty = resolve_type(context, &callee.decl.return_type)?;
     // void* はアノテーションがあればその型として扱う
     if let Some(annotation) = annotation {
         if let ResolvedType::Ptr(inner) = &resolved_return_ty {
@@ -501,20 +341,21 @@ pub fn resolve_call_expr(
 
     // varargsはintrinsicでしか定義しないので、引数の最後に来ないケースは想定しない。
     if call_expr.args.len() != callee.decl.args.len() && !has_var_args {
-        dbg!(errors.push(CompileError::new(
+        context.errors.borrow_mut().push(CompileError::new(
             call_expr.range,
             CompileErrorKind::MismatchFunctionArgCount {
                 name: call_expr.name.to_owned(),
                 expected: callee.decl.args.len(),
                 actual: call_expr.args.len(),
             },
-        )));
+        ));
         return Ok(ResolvedExpression {
             ty: resolved_return_ty,
             kind: ExpressionKind::Unknown,
         });
     }
 
+    // 解決された式を返す
     return Ok(resolved_ast::ResolvedExpression {
         kind: resolved_ast::ExpressionKind::CallExpr(resolved_ast::CallExpr {
             callee: if callee.decl.generic_args.is_some() {
