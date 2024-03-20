@@ -59,6 +59,8 @@ pub(super) fn register_intrinsic_functions(function_by_name: &mut HashMap<String
                 );
             }
             ast::TopLevel::TypeDef(_) => {}
+            ast::TopLevel::Implemantation(_) => unreachable!(),
+            ast::TopLevel::Interface(_) => unreachable!(),
         }
     }
 }

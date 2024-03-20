@@ -33,17 +33,25 @@ set -Ux LLVM_SYS_160_PREFIX /opt/homebrew/Cellar/llvm@16/16.0.6
 - テストフレームワークの実装
 - 標準ライブラリの実装
 
-## TODOリスト
+## TODOリスト（やる順）
 - トレイト（アロケーターの実装のために必要（stack, heapで挙動が違うため))
+- 名前空間（モジュールシステム）
+- メモリ管理
+- Rustで標準ライブラリ作れるようにする
+- string型の実装
 - 使用箇所からのジェネリクス引数の推論
+- リテラル
+    - ベクタリテラル []
+    - マップリテラル {} (Structとの相互変換を実装したい)
+    - セットリテラル #{}
+
+以下は細かいの
+- Statementいらなかったので削除
+- 関数定義のアノテーションがなかったらvoid型
 - indexがintであるかの検証
 - structのフィールドにVoidを入れることは出来ないことの検証
 - panic!, todo!, unreachable!の実装
 - annotationをOption<&ResolvedType>にできるか検討
-- メモリ管理終わったら
-    - ベクタリテラル []
-    - マップリテラル {} (Structとの相互変換を実装したい)
-    - セットリテラル #{}
 - リージョンって実は推論できるかも cf. https://github.com/melsman/mlkit
 
 変数定義こうしようと思ってる
@@ -94,16 +102,12 @@ heap_alloc {
 - リージョンのアロケーターはスレッドごとに管理される。
 - 他のスレッドに record を渡すときは必ずコピーとなる。
 - クロージャーは常にリージョンを持つ。リージョンはクロージャーが作られたスコープのリージョンとなる。
+
+- Interface
 ```
-method into<T>(self): T;
+interface as_bool<T>(self: T): bool
 
-(defmethod into<T> [self] : T)
+impl as_bool<i32>(self): bool {
 
-impl fn core::into<i64> for i32 (self) {
-    (cast<i64> self)
 }
-
-(:= long : i64 (into 1_i32))
 ```
-
-

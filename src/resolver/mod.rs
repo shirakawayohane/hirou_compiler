@@ -321,6 +321,8 @@ pub(crate) fn resolve_module(
                     .borrow_mut()
                     .insert(typedef.name.clone(), typedef.clone());
             }
+            TopLevel::Implemantation(_) => todo!(),
+            TopLevel::Interface(_) => todo!(),
         }
     }
 
@@ -358,6 +360,8 @@ pub(crate) fn resolve_module(
                     }
                 }
                 TopLevel::TypeDef(_) => {}
+                TopLevel::Implemantation(_) => todo!(),
+                TopLevel::Interface(_) => todo!(),
             }
         }
     }

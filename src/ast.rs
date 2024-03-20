@@ -324,8 +324,30 @@ pub struct FunctionDecl {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct Interface {
+    pub name: String,
+    pub generic_args: Option<Vec<Located<GenericArgument>>>,
+    pub args: Vec<Argument>,
+    pub return_type: Located<UnresolvedType>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Function {
     pub decl: FunctionDecl,
+    pub body: Vec<Located<Statement>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImplementationDecl {
+    pub fullname: String,
+    pub generic_args: Option<Vec<Located<GenericArgument>>>,
+    pub args: Vec<Argument>,
+    pub return_type: Located<UnresolvedType>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Implementation {
+    pub decl: ImplementationDecl,
     pub body: Vec<Located<Statement>>,
 }
 
@@ -350,7 +372,9 @@ pub struct TypeDef {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TopLevel {
     Function(Function),
+    Implemantation(Implementation),
     TypeDef(TypeDef),
+    Interface(Interface),
 }
 
 #[derive(Debug)]

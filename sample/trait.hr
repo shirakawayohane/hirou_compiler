@@ -1,0 +1,12 @@
+interface ->bool<T> (self: T) : bool
+
+impl ->bool<i32>(self: i32) : bool {
+  (> self 0)
+}
+
+fn main(): void {
+  (printf "one is %s\n" 
+    (if (->bool 1)
+      "truthy"
+      "falsy"))
+}

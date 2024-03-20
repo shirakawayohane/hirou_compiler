@@ -1,10 +1,16 @@
+use crate::ast::{Position, Range};
+
 use super::*;
 
 use nom::{
-    bytes::complete::{tag, take_till1},
-    character::complete::{char, digit1},
-    combinator::not,
-    sequence::preceded,
+    bytes::complete::{tag, take, take_while, take_while1},
+    character::{
+        complete::{char, digit1},
+        is_alphabetic, is_alphanumeric,
+    },
+    combinator::{not, recognize},
+    error::VerboseErrorKind,
+    sequence::{pair, preceded},
 };
 
 // トークン間の空白をスキップし、本筋に集中するためのコンビネーター
@@ -75,22 +81,59 @@ token_tag!(gt_token, ">");
 token_tag!(lt_token, "<");
 token_tag!(alloc_token, "alloc");
 token_tag!(salloc_token, "salloc");
+token_tag!(interface_token, "interface");
+token_tag!(impl_token, "impl");
 
-#[inline(always)]
 pub(super) fn parse_identifier(input: Span) -> NotLocatedParseResult<String> {
-    let (s, _) = skip0(input)?;
-    let (s, _) = not(digit1)(s)?;
+    let (first_skipped, _) = skip0(input)?;
+    let (s, _) = not(digit1)(first_skipped)?;
     let (s, _) = skip0(s)?;
-    map(
-        take_till1(|x: char| !x.is_alphabetic() && !x.is_ascii_digit() && !['-', '_'].contains(&x)),
-        |s: Span| s.to_string(),
-    )(s)
+
+    let mut take_count: usize = 0;
+    let mut last_char: char = ' ';
+    while take_count < s.fragment().len() {
+        let c: char = s.fragment().chars().nth(take_count).unwrap();
+        match c {
+            '0'..='9' | '_' | '-' | '!' | '?' => take_count += 1,
+            '>' => {
+                if last_char != '-' {
+                    break;
+                }
+                take_count += 1;
+            }
+            '<' => {
+                let next_char = s.fragment().chars().nth(take_count + 1).unwrap();
+                if next_char != '-' {
+                    break;
+                }
+            }
+            _ => {
+                if c.is_alphabetic() {
+                    take_count += 1;
+                } else {
+                    break;
+                }
+            }
+        }
+        last_char = c;
+    }
+
+    if take_count == 0 {
+        return Err(nom::Err::Error(VerboseError {
+            errors: vec![(s, VerboseErrorKind::Context("identifier"))],
+        }));
+    }
+
+    map(take(take_count), |x: Span| x.to_string())(first_skipped)
 }
 
 #[test]
 fn parse_identifier_test() {
     assert!(parse_identifier("print-i32".into()).is_ok());
     assert!(parse_identifier("buf[i]".into()).is_ok());
+    let (rest, ident) = parse_identifier(" ->bool<T> (self: T)".into()).unwrap();
+    assert_eq!(&ident, &"->bool");
+    assert_eq!(rest.fragment(), &"<T> (self: T)");
     assert!(parse_identifier("}".into()).is_err());
     assert!(parse_identifier("{".into()).is_err());
     assert!(parse_identifier("(".into()).is_err());

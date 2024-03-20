@@ -8,9 +8,9 @@ use super::{statement::parse_statement, token::*, util::*, *};
 
 use nom::{
     branch::alt,
-    combinator::{cut, opt},
+    combinator::{cut, opt, peek},
     error::context,
-    sequence::tuple,
+    sequence::{preceded, tuple},
 };
 
 #[test]
@@ -185,6 +185,66 @@ fn parse_function(input: Span) -> ParseResult<TopLevel> {
     ))(input)
 }
 
+fn parse_interface(input: Span) -> ParseResult<TopLevel> {
+    let (s, _) = peek(interface_token)(input)?;
+    cut(located(context(
+        "interface",
+        map(
+            tuple((
+                context("interface", interface_token),
+                context("identifier", parse_identifier),
+                context("generic_arguments", opt(parse_generic_argument_decls)),
+                context("arguments", parse_arguments),
+                preceded(colon, parse_type),
+            )),
+            |(_, name, generic_args, args, return_type)| {
+                TopLevel::Interface(Interface {
+                    name,
+                    generic_args,
+                    args,
+                    return_type,
+                })
+            },
+        ),
+    )))(s)
+}
+
+#[test]
+fn parse_interface_invalid_input() {
+    assert!(dbg!(parse_interface(
+        "interface ->bool<T> (self: T) : bool".into()
+    ))
+    .is_ok());
+}
+
+fn parse_impl(input: Span) -> ParseResult<TopLevel> {
+    let (s, _) = peek(impl_token)(input)?;
+    cut(located(context(
+        "implementation",
+        map(
+            tuple((
+                impl_token,
+                parse_identifier,
+                opt(parse_generic_argument_decls),
+                parse_arguments,
+                preceded(colon, parse_type),
+                parse_block,
+            )),
+            |(_, name, generic_args, args, return_type, body)| {
+                TopLevel::Implemantation(Implementation {
+                    decl: ImplementationDecl {
+                        fullname: name,
+                        generic_args,
+                        args,
+                        return_type,
+                    },
+                    body,
+                })
+            },
+        ),
+    )))(s)
+}
+
 fn parse_field(input: Span) -> NotLocatedParseResult<(String, Located<UnresolvedType>)> {
     map(
         tuple((parse_identifier, colon, located(parse_type))),
@@ -234,7 +294,10 @@ fn parse_struct(input: Span) -> ParseResult<TopLevel> {
 }
 
 pub(crate) fn parse_toplevel(input: Span) -> ParseResult<TopLevel> {
-    context("toplevel", alt((parse_function, parse_struct)))(input)
+    context(
+        "toplevel",
+        alt((parse_function, parse_struct, parse_interface, parse_impl)),
+    )(input)
 }
 
 #[test]
