@@ -110,14 +110,14 @@ impl CompileError {
         writeln!(
             f,
             "error: {}
-  in {}:{}:{}\n{}",
+  in {}:{}:{}\n{}\n",
             self.kind,
             path,
             self.range.from.line,
             self.range.from.col,
             display_lines
                 .iter()
-                .map(|(line_number, line)| format!("{} |{}", line_number, line))
+                .map(|(line_number, line)| format!("{:4} |{}", line_number, line))
                 .collect::<Vec<_>>()
                 .join("\n")
         )?;
