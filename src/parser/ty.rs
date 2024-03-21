@@ -1,7 +1,9 @@
+use itertools::Itertools;
 use nom::{
     branch::alt,
     combinator::opt,
     error::context,
+    multi::separated_list1,
     sequence::{pair, preceded},
 };
 
@@ -16,7 +18,19 @@ pub(super) fn parse_generic_argument_decls(
     fn parse_generic_argument(input: Span) -> ParseResult<GenericArgument> {
         located(context(
             "generic_argument",
-            map(parse_identifier, |name| GenericArgument { name }),
+            map(
+                pair(
+                    parse_identifier,
+                    preceded(colon, separated_list1(plus, parse_identifier)),
+                ),
+                |(name, restrictions)| GenericArgument {
+                    name,
+                    restrictions: restrictions
+                        .into_iter()
+                        .map(|x| Restriction::Interface(x))
+                        .collect_vec(),
+                },
+            ),
         ))(input)
     }
     let mut args = Vec::new();
@@ -64,8 +78,7 @@ fn parse_typeref(input: Span) -> ParseResult<UnresolvedType> {
         |(ident, generics_args)| {
             UnresolvedType::TypeRef(TypeRef {
                 name: ident,
-                generic_args: generics_args
-                    .map(|args| args.into_iter().collect::<Vec<_>>()),
+                generic_args: generics_args.map(|args| args.into_iter().collect::<Vec<_>>()),
             })
         },
     ))(input)

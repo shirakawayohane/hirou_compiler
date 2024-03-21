@@ -4,9 +4,13 @@ impl ->bool<i32>(self: i32) : bool {
   (> self 0)
 }
 
+fn into_bool<T: ->bool>(v: T): bool {
+  (->bool v)
+}
+
 fn main(): void {
   (printf "one is %s\n" 
-    (if (->bool 1)
+    (if (into_bool 1)
       "truthy"
       "falsy"))
 }

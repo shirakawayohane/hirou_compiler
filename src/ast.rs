@@ -303,8 +303,14 @@ pub enum Statement {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum Restriction {
+    Interface(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct GenericArgument {
     pub name: String,
+    pub restrictions: Vec<Restriction>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
