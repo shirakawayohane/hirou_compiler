@@ -5,19 +5,19 @@ use std::{
 
 use crate::common::{AllocMode, StructKind};
 
-#[derive(Debug, Clone, Copy, PartialEq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct Position {
     pub line: u32,
     pub col: usize,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct Range {
     pub from: Position,
     pub to: Position,
 }
 
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Located<T> {
     pub range: Range,
     pub value: T,
@@ -251,13 +251,13 @@ pub enum Expression {
     VariableDecl(VariableDeclsExpr),
 }
 
-#[derive(Debug, PartialEq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct TypeRef {
     pub name: String,
     pub generic_args: Option<Vec<Located<UnresolvedType>>>,
 }
 
-#[derive(Debug, PartialEq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum UnresolvedType {
     TypeRef(TypeRef),
     Ptr(Box<Located<UnresolvedType>>),
@@ -307,10 +307,34 @@ pub enum Restriction {
     Interface(String),
 }
 
+impl Display for Restriction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Restriction::Interface(name) => write!(f, "{}", name),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct GenericArgument {
     pub name: String,
     pub restrictions: Vec<Restriction>,
+}
+
+impl Display for GenericArgument {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)?;
+        if !self.restrictions.is_empty() {
+            f.write_char(':')?;
+            for (i, restriction) in self.restrictions.iter().enumerate() {
+                if i != 0 {
+                    f.write_str(" + ")?;
+                }
+                write!(f, "{}", restriction)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -332,7 +356,7 @@ pub struct FunctionDecl {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Interface {
     pub name: String,
-    pub generic_args: Option<Vec<Located<GenericArgument>>>,
+    pub generic_args: Vec<Located<GenericArgument>>,
     pub args: Vec<Argument>,
     pub return_type: Located<UnresolvedType>,
 }
@@ -345,8 +369,10 @@ pub struct Function {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImplementationDecl {
-    pub fullname: String,
+    pub alloc_mode: Option<AllocMode>,
+    pub name: String,
     pub generic_args: Option<Vec<Located<GenericArgument>>>,
+    pub target_ty: Located<UnresolvedType>,
     pub args: Vec<Argument>,
     pub return_type: Located<UnresolvedType>,
 }

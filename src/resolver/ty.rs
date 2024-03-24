@@ -183,6 +183,7 @@ mod tests {
                         range: Range::default(),
                         value: GenericArgument {
                             name: "T".to_string(),
+                            restrictions: vec![],
                         },
                     }]),
                 }),

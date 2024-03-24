@@ -105,9 +105,16 @@ heap_alloc {
 
 - Interface
 ```
-interface as_bool<T>(self: T): bool
+interface as_bool(self): bool
 
-impl as_bool<i32>(self): bool {
+interace into<T>(self): T
 
+impl as_bool for i32 (self) {
+    (> self 0)
+}
+
+impl into<i64> for i32(self) {
+    // i64 is built-in interface
+    (i64 self)
 }
 ```

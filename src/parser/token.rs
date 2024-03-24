@@ -1,16 +1,11 @@
-use crate::ast::{Position, Range};
-
 use super::*;
 
 use nom::{
-    bytes::complete::{tag, take, take_while, take_while1},
-    character::{
-        complete::{char, digit1},
-        is_alphabetic, is_alphanumeric,
-    },
-    combinator::{not, recognize},
+    bytes::complete::{tag, take},
+    character::complete::{char, digit1},
+    combinator::not,
     error::VerboseErrorKind,
-    sequence::{pair, preceded},
+    sequence::preceded,
 };
 
 // トークン間の空白をスキップし、本筋に集中するためのコンビネーター
@@ -83,6 +78,7 @@ token_tag!(alloc_token, "alloc");
 token_tag!(salloc_token, "salloc");
 token_tag!(interface_token, "interface");
 token_tag!(impl_token, "impl");
+token_tag!(for_token, "for");
 
 pub(super) fn parse_identifier(input: Span) -> NotLocatedParseResult<String> {
     let (first_skipped, _) = skip0(input)?;

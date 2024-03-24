@@ -12,7 +12,7 @@ pub const USIZE_TYPE_NAME: &str = "usize";
 pub const BOOL_TYPE_NAME: &str = "bool";
 pub const UNKNOWN_TYPE_NAME: &str = "unknown";
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct ResolvedStructType {
     pub name: String,
     pub non_generic_name: String,
@@ -20,7 +20,7 @@ pub struct ResolvedStructType {
     pub generic_args: Option<Vec<ResolvedType>>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum ResolvedType {
     I32,
     I64,

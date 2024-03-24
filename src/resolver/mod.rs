@@ -1,5 +1,6 @@
 mod error;
 mod expression;
+mod interface;
 mod intrinsic;
 mod statement;
 mod ty;
@@ -29,6 +30,8 @@ pub struct ResolverContext {
     pub scopes: Rc<RefCell<VariableScopes>>,
     pub type_defs: Rc<RefCell<HashMap<String, ast::TypeDef>>>,
     pub function_by_name: Rc<RefCell<HashMap<String, ast::Function>>>,
+    pub interface_by_name: Rc<RefCell<HashMap<String, ast::Interface>>>,
+    pub impls_by_name: Rc<RefCell<HashMap<String, Vec<ast::Implementation>>>>,
     pub resolved_functions: Rc<RefCell<HashMap<String, resolved_ast::Function>>>,
     pub ptr_sized_int_type: PointerSizedIntWidth,
 }
@@ -36,13 +39,15 @@ pub struct ResolverContext {
 impl ResolverContext {
     pub fn new(ptr_sized_int_type: PointerSizedIntWidth) -> Self {
         Self {
-            errors: Rc::new(RefCell::new(Vec::new())),
+            errors: Default::default(),
             types: Rc::new(RefCell::new(TypeScopes::new())),
             scopes: Rc::new(RefCell::new(VariableScopes::new())),
-            type_defs: Rc::new(RefCell::new(HashMap::new())),
-            function_by_name: Rc::new(RefCell::new(HashMap::new())),
-            resolved_functions: Rc::new(RefCell::new(HashMap::new())),
+            type_defs: Default::default(),
+            function_by_name: Default::default(),
+            resolved_functions: Default::default(),
             ptr_sized_int_type,
+            interface_by_name: Default::default(),
+            impls_by_name: Default::default(),
         }
     }
 }
@@ -68,6 +73,22 @@ pub(crate) fn mangle_fn_name(
     mangled_name.push(')');
     mangled_name.push_str("->");
     mangled_name.push_str(&ret.to_string());
+    mangled_name
+}
+
+pub(crate) fn mangle_impl_name(implementation: &ast::Implementation) -> String {
+    let mut mangled_name = implementation.decl.name.to_owned();
+    if let Some(generic_args) = implementation.decl.generic_args {
+        mangled_name.push('<');
+        mangled_name.push_str(
+            &generic_args
+                .iter()
+                .map(|arg| arg.to_string())
+                .collect::<Vec<_>>()
+                .join(","),
+        );
+        mangled_name.push('>');
+    }
     mangled_name
 }
 
@@ -321,10 +342,31 @@ pub(crate) fn resolve_module(
                     .borrow_mut()
                     .insert(typedef.name.clone(), typedef.clone());
             }
-            TopLevel::Implemantation(_) => todo!(),
-            TopLevel::Interface(_) => todo!(),
+            TopLevel::Interface(interface) => {
+                context
+                    .interface_by_name
+                    .borrow_mut()
+                    .insert(interface.name.clone(), interface.clone());
+            }
+            TopLevel::Implemantation(_) => {}
         }
     }
+
+    // TypeDefが登録された後、Implentationの登録に必要な型を解決する
+    for toplevel in &module.toplevels {
+        match &toplevel.value {
+            TopLevel::Implemantation(implementation) => {
+                context
+                    .impls_by_name
+                    .borrow_mut()
+                    .entry(mangle_impl_name(implementation))
+                    .or_insert_with(Vec::new);
+            }
+            _ => {}
+        }
+    }
+
+    dbg!(&context.impls_by_name);
 
     let function_by_name = context.function_by_name.borrow();
     let main_fn = function_by_name

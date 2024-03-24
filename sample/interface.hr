@@ -1,6 +1,6 @@
-interface ->bool<T> (self: T) : bool
+interface ->bool(self) : bool
 
-impl ->bool<i32>(self: i32) : bool {
+impl ->bool for i32 (self) {
   (> self 0)
 }
 

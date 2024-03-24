@@ -14,6 +14,8 @@ pub enum CompileErrorKind {
     VariableNotFound { name: String },
     #[error("Function `{name:?}` is not found.")]
     FunctionNotFound { name: String },
+    #[error("`{name:?}` is not implemented for `{ty:?}`")]
+    InterfaceNotImplemented { name: String, ty: ResolvedType },
     #[error("`{name:?}` is not a function")]
     IsNotFunction { name: String },
     #[error("`{name:?}` is not a typename")]

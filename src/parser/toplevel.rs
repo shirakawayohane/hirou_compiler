@@ -10,6 +10,7 @@ use nom::{
     branch::alt,
     combinator::{cut, opt, peek},
     error::context,
+    multi::separated_list1,
     sequence::{preceded, tuple},
 };
 
@@ -127,15 +128,19 @@ fn test_parse_argument_with_error() {
     assert!(result.is_err());
 }
 
+fn parse_alloc_mode(input: Span) -> NotLocatedParseResult<AllocMode> {
+    alt((
+        map(alloc_token, |_| AllocMode::Heap),
+        map(salloc_token, |_| AllocMode::Stack),
+    ))(input)
+}
+
 fn parse_function_decl(input: Span) -> ParseResult<FunctionDecl> {
     context(
         "function_decl",
         located(map(
             tuple((
-                opt(alt((
-                    map(alloc_token, |_| AllocMode::Heap),
-                    map(salloc_token, |_| AllocMode::Stack),
-                ))),
+                opt(parse_alloc_mode),
                 fn_token,
                 parse_identifier,
                 opt(parse_generic_argument_decls),
@@ -193,7 +198,7 @@ fn parse_interface(input: Span) -> ParseResult<TopLevel> {
             tuple((
                 context("interface", interface_token),
                 context("identifier", parse_identifier),
-                context("generic_arguments", opt(parse_generic_argument_decls)),
+                context("generic_arguments", parse_generic_argument_decls),
                 context("arguments", parse_arguments),
                 preceded(colon, parse_type),
             )),
@@ -223,18 +228,23 @@ fn parse_impl(input: Span) -> ParseResult<TopLevel> {
         "implementation",
         map(
             tuple((
+                opt(parse_alloc_mode),
                 impl_token,
                 parse_identifier,
                 opt(parse_generic_argument_decls),
+                for_token,
+                parse_type,
                 parse_arguments,
                 preceded(colon, parse_type),
                 parse_block,
             )),
-            |(_, name, generic_args, args, return_type, body)| {
+            |(alloc_mode, _, name, generic_args, _, target_ty, args, return_type, body)| {
                 TopLevel::Implemantation(Implementation {
                     decl: ImplementationDecl {
-                        fullname: name,
+                        alloc_mode,
+                        name,
                         generic_args,
+                        target_ty,
                         args,
                         return_type,
                     },
@@ -267,9 +277,10 @@ fn parse_fields(input: Span) -> NotLocatedParseResult<Vec<(String, Located<Unres
 }
 
 fn parse_struct(input: Span) -> ParseResult<TopLevel> {
+    let (s, _) = peek(alt((struct_token, record_token)))(input)?;
     context(
         "struct",
-        located(map(
+        cut(located(map(
             tuple((
                 alt((
                     map(struct_token, |_| StructKind::Struct),
@@ -289,8 +300,26 @@ fn parse_struct(input: Span) -> ParseResult<TopLevel> {
                     name,
                 })
             },
-        )),
-    )(input)
+        ))),
+    )(s)
+}
+
+#[test]
+fn test_parse_struct() {
+    assert!(matches!(
+        parse_toplevel("struct Vec<T> { size: i32, data: T }".into())
+            .unwrap()
+            .1
+            .value,
+        TopLevel::TypeDef(TypeDef {
+            name: _,
+            kind: TypeDefKind::StructLike(StructLikeTypeDef {
+                struct_kind: StructKind::Struct,
+                generic_args: _,
+                fields: _
+            })
+        })
+    ))
 }
 
 pub(crate) fn parse_toplevel(input: Span) -> ParseResult<TopLevel> {

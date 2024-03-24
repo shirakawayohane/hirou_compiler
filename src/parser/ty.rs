@@ -21,11 +21,12 @@ pub(super) fn parse_generic_argument_decls(
             map(
                 pair(
                     parse_identifier,
-                    preceded(colon, separated_list1(plus, parse_identifier)),
+                    opt(preceded(colon, separated_list1(plus, parse_identifier))),
                 ),
                 |(name, restrictions)| GenericArgument {
                     name,
                     restrictions: restrictions
+                        .unwrap_or(vec![])
                         .into_iter()
                         .map(|x| Restriction::Interface(x))
                         .collect_vec(),
@@ -46,6 +47,17 @@ pub(super) fn parse_generic_argument_decls(
     }
     let (rest, _) = ranglebracket(rest)?;
     Ok((rest, args))
+}
+
+#[test]
+fn test_parse_generic_argument_decls() {
+    let result = parse_generic_argument_decls(Span::new("<T: a + b> { size: i32, data: T }"));
+    assert!(result.is_ok());
+    let (rest, args) = result.unwrap();
+    assert_eq!(rest.to_string().as_str(), " { size: i32, data: T }");
+    assert_eq!(args.len(), 1);
+    assert_eq!(args[0].value.name, "T");
+    assert_eq!(args[0].value.restrictions.len(), 2);
 }
 
 pub(super) fn parse_generic_arguments(
