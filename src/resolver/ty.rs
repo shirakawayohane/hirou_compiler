@@ -30,6 +30,20 @@ pub(super) fn resolve_type(
                                 } else {
                                     in_new_scope!(context.types, {
                                         for (i, generic_arg) in generic_args.iter().enumerate() {
+                                            if matches!(generic_arg.value, UnresolvedType::Infer) {
+                                                context
+                                                    .errors
+                                                    .borrow_mut()
+                                                    .push(CompileError::new(
+                                                    loc_ty.range,
+                                                    error::CompileErrorKind::CannotInferGenericArgs {
+                                                        name: typ_ref.name.clone(),
+                                                        message: "Generic inference here is not supported yet.".into()
+                                                    },
+                                                ));
+                                                return Ok(ResolvedType::Unknown);
+                                            }
+
                                             let resolved_generic_arg =
                                                 resolve_type(context, generic_arg)?;
                                             resolved_generic_args
@@ -125,6 +139,7 @@ pub(super) fn resolve_type(
             let inner_type: ResolvedType = resolve_type(context, inner_type)?;
             Ok(ResolvedType::Ptr(Box::new(inner_type)))
         }
+        UnresolvedType::Infer => Ok(ResolvedType::Unknown),
     }
 }
 

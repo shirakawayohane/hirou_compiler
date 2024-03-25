@@ -1,3 +1,5 @@
+use core::panic;
+
 use crate::resolved_ast::ResolvedType;
 
 use super::target::PointerSizedIntWidth;

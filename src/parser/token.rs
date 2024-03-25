@@ -54,6 +54,7 @@ token_char!(minus, '-');
 token_char!(asterisk, '*');
 token_char!(slash, '/');
 token_char!(dot, '.');
+token_char!(underscore, '_');
 token_tag!(fn_token, "fn");
 token_tag!(struct_token, "struct");
 token_tag!(record_token, "record");

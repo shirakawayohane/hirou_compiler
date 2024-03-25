@@ -138,6 +138,7 @@ impl Display for ResolvedType {
 pub struct CallExpr {
     pub callee: String,
     pub args: Vec<ResolvedExpression>,
+    pub generic_args: Option<Vec<ResolvedType>>,
 }
 
 #[derive(Debug, Clone)]
