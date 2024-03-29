@@ -14,13 +14,13 @@ pub struct ConcreteStructType {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct Interface {
+pub struct InterfaceRestriction {
     pub name: String,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Restriction {
-    Interface(Interface),
+    Interface(InterfaceRestriction),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]

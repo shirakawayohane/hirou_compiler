@@ -84,6 +84,19 @@ fn test_parse_generic_arguments() {
     assert!(result.is_ok());
     let (rest, args) = result.unwrap();
     assert_eq!(rest.to_string().as_str(), " a b)");
+    assert_eq!(
+        args.into_iter().map(|x| x.value).collect_vec(),
+        [
+            UnresolvedType::TypeRef(TypeRef {
+                name: "A".to_string(),
+                generic_args: None
+            }),
+            UnresolvedType::TypeRef(TypeRef {
+                name: "B".to_string(),
+                generic_args: None
+            }),
+        ]
+    );
 }
 
 fn parse_infer(input: Span) -> ParseResult<UnresolvedType> {

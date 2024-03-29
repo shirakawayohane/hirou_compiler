@@ -2,10 +2,7 @@ use core::panic;
 
 use crate::concrete_ast::ConcreteType;
 
-use super::target::PointerSizedIntWidth;
-
 pub(crate) fn get_cast_type(
-    ptr_sized_int_type: PointerSizedIntWidth,
     lhs: &ConcreteType,
     rhs: &ConcreteType,
 ) -> (Option<ConcreteType>, Option<ConcreteType>) {

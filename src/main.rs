@@ -82,7 +82,7 @@ fn main() {
     }
     let concretizer_context =
         concretizer::ConcretizerContext::from_resolved_module(&resolver_context, resolved_module);
-    let mut concrete_module = concretizer::concretize_module(&concretizer_context);
+    let concrete_module = concretizer::concretize_module(&concretizer_context);
     let mut llvm_codegenerator = builder::LLVMCodeGenerator::new(
         &llvm_context,
         target_platform,

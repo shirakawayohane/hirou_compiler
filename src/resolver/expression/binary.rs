@@ -29,7 +29,6 @@ pub(super) fn resolve_binary_expression(
                 ));
             }
             let ty: ResolvedType = match get_cast_type(
-                context.ptr_sized_int_type,
                 &lhs.ty
                     .unwrap_primitive_into_concrete_type(context.is_64_bit()),
                 &rhs.ty

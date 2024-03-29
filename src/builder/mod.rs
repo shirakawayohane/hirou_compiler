@@ -3,7 +3,6 @@ mod statement;
 mod toplevel;
 mod ty;
 
-use inkwell::types::IntType;
 use inkwell::OptimizationLevel;
 
 use crate::common::target::TargetPlatform;
@@ -11,9 +10,7 @@ use crate::concrete_ast::*;
 use inkwell::builder::Builder as LLVMBuilder;
 use inkwell::context::Context as LLVMContext;
 use inkwell::module::Module as LLVMModule;
-use inkwell::targets::{
-    CodeModel, InitializationConfig, RelocMode, Target, TargetMachine, TargetTriple,
-};
+use inkwell::targets::{InitializationConfig, Target};
 use inkwell::values::PointerValue;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -43,19 +40,15 @@ pub struct LLVMCodeGenerator<'a> {
     llvm_module: LLVMModule<'a>,
     llvm_builder: LLVMBuilder<'a>,
     llvm_context: &'a LLVMContext,
-    ptr_sized_int_type: IntType<'a>,
     scopes: Vec<RefCell<Scope<'a>>>,
     function_by_name: HashMap<String, &'a Function>,
 }
 
 impl<'a> LLVMCodeGenerator<'a> {
-    pub fn is_64_bit(self) -> bool {
-        self.ptr_sized_int_type.get_bit_width() == 64
-    }
     pub fn new(
         llvm_context: &'a LLVMContext,
-        target: TargetPlatform,
-        optimization_level: OptimizationLevel,
+        _target: TargetPlatform,
+        _optimization_level: OptimizationLevel,
         module: &'a ConcreteModule,
     ) -> Self {
         let llvm_module = llvm_context.create_module("main");
@@ -70,20 +63,20 @@ impl<'a> LLVMCodeGenerator<'a> {
             machine_code: true,
         });
 
-        let triple = TargetTriple::create(target.metrics().target_triplet);
-        let target = Target::from_triple(&triple).unwrap();
-        let host_cpu = TargetMachine::get_host_cpu_name();
-        let features = TargetMachine::get_host_cpu_features();
-        let target_machine = target
-            .create_target_machine(
-                &triple,
-                host_cpu.to_str().unwrap(),
-                features.to_str().unwrap(),
-                optimization_level,
-                RelocMode::Default,
-                CodeModel::Default,
-            )
-            .unwrap();
+        // let triple = TargetTriple::create(target.metrics().target_triplet);
+        // let target = Target::from_triple(&triple).unwrap();
+        // let host_cpu = TargetMachine::get_host_cpu_name();
+        // let features = TargetMachine::get_host_cpu_features();
+        // let target_machine = target
+        //     .create_target_machine(
+        //         &triple,
+        //         host_cpu.to_str().unwrap(),
+        //         features.to_str().unwrap(),
+        //         optimization_level,
+        //         RelocMode::Default,
+        //         CodeModel::Default,
+        //     )
+        //     .unwrap();
 
         let mut function_by_name = HashMap::new();
         for toplevel in &module.toplevels {
@@ -98,8 +91,6 @@ impl<'a> LLVMCodeGenerator<'a> {
             llvm_module,
             llvm_builder,
             llvm_context,
-            ptr_sized_int_type: llvm_context
-                .ptr_sized_int_type(&target_machine.get_target_data(), None),
             scopes: Vec::new(),
             function_by_name,
         }

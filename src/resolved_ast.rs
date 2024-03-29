@@ -3,7 +3,7 @@ use std::fmt::{Display, Write};
 use crate::{
     ast::{BinaryOp, MultiOp, UnaryOp},
     common::{typename::*, AllocMode},
-    concrete_ast::{ConcreteStructType, ConcreteType},
+    concrete_ast::ConcreteType,
 };
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]

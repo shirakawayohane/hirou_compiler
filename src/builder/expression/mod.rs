@@ -37,11 +37,6 @@ impl LLVMCodeGenerator<'_> {
         let int_value = self.llvm_context.i64_type().const_int(n, true);
         int_value.into()
     }
-    fn eval_usize(&self, value_str: &str) -> BasicValueEnum {
-        let n = value_str.parse::<usize>().unwrap();
-        let int_value = self.ptr_sized_int_type.const_int(n as u64, true);
-        int_value.into()
-    }
     fn eval_number_literal(
         &self,
         integer_literal: &NumberLiteral,

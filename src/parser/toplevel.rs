@@ -10,7 +10,6 @@ use nom::{
     branch::alt,
     combinator::{cut, opt, peek},
     error::context,
-    multi::separated_list1,
     sequence::{preceded, tuple},
 };
 

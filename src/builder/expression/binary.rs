@@ -1,8 +1,5 @@
 use super::*;
-use crate::{
-    ast::BinaryOp,
-    common::{binary::get_cast_type, target::PointerSizedIntWidth},
-};
+use crate::{ast::BinaryOp, common::binary::get_cast_type};
 
 impl LLVMCodeGenerator<'_> {
     pub(crate) fn gen_try_cast<'ctx>(
@@ -51,15 +48,8 @@ impl LLVMCodeGenerator<'_> {
         let mut left = self.gen_expression(&binary_expr.lhs)?.unwrap();
         let mut right = self.gen_expression(&binary_expr.rhs)?.unwrap();
 
-        let (lhs_cast_type, rhs_cast_type) = get_cast_type(
-            if self.ptr_sized_int_type.get_bit_width() == 32 {
-                PointerSizedIntWidth::ThirtyTwo
-            } else {
-                PointerSizedIntWidth::SixtyFour
-            },
-            &binary_expr.lhs.ty,
-            &binary_expr.rhs.ty,
-        );
+        let (lhs_cast_type, rhs_cast_type) =
+            get_cast_type(&binary_expr.lhs.ty, &binary_expr.rhs.ty);
 
         let mut result_type = ConcreteType::I32;
         if let Some(lhs_cast_type) = lhs_cast_type {
