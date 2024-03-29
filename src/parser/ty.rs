@@ -78,6 +78,18 @@ pub(super) fn parse_generic_arguments(
     Ok((rest, args))
 }
 
+#[test]
+fn test_parse_generic_arguments() {
+    let result = parse_generic_arguments(Span::new("<A, B> a b)"));
+    assert!(result.is_ok());
+    let (rest, args) = result.unwrap();
+    assert_eq!(rest.to_string().as_str(), " a b)");
+}
+
+fn parse_infer(input: Span) -> ParseResult<UnresolvedType> {
+    located(map(underscore, |_| UnresolvedType::Infer))(input)
+}
+
 fn parse_ptr(input: Span) -> ParseResult<UnresolvedType> {
     located(map(preceded(asterisk, parse_type), |ty| {
         UnresolvedType::Ptr(Box::new(ty))
@@ -97,7 +109,7 @@ fn parse_typeref(input: Span) -> ParseResult<UnresolvedType> {
 }
 
 pub(super) fn parse_type(input: Span) -> ParseResult<UnresolvedType> {
-    context("type", alt((parse_ptr, parse_typeref)))(input)
+    context("type", alt((parse_infer, parse_ptr, parse_typeref)))(input)
 }
 
 #[test]

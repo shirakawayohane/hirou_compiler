@@ -3,27 +3,26 @@ use inkwell::{
     AddressSpace,
 };
 
-use crate::resolved_ast::{ResolvedStructType, ResolvedType};
+use crate::concrete_ast::{ConcreteStructType, ConcreteType};
 
 use super::LLVMCodeGenerator;
 
 impl<'a> LLVMCodeGenerator<'a> {
-    pub fn type_to_basic_type_enum(&self, ty: &ResolvedType) -> Option<BasicTypeEnum<'a>> {
+    pub fn type_to_basic_type_enum(&self, ty: &ConcreteType) -> Option<BasicTypeEnum<'a>> {
         self.type_to_basic_metadata_type_enum(ty)
             .map(|x| x.try_into().unwrap())
     }
     pub fn type_to_basic_metadata_type_enum(
         &self,
-        ty: &ResolvedType,
+        ty: &ConcreteType,
     ) -> Option<BasicMetadataTypeEnum<'a>> {
         Some(match ty {
-            ResolvedType::I32 => BasicMetadataTypeEnum::IntType(self.llvm_context.i32_type()),
-            ResolvedType::U8 => BasicMetadataTypeEnum::IntType(self.llvm_context.i8_type()),
-            ResolvedType::U32 => BasicMetadataTypeEnum::IntType(self.llvm_context.i32_type()),
-            ResolvedType::U64 => BasicMetadataTypeEnum::IntType(self.llvm_context.i64_type()),
-            ResolvedType::I64 => BasicMetadataTypeEnum::IntType(self.llvm_context.i64_type()),
-            ResolvedType::USize => BasicMetadataTypeEnum::IntType(self.llvm_context.i64_type()),
-            ResolvedType::Ptr(inner) => BasicMetadataTypeEnum::PointerType(
+            ConcreteType::I32 => BasicMetadataTypeEnum::IntType(self.llvm_context.i32_type()),
+            ConcreteType::U8 => BasicMetadataTypeEnum::IntType(self.llvm_context.i8_type()),
+            ConcreteType::U32 => BasicMetadataTypeEnum::IntType(self.llvm_context.i32_type()),
+            ConcreteType::U64 => BasicMetadataTypeEnum::IntType(self.llvm_context.i64_type()),
+            ConcreteType::I64 => BasicMetadataTypeEnum::IntType(self.llvm_context.i64_type()),
+            ConcreteType::Ptr(inner) => BasicMetadataTypeEnum::PointerType(
                 if let Some(t) = self.type_to_basic_type_enum(inner) {
                     t.ptr_type(AddressSpace::default())
                 } else {
@@ -33,13 +32,11 @@ impl<'a> LLVMCodeGenerator<'a> {
                         .ptr_type(AddressSpace::default())
                 },
             ),
-            ResolvedType::Bool => BasicMetadataTypeEnum::IntType(self.llvm_context.bool_type()),
-            ResolvedType::Void => return None,
-            ResolvedType::Unknown => unimplemented!(),
-            ResolvedType::StructLike(ResolvedStructType {
+            ConcreteType::Bool => BasicMetadataTypeEnum::IntType(self.llvm_context.bool_type()),
+            ConcreteType::Void => return None,
+            ConcreteType::StructLike(ConcreteStructType {
                 name,
                 fields,
-                generic_args: _,
                 non_generic_name: _,
             }) => {
                 if let Some(t) = self.llvm_context.get_struct_type(name) {

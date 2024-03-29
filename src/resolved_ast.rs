@@ -1,16 +1,10 @@
 use std::fmt::{Display, Write};
 
-use crate::ast::{BinaryOp, MultiOp, UnaryOp};
-
-pub const VOID_TYPE_NAME: &str = "void";
-pub const U8_TYPE_NAME: &str = "u8";
-pub const U32_TYPE_NAME: &str = "u32";
-pub const U64_TYPE_NAME: &str = "u64";
-pub const I32_TYPE_NAME: &str = "i32";
-pub const I64_TYPE_NAME: &str = "i64";
-pub const USIZE_TYPE_NAME: &str = "usize";
-pub const BOOL_TYPE_NAME: &str = "bool";
-pub const UNKNOWN_TYPE_NAME: &str = "unknown";
+use crate::{
+    ast::{BinaryOp, MultiOp, UnaryOp},
+    common::{typename::*, AllocMode},
+    concrete_ast::{ConcreteStructType, ConcreteType},
+};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct ResolvedStructType {
@@ -18,6 +12,22 @@ pub struct ResolvedStructType {
     pub non_generic_name: String,
     pub fields: Vec<(String, ResolvedType)>,
     pub generic_args: Option<Vec<ResolvedType>>,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct InterfaceRestriction {
+    pub name: String,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub enum Restriction {
+    Interface(InterfaceRestriction),
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct ResolvedGenericType {
+    pub name: String,
+    pub restrictions: Vec<Restriction>,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -33,6 +43,7 @@ pub enum ResolvedType {
     Void,
     Unknown,
     StructLike(ResolvedStructType),
+    Generics(ResolvedGenericType),
 }
 
 impl ResolvedType {
@@ -49,20 +60,7 @@ impl ResolvedType {
             ResolvedType::Unknown => false,
             ResolvedType::StructLike(_) => false,
             ResolvedType::Bool => false,
-        }
-    }
-    pub fn is_signed_integer_type(&self) -> bool {
-        match self {
-            ResolvedType::I32 => true,
-            ResolvedType::I64 => true,
-            _ => false,
-        }
-    }
-    pub fn is_struct_type(&self) -> bool {
-        if let ResolvedType::StructLike(_) = self {
-            true
-        } else {
-            false
+            ResolvedType::Generics(_) => false,
         }
     }
     pub fn is_pointer_type(&self) -> bool {
@@ -88,6 +86,28 @@ impl ResolvedType {
         }
         // TODO: より高等な型チェック
         self == other
+    }
+    pub fn unwrap_primitive_into_concrete_type(&self, is_64_bit: bool) -> ConcreteType {
+        match self {
+            ResolvedType::I32 => ConcreteType::I32,
+            ResolvedType::I64 => ConcreteType::I64,
+            ResolvedType::U32 => ConcreteType::U32,
+            ResolvedType::U64 => ConcreteType::U64,
+            ResolvedType::USize => {
+                if is_64_bit {
+                    ConcreteType::U64
+                } else {
+                    ConcreteType::U32
+                }
+            }
+            ResolvedType::U8 => ConcreteType::U8,
+            ResolvedType::Bool => ConcreteType::Bool,
+            ResolvedType::Ptr(inner) => ConcreteType::Ptr(Box::new(
+                (*inner).unwrap_primitive_into_concrete_type(is_64_bit),
+            )),
+            ResolvedType::Void => ConcreteType::Void,
+            _ => unreachable!(),
+        }
     }
 }
 
@@ -128,6 +148,12 @@ impl Display for ResolvedType {
                     }) => {
                         name
                     }
+                    ResolvedType::Generics(ResolvedGenericType {
+                        name,
+                        restrictions: _,
+                    }) => {
+                        name
+                    }
                 }
             )
         }
@@ -138,6 +164,7 @@ impl Display for ResolvedType {
 pub struct CallExpr {
     pub callee: String,
     pub args: Vec<ResolvedExpression>,
+    pub generic_args: Option<Vec<ResolvedType>>,
 }
 
 #[derive(Debug, Clone)]
@@ -278,13 +305,13 @@ pub enum Statement {
     Effect(Effect),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Argument {
     VarArgs,
     Normal(ResolvedType, String),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FunctionDecl {
     pub name: String,
     pub args: Vec<Argument>,
@@ -297,12 +324,38 @@ pub struct Function {
     pub body: Vec<Statement>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImplementationDecl {
+    pub alloc_mode: Option<AllocMode>,
+    pub name: String,
+    pub generic_args: Option<Vec<ResolvedType>>,
+    pub target_ty: ResolvedType,
+    pub args: Vec<Argument>,
+    pub return_type: ResolvedType,
+}
+
+#[derive(Debug, Clone)]
+pub struct Implementation {
+    pub decl: ImplementationDecl,
+    pub body: Vec<Statement>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Interface {
+    pub name: String,
+    pub generic_args: Vec<ResolvedType>,
+    pub args: Vec<Argument>,
+    pub return_type: ResolvedType,
+}
+
 #[derive(Debug, Clone)]
 pub enum TopLevel {
     Function(Function),
+    Implemantation(Implementation),
+    Interface(Interface),
 }
 
 #[derive(Debug)]
-pub struct Module {
+pub struct ResolvedModule {
     pub toplevels: Vec<TopLevel>,
 }

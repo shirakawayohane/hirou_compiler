@@ -14,6 +14,8 @@ pub enum CompileErrorKind {
     VariableNotFound { name: String },
     #[error("Function `{name:?}` is not found.")]
     FunctionNotFound { name: String },
+    #[error("Interface `{name:?}` is not found.")]
+    InterfaceNotFound { name: String },
     #[error("`{name:?}` is not implemented for `{ty:?}`")]
     InterfaceNotImplemented { name: String, ty: ResolvedType },
     #[error("`{name:?}` is not a function")]
@@ -71,6 +73,12 @@ pub enum CompileErrorKind {
     InvalidGenericArgsLength { expected: usize, actual: usize },
     #[error("Cannot infer generic argument of function `{name}`. {message}")]
     CannotInferGenericArgs { name: String, message: String },
+    #[error("{message}")]
+    NotImplemented { message: String },
+    #[error("Cannot implement interface for pointer type")]
+    ImplForPointerIsInvalid,
+    #[error("Cannot implement interface for inference type")]
+    ImplForInferenceIsInvalid,
 }
 
 #[derive(Debug, Error, PartialEq)]

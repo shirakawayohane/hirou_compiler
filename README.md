@@ -26,6 +26,31 @@ echo export LLVM_SYS_160_PREFIX=/opt/homebrew/Cellar/llvm@16/16.0.6 >> ~/.bashrc
 set -Ux LLVM_SYS_160_PREFIX /opt/homebrew/Cellar/llvm@16/16.0.6
 ```
 
+## 構成
+以下は、このようにしようと思っている、というもの
+
+### ast
+抽象構文木のモジュール
+
+### parser
+文字列からSyntaxASTを生成するモジュール
+
+### resolver
+SyntaxASTからResolvedASTを生成するモジュール。
+具体的な型の解決と、モジュールや変数の参照の解決を担う。
+コンパイラが出力するエラーは、parseのエラーを除けば、すべてこのモジュールから出力される。
+
+### concretizer
+ResolvedASTからConcreteASTを生成するモジュール。
+すべてのジェネリック型、インターフェースの解決を担い、実際のコードに対応した型に変換する。
+resolverで異常系は弾かれるので、このモジュールは正常系のみを扱う。
+
+### llvm-builder
+ConcreteASTからLLVM IRを生成するモジュール。
+
+### js-builder
+ConcreteASTからJavaScriptを生成するモジュール。
+
 ## ロードマップ
 - 基本的な言語機能の実装 <- 今ココ
     - リージョンベースのメモリ管理

@@ -28,12 +28,21 @@ pub(super) fn resolve_binary_expression(
                     },
                 ));
             }
-            let ty = match get_cast_type(context.ptr_sized_int_type, &lhs.ty, &rhs.ty) {
-                (None, None) => lhs.ty.clone(),
+            let ty: ResolvedType = match get_cast_type(
+                context.ptr_sized_int_type,
+                &lhs.ty
+                    .unwrap_primitive_into_concrete_type(context.is_64_bit()),
+                &rhs.ty
+                    .unwrap_primitive_into_concrete_type(context.is_64_bit()),
+            ) {
+                (None, None) => lhs
+                    .ty
+                    .unwrap_primitive_into_concrete_type(context.is_64_bit()),
                 (None, Some(t)) => t,
                 (Some(t), None) => t,
                 (Some(_), Some(t)) => t,
-            };
+            }
+            .unwrap_primitive_into_resolved_type();
             Ok(resolved_ast::ResolvedExpression {
                 kind: resolved_ast::ExpressionKind::Binary(resolved_ast::BinaryExpr {
                     op: bin_expr.op,

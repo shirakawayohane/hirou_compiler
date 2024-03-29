@@ -8,46 +8,40 @@ impl LLVMCodeGenerator<'_> {
     pub(crate) fn gen_try_cast<'ctx>(
         &'ctx self,
         value: BasicValueEnum<'ctx>,
-        ty: &ResolvedType,
+        ty: &ConcreteType,
     ) -> BasicValueEnum<'ctx> {
         dbg!(ty, value);
         let value = value.into_int_value();
         match ty {
-            ResolvedType::I32 => self
+            ConcreteType::I32 => self
                 .llvm_builder
                 .build_int_cast_sign_flag(value, self.llvm_context.i32_type(), true, "(i32)")
                 .unwrap()
                 .as_basic_value_enum(),
-            ResolvedType::U32 => self
+            ConcreteType::U32 => self
                 .llvm_builder
                 .build_int_cast_sign_flag(value, self.llvm_context.i32_type(), false, "(u32)")
                 .unwrap()
                 .as_basic_value_enum(),
-            ResolvedType::U64 => self
+            ConcreteType::U64 => self
                 .llvm_builder
                 .build_int_cast_sign_flag(value, self.llvm_context.i64_type(), false, "(u64)")
                 .unwrap()
                 .as_basic_value_enum(),
-            ResolvedType::U8 => self
+            ConcreteType::U8 => self
                 .llvm_builder
                 .build_int_cast_sign_flag(value, self.llvm_context.i8_type(), false, "(u8)")
                 .unwrap()
                 .as_basic_value_enum(),
-            ResolvedType::I64 => self
+            ConcreteType::I64 => self
                 .llvm_builder
                 .build_int_cast(value, self.llvm_context.i64_type(), "(i64)")
                 .unwrap()
                 .as_basic_value_enum(),
-            ResolvedType::Ptr(_) => unreachable!(),
-            ResolvedType::Void => unreachable!(),
-            ResolvedType::USize => self
-                .llvm_builder
-                .build_int_cast(value, self.ptr_sized_int_type, "(usize)")
-                .unwrap()
-                .as_basic_value_enum(),
-            ResolvedType::Unknown => unreachable!(),
-            ResolvedType::StructLike(_) => unreachable!(),
-            ResolvedType::Bool => unreachable!(),
+            ConcreteType::Ptr(_) => unreachable!(),
+            ConcreteType::Void => unreachable!(),
+            ConcreteType::StructLike(_) => unreachable!(),
+            ConcreteType::Bool => unreachable!(),
         }
     }
     pub(super) fn eval_binary_expr(
@@ -67,7 +61,7 @@ impl LLVMCodeGenerator<'_> {
             &binary_expr.rhs.ty,
         );
 
-        let mut result_type = ResolvedType::I32;
+        let mut result_type = ConcreteType::I32;
         if let Some(lhs_cast_type) = lhs_cast_type {
             left = self.gen_try_cast(left, &lhs_cast_type);
             result_type = lhs_cast_type;
@@ -79,6 +73,14 @@ impl LLVMCodeGenerator<'_> {
 
         let value = match binary_expr.op {
             BinaryOp::Add => {
+                match result_type {
+                    ConcreteType::I32
+                    | ConcreteType::U8
+                    | ConcreteType::U32
+                    | ConcreteType::I64
+                    | ConcreteType::U64 => {}
+                    _ => unimplemented!(),
+                }
                 if result_type.is_integer_type() {
                     self.llvm_builder.build_int_add(
                         left.into_int_value(),

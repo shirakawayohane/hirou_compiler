@@ -5,7 +5,7 @@ use inkwell::{
 };
 
 use super::*;
-use crate::resolved_ast::*;
+use crate::concrete_ast::*;
 
 impl LLVMCodeGenerator<'_> {
     pub(super) fn gen_return(&mut self, ret: &Return) -> Result<InstructionValue, BuilderError> {

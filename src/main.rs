@@ -2,6 +2,8 @@ use std::{fs::read_to_string, path::Path};
 mod ast;
 mod builder;
 mod common;
+mod concrete_ast;
+mod concretizer;
 mod parser;
 mod resolved_ast;
 mod resolver;
@@ -78,13 +80,16 @@ fn main() {
         }
         return;
     }
+    let concretizer_context =
+        concretizer::ConcretizerContext::from_resolved_module(&resolver_context, resolved_module);
+    let mut concrete_module = concretizer::concretize_module(&concretizer_context);
     let mut llvm_codegenerator = builder::LLVMCodeGenerator::new(
         &llvm_context,
         target_platform,
         OptimizationLevel::None,
-        &resolved_module,
+        &concrete_module,
     );
-    llvm_codegenerator.gen_module(&resolved_module);
+    llvm_codegenerator.gen_module(&concrete_module);
     let module = llvm_codegenerator.get_module();
 
     module.print_to_file(Path::new("out.ll")).unwrap();

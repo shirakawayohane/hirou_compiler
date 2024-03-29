@@ -1,6 +1,6 @@
 mod error;
 mod expression;
-mod interface;
+mod generics;
 mod intrinsic;
 mod statement;
 mod ty;
@@ -31,7 +31,7 @@ pub struct ResolverContext {
     pub type_defs: Rc<RefCell<HashMap<String, ast::TypeDef>>>,
     pub function_by_name: Rc<RefCell<HashMap<String, ast::Function>>>,
     pub interface_by_name: Rc<RefCell<HashMap<String, ast::Interface>>>,
-    pub impls_by_name: Rc<RefCell<HashMap<String, Vec<ast::Implementation>>>>,
+    pub impls_by_name: Rc<RefCell<HashMap<String, Vec<Implementation>>>>,
     pub resolved_functions: Rc<RefCell<HashMap<String, resolved_ast::Function>>>,
     pub ptr_sized_int_type: PointerSizedIntWidth,
 }
@@ -49,6 +49,9 @@ impl ResolverContext {
             interface_by_name: Default::default(),
             impls_by_name: Default::default(),
         }
+    }
+    pub fn is_64_bit(&self) -> bool {
+        self.ptr_sized_int_type == PointerSizedIntWidth::SixtyFour
     }
 }
 
@@ -73,22 +76,6 @@ pub(crate) fn mangle_fn_name(
     mangled_name.push(')');
     mangled_name.push_str("->");
     mangled_name.push_str(&ret.to_string());
-    mangled_name
-}
-
-pub(crate) fn mangle_impl_name(implementation: &ast::Implementation) -> String {
-    let mut mangled_name = implementation.decl.name.to_owned();
-    if let Some(generic_args) = implementation.decl.generic_args {
-        mangled_name.push('<');
-        mangled_name.push_str(
-            &generic_args
-                .iter()
-                .map(|arg| arg.to_string())
-                .collect::<Vec<_>>()
-                .join(","),
-        );
-        mangled_name.push('>');
-    }
     mangled_name
 }
 
@@ -316,7 +303,7 @@ pub(crate) fn resolve_module(
     context: &ResolverContext,
     module: &crate::ast::Module,
     is_build_only: bool,
-) -> Result<crate::resolved_ast::Module, FaitalError> {
+) -> Result<crate::resolved_ast::ResolvedModule, FaitalError> {
     context.scopes.borrow_mut().push_new();
     context.types.borrow_mut().push_new();
     // 組み込み関数の型を登録する
@@ -348,7 +335,7 @@ pub(crate) fn resolve_module(
                     .borrow_mut()
                     .insert(interface.name.clone(), interface.clone());
             }
-            TopLevel::Implemantation(_) => {}
+            TopLevel::Implemantation(_) => (),
         }
     }
 
@@ -356,17 +343,53 @@ pub(crate) fn resolve_module(
     for toplevel in &module.toplevels {
         match &toplevel.value {
             TopLevel::Implemantation(implementation) => {
-                context
-                    .impls_by_name
-                    .borrow_mut()
-                    .entry(mangle_impl_name(implementation))
+                let mut impls_by_name = context.impls_by_name.borrow_mut();
+                let mut impl_by_target = impls_by_name
+                    .entry(implementation.decl.name.clone())
                     .or_insert_with(Vec::new);
+
+                if let Ok(resolved_ty) = resolve_type(context, &implementation.decl.target_ty) {
+                    impl_by_target.push(implementation.clone());
+                    continue;
+                }
+
+                match &implementation.decl.target_ty.value {
+                    UnresolvedType::TypeRef(typeref) => {
+                        if let Some(interface) =
+                            context.interface_by_name.borrow().get(&typeref.name)
+                        {
+                            context.errors.borrow_mut().push(CompileError::new(
+                                implementation.decl.target_ty.range,
+                                crate::resolver::error::CompileErrorKind::NotImplemented {
+                                    message: "".into(),
+                                },
+                            ));
+                        } else {
+                            context.errors.borrow_mut().push(CompileError::new(
+                                implementation.decl.target_ty.range,
+                                crate::resolver::error::CompileErrorKind::TypeNotFound {
+                                    name: typeref.name.clone(),
+                                },
+                            ));
+                        }
+                    }
+                    UnresolvedType::Ptr(_) => {
+                        context.errors.borrow_mut().push(CompileError::new(
+                            implementation.decl.target_ty.range,
+                            crate::resolver::error::CompileErrorKind::ImplForPointerIsInvalid,
+                        ));
+                    }
+                    UnresolvedType::Infer => {
+                        context.errors.borrow_mut().push(CompileError::new(
+                            implementation.decl.target_ty.range,
+                            crate::resolver::error::CompileErrorKind::ImplForInferenceIsInvalid,
+                        ));
+                    }
+                }
             }
             _ => {}
         }
     }
-
-    dbg!(&context.impls_by_name);
 
     let function_by_name = context.function_by_name.borrow();
     let main_fn = function_by_name
@@ -408,7 +431,7 @@ pub(crate) fn resolve_module(
         }
     }
 
-    Ok(resolved_ast::Module {
+    Ok(resolved_ast::ResolvedModule {
         toplevels: resolved_toplevels.into_inner(),
     })
 }

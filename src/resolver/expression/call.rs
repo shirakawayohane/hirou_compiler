@@ -1,8 +1,11 @@
+use std::collections::HashSet;
+
 use itertools::Itertools;
 
-use crate::{ast::UnresolvedType, resolver::ResolverContext};
-
-use self::ast::{Function, FunctionDecl};
+use crate::{
+    ast::UnresolvedType,
+    resolver::{generics::check_generic_bounds, ResolverContext},
+};
 
 use super::*;
 
@@ -116,6 +119,9 @@ fn infer_generic_args_recursively(
                 }
             }
         }
+        UnresolvedType::Infer => {
+            return Ok(false);
+        }
     }
     Ok(false)
 }
@@ -125,55 +131,56 @@ pub fn resolve_infer_generic_from_arguments(
     call_expr: &Located<&ast::CallExpr>,
     callee: &ast::Function,
     resolved_args: &[ResolvedExpression], // 推論に成功した場合のみtrueを返す
-) -> Result<bool, FaitalError> {
+) -> Result<Vec<usize>, FaitalError> {
+    todo!()
     // ジェネリック引数が存在しない場合は、推論を行わない
-    if call_expr.generic_args.is_some() || callee.decl.generic_args.is_none() {
-        return Ok(false);
-    }
-    // 可変長引数を持つ関数は、推論を行わない
-    if callee
-        .decl
-        .args
-        .iter()
-        .any(|x| matches!(x, ast::Argument::VarArgs))
-    {
-        return Ok(false);
-    }
-    let mut inferred = false;
-    let mut temp_errors = Vec::new();
-    // グローバルスコープで処理を行う
-    in_global_scope!(context.scopes, {
-        in_global_scope!(context.types, {
-            for (arg_idx, _arg) in call_expr.args.iter().enumerate() {
-                let callee_arg = &callee.decl.args[arg_idx];
-                // 引数にジェネリクスを含まない場合は推論しない
-                // 含む場合、unknownになるはずなので推論する
-                match callee_arg {
-                    ast::Argument::VarArgs => unreachable!(),
-                    ast::Argument::Normal(callee_ty, _name) => {
-                        if infer_generic_args_recursively(
-                            &mut temp_errors,
-                            context,
-                            callee,
-                            callee_ty,
-                            &resolved_args[arg_idx].ty.clone(),
-                        )? {
-                            inferred = true;
-                        }
-                    }
-                }
-            }
-            // 関数の解決を試みる
-            resolve_function(context, callee)?;
-        });
-    });
+    // if call_expr.generic_args.is_some() || callee.decl.generic_args.is_none() {
+    //     return Ok(false);
+    // }
+    // // 可変長引数を持つ関数は、推論を行わない
+    // if callee
+    //     .decl
+    //     .args
+    //     .iter()
+    //     .any(|x| matches!(x, ast::Argument::VarArgs))
+    // {
+    //     return Ok(false);
+    // }
+    // let mut inferred = false;
+    // let mut temp_errors = Vec::new();
+    // // グローバルスコープで処理を行う
+    // in_global_scope!(context.scopes, {
+    //     in_global_scope!(context.types, {
+    //         for (arg_idx, _arg) in call_expr.args.iter().enumerate() {
+    //             let callee_arg = &callee.decl.args[arg_idx];
+    //             // 引数にジェネリクスを含まない場合は推論しない
+    //             // 含む場合、unknownになるはずなので推論する
+    //             match callee_arg {
+    //                 ast::Argument::VarArgs => unreachable!(),
+    //                 ast::Argument::Normal(callee_ty, _name) => {
+    //                     if infer_generic_args_recursively(
+    //                         &mut temp_errors,
+    //                         context,
+    //                         callee,
+    //                         callee_ty,
+    //                         &resolved_args[arg_idx].ty.clone(),
+    //                     )? {
+    //                         inferred = true;
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //         // 関数の解決を試みる
+    //         resolve_function(context, callee)?;
+    //     });
+    // });
 
-    // 推論が成功した場合、一時エラーを追加する
-    if inferred {
-        context.errors.borrow_mut().extend(temp_errors);
-    }
+    // // 推論が成功した場合、一時エラーを追加する
+    // if inferred {
+    //     context.errors.borrow_mut().extend(temp_errors);
+    // }
 
-    Ok(inferred)
+    // Ok(inferred)
 }
 
 // 関数のジェネリック引数をアノテーションから推論する関数
@@ -182,11 +189,11 @@ pub fn resolve_infer_generic_from_annotation(
     call_expr: &Located<&ast::CallExpr>,
     callee: &ast::Function,
     annotation: Option<&ResolvedType>,
-    // 推論に成功した場合のみtrueを返す
-) -> Result<bool, FaitalError> {
+    // 推論に成功したジェネリクス引数のインデックスを返す
+) -> Result<Vec<usize>, FaitalError> {
     // ジェネリック引数が存在しない場合は、推論を行わない
     if call_expr.generic_args.is_some() || callee.decl.generic_args.is_none() {
-        return Ok(false);
+        return Ok(vec![]);
     }
     // アノテーションが存在する場合、推論を試みる
     if let Some(annotation) = &annotation {
@@ -205,11 +212,11 @@ pub fn resolve_infer_generic_from_annotation(
                     context.errors.borrow_mut().extend(temp_errors);
                     resolve_function(context, callee)?;
                 }
-                Ok(inferred)
+                Ok((0..callee.decl.generic_args.as_ref().unwrap().len()).collect_vec())
             })
         })
     } else {
-        Ok(false)
+        Ok(vec![])
     }
 }
 
@@ -239,14 +246,40 @@ fn resolve_function_call_expr(
     annotation: Option<&ResolvedType>,
 ) -> Result<ResolvedExpression, FaitalError> {
     {
-        // ジェネリック引数を持たない関数、ジェネリック引数を持つ関数、アノテーションからの推論を試みる
-        let mut inferred = true;
-        if !resolve_non_generic_function(context, callee)?
-            && !resolve_call_with_generic_args(context, call_expr, callee)?
-            && !resolve_infer_generic_from_annotation(context, call_expr, callee, annotation)?
-        {
-            inferred = false;
+        // ジェネリック引数を持たない関数、ジェネリック引数を持つ関数、およびアノテーションからの推論を試みる
+        if let Some(callee_generic_args) = &callee.decl.generic_args {
+            let mut inferred_args_indices = HashSet::new();
+            if let Some(annotation) = annotation {
+                inferred_args_indices.extend(resolve_infer_generic_from_annotation(
+                    context,
+                    call_expr,
+                    callee,
+                    Some(annotation),
+                )?);
+            }
+            if inferred_args_indices.len() == callee_generic_args.len() {}
+            // if !resolve_call_with_generic_args(context, call_expr, callee)? {
+            //     inferred = false;
+            // }
+        } else {
+            resolve_non_generic_function(context, callee)?;
         }
+        // 推論が失敗した場合、引数からの推論を試みる
+        // if !inferred
+        //     && !resolve_infer_generic_from_arguments(context, call_expr, callee, &resolved_args)?
+        // {
+        //     context.errors.borrow_mut().push(CompileError::new(
+        //         call_expr.range,
+        //         CompileErrorKind::CannotInferGenericArgs {
+        //             name: call_expr.name.to_owned(),
+        //             message: "".to_string(),
+        //         },
+        //     ));
+        //     return Ok(ResolvedExpression {
+        //         ty: resolve_type(context, &callee.decl.return_type)?,
+        //         kind: ExpressionKind::Unknown,
+        //     });
+        // }
 
         // 引数の解決を試みる
         let mut resolved_args = Vec::new();
@@ -298,23 +331,6 @@ fn resolve_function_call_expr(
             }
         }
 
-        // 推論が失敗した場合、引数からの推論を試みる
-        if !inferred
-            && !resolve_infer_generic_from_arguments(context, call_expr, callee, &resolved_args)?
-        {
-            context.errors.borrow_mut().push(CompileError::new(
-                call_expr.range,
-                CompileErrorKind::CannotInferGenericArgs {
-                    name: call_expr.name.to_owned(),
-                    message: "".to_string(),
-                },
-            ));
-            return Ok(ResolvedExpression {
-                ty: resolve_type(context, &callee.decl.return_type)?,
-                kind: ExpressionKind::Unknown,
-            });
-        }
-
         // 戻り値の型を解決する
         let mut resolved_return_ty = resolve_type(context, &callee.decl.return_type)?;
         // void* はアノテーションがあればその型として扱う
@@ -342,6 +358,15 @@ fn resolve_function_call_expr(
             });
         }
 
+        let mut generic_args = None;
+        if let Some(unresolved_generic_args) = &call_expr.generic_args {
+            let mut resolved_generic_args = Vec::new();
+            for generic_arg in unresolved_generic_args {
+                resolved_generic_args.push(resolve_type(context, generic_arg)?);
+            }
+            generic_args = Some(resolved_generic_args)
+        }
+
         // 解決された式を返す
         return Ok(resolved_ast::ResolvedExpression {
             kind: resolved_ast::ExpressionKind::CallExpr(resolved_ast::CallExpr {
@@ -359,6 +384,7 @@ fn resolve_function_call_expr(
                     call_expr.name.clone()
                 },
                 args: resolved_args,
+                generic_args,
             }),
             ty: resolved_return_ty,
         });
@@ -387,9 +413,34 @@ pub fn resolve_call_expr(
     if let Some(callee) = function_by_name.get(&call_expr.name) {
         resolve_function_call_expr(context, call_expr, callee, annotation)
     } else if let Some(interface) = interface_by_name.get(&call_expr.name) {
+        let mut resolved_arg_types = vec![];
+        for arg in &call_expr.args {
+            resolved_arg_types.push(resolve_expression(context, arg.as_inner_deref(), None)?.ty);
+        }
+        let mut generic_annotations: Vec<ResolvedType> = vec![];
+        if let Some(generic_args) = &call_expr.generic_args {
+            for generic_arg in generic_args {
+                generic_annotations.push(resolve_type(context, generic_arg)?);
+            }
+        } else {
+            let required_generic_args_len = interface.generic_args.len();
+            for _ in 0..required_generic_args_len {
+                generic_annotations.push(ResolvedType::Unknown);
+            }
+        }
         if let Some(impls) = impls_by_name.get(&interface.name) {
-            if let Some(implementation) = impl_by_generic_args.get(&arg_types) {
-                resolve_interface_call_expr(context, interface, implementation, annotation)
+            if let Some(implementation) = &impls.iter().find(|implementation| {
+                let resolved_target_ty =
+                    resolve_type(context, &implementation.decl.target_ty).unwrap();
+                check_generic_bounds(
+                    context,
+                    implementation.decl.generic_args.as_ref().unwrap_or(&vec![]),
+                    &resolved_arg_types,
+                    &generic_annotations,
+                )
+                .is_ok() // todo
+            }) {
+                todo!();
             } else {
                 context.errors.borrow_mut().push(CompileError::new(
                     call_expr.range,

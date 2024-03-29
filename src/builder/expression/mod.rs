@@ -3,7 +3,7 @@ mod multi;
 mod unary;
 
 use super::*;
-use crate::resolved_ast::*;
+use crate::concrete_ast::*;
 use inkwell::{
     builder::BuilderError,
     types::BasicType,
@@ -45,21 +45,19 @@ impl LLVMCodeGenerator<'_> {
     fn eval_number_literal(
         &self,
         integer_literal: &NumberLiteral,
-        ty: &ResolvedType,
+        ty: &ConcreteType,
     ) -> Result<BasicValueEnum, BuilderError> {
         let value_str = &integer_literal.value;
         Ok(match ty {
-            ResolvedType::U8 => self.eval_u8(value_str),
-            ResolvedType::U32 => self.eval_u32(value_str),
-            ResolvedType::I32 => self.eval_i32(value_str),
-            ResolvedType::I64 => self.eval_i64(value_str),
-            ResolvedType::U64 => self.eval_u64(value_str),
-            ResolvedType::USize => self.eval_usize(value_str),
-            ResolvedType::Ptr(_) => unreachable!(),
-            ResolvedType::Void => unreachable!(),
-            ResolvedType::Unknown => unreachable!(),
-            ResolvedType::StructLike(_) => unreachable!(),
-            ResolvedType::Bool => unreachable!(),
+            ConcreteType::U8 => self.eval_u8(value_str),
+            ConcreteType::U32 => self.eval_u32(value_str),
+            ConcreteType::I32 => self.eval_i32(value_str),
+            ConcreteType::I64 => self.eval_i64(value_str),
+            ConcreteType::U64 => self.eval_u64(value_str),
+            ConcreteType::Ptr(_) => unreachable!(),
+            ConcreteType::Void => unreachable!(),
+            ConcreteType::StructLike(_) => unreachable!(),
+            ConcreteType::Bool => unreachable!(),
         })
     }
     fn eval_bool_literal(
@@ -83,7 +81,7 @@ impl LLVMCodeGenerator<'_> {
     fn eval_struct_literal(
         &self,
         struct_literal: &StructLiteral,
-        ty: &ResolvedType,
+        ty: &ConcreteType,
     ) -> Result<BasicValueEnum, BuilderError> {
         let ty = self.type_to_basic_type_enum(ty).unwrap();
         let ptr = self.llvm_builder.build_alloca(ty, "")?;
@@ -97,7 +95,7 @@ impl LLVMCodeGenerator<'_> {
     fn eval_variable_ref(
         &self,
         variable_ref: &VariableRefExpr,
-        ty: &ResolvedType,
+        ty: &ConcreteType,
     ) -> Result<BasicValueEnum, BuilderError> {
         let ptr = self.get_variable(&variable_ref.name);
         let pointee_ty = self.type_to_basic_type_enum(ty).unwrap();
@@ -110,7 +108,7 @@ impl LLVMCodeGenerator<'_> {
     fn eval_index_access(
         &self,
         index_access: &IndexAccessExpr,
-        ty: &ResolvedType,
+        ty: &ConcreteType,
     ) -> Result<BasicValueEnum, BuilderError> {
         let ptr = self
             .gen_expression(&index_access.target)?
@@ -132,9 +130,9 @@ impl LLVMCodeGenerator<'_> {
     fn eval_field_access(
         &self,
         field_access: &FieldAccessExpr,
-        ty: &ResolvedType,
+        ty: &ConcreteType,
     ) -> Result<BasicValueEnum, BuilderError> {
-        if let ResolvedType::StructLike(struct_ty) = &field_access.target.ty {
+        if let ConcreteType::StructLike(struct_ty) = &field_access.target.ty {
             let ty_enum = self.type_to_basic_type_enum(ty).unwrap();
             let index: usize = struct_ty
                 .fields
@@ -164,18 +162,18 @@ impl LLVMCodeGenerator<'_> {
     fn eval_deref(
         &self,
         deref: &DerefExpr,
-        ty: &ResolvedType,
+        ty: &ConcreteType,
     ) -> Result<BasicValueEnum, BuilderError> {
         let ptr = self.gen_expression(&deref.target)?.unwrap();
         let pointee_ty = self
             .type_to_basic_type_enum(ty)
-            .unwrap_or(self.type_to_basic_type_enum(&ResolvedType::U8).unwrap());
+            .unwrap_or(self.type_to_basic_type_enum(&ConcreteType::U8).unwrap());
         let value = self
             .llvm_builder
             .build_load(pointee_ty, ptr.into_pointer_value(), "")?;
         Ok(value)
     }
-    fn eval_sizeof(&self, ty: &ResolvedType) -> BasicValueEnum {
+    fn eval_sizeof(&self, ty: &ConcreteType) -> BasicValueEnum {
         let size = self.type_to_basic_type_enum(ty).unwrap().size_of().unwrap();
         size.as_basic_value_enum()
     }
@@ -204,7 +202,7 @@ impl LLVMCodeGenerator<'_> {
         let function = *self.function_by_name.get(&call_expr.callee).unwrap();
         let func = self.gen_or_get_function(function);
         // 構造体を返す関数を呼ぶ場合、第一引数にスタックポインタを渡す
-        if let ResolvedType::StructLike(_) = &function.decl.return_type {
+        if let ConcreteType::StructLike(_) = &function.decl.return_type {
             let return_ty = self
                 .type_to_basic_type_enum(&function.decl.return_type)
                 .unwrap();
@@ -220,7 +218,7 @@ impl LLVMCodeGenerator<'_> {
     pub(super) fn eval_if_expr<'a>(
         &'a self,
         if_expr: &IfExpr,
-        ty: &ResolvedType,
+        ty: &ConcreteType,
     ) -> Result<Option<BasicValueEnum<'a>>, BuilderError> {
         // condがboolであることはresolverで保証されている
         let cond = self
@@ -246,7 +244,7 @@ impl LLVMCodeGenerator<'_> {
         let else_value = self.gen_expression(&if_expr.els)?.unwrap();
         self.llvm_builder.build_unconditional_branch(merge_block)?;
         let else_block = self.llvm_builder.get_insert_block().unwrap();
-        if matches!(ty, ResolvedType::Void) {
+        if matches!(ty, ConcreteType::Void) {
             Ok(None)
         } else {
             self.llvm_builder.position_at_end(merge_block);
@@ -347,7 +345,7 @@ impl LLVMCodeGenerator<'_> {
     }
     pub(super) fn gen_expression<'a>(
         &'a self,
-        expr: &ResolvedExpression,
+        expr: &ConcreteExpression,
     ) -> Result<Option<BasicValueEnum<'a>>, BuilderError> {
         match &expr.kind {
             ExpressionKind::NumberLiteral(number_literal) => {

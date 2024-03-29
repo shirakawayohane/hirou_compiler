@@ -7,7 +7,7 @@ use inkwell::types::IntType;
 use inkwell::OptimizationLevel;
 
 use crate::common::target::TargetPlatform;
-use crate::resolved_ast::*;
+use crate::concrete_ast::*;
 use inkwell::builder::Builder as LLVMBuilder;
 use inkwell::context::Context as LLVMContext;
 use inkwell::module::Module as LLVMModule;
@@ -49,11 +49,14 @@ pub struct LLVMCodeGenerator<'a> {
 }
 
 impl<'a> LLVMCodeGenerator<'a> {
+    pub fn is_64_bit(self) -> bool {
+        self.ptr_sized_int_type.get_bit_width() == 64
+    }
     pub fn new(
         llvm_context: &'a LLVMContext,
         target: TargetPlatform,
         optimization_level: OptimizationLevel,
-        module: &'a Module,
+        module: &'a ConcreteModule,
     ) -> Self {
         let llvm_module = llvm_context.create_module("main");
         let llvm_builder = llvm_context.create_builder();
@@ -101,7 +104,7 @@ impl<'a> LLVMCodeGenerator<'a> {
             function_by_name,
         }
     }
-    pub fn gen_module(&mut self, module: &'a Module) {
+    pub fn gen_module(&mut self, module: &'a ConcreteModule) {
         self.scopes
             .push(RefCell::new(Scope::new(ScopeKind::Global)));
 

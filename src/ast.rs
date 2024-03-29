@@ -261,6 +261,7 @@ pub struct TypeRef {
 pub enum UnresolvedType {
     TypeRef(TypeRef),
     Ptr(Box<Located<UnresolvedType>>),
+    Infer,
 }
 
 impl Display for UnresolvedType {
@@ -280,6 +281,9 @@ impl Display for UnresolvedType {
                 f.write_char('[')?;
                 write!(f, "{}", inner_type.value)?;
                 f.write_char(']')?;
+            }
+            UnresolvedType::Infer => {
+                f.write_str("_")?;
             }
         }
         Ok(())
