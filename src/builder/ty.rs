@@ -1,5 +1,5 @@
 use inkwell::{
-    types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum},
+    types::{BasicMetadataTypeEnum, BasicTypeEnum},
     AddressSpace,
 };
 
@@ -22,15 +22,9 @@ impl<'a> LLVMCodeGenerator<'a> {
             ConcreteType::U32 => BasicMetadataTypeEnum::IntType(self.llvm_context.i32_type()),
             ConcreteType::U64 => BasicMetadataTypeEnum::IntType(self.llvm_context.i64_type()),
             ConcreteType::I64 => BasicMetadataTypeEnum::IntType(self.llvm_context.i64_type()),
-            ConcreteType::Ptr(inner) => BasicMetadataTypeEnum::PointerType(
-                if let Some(t) = self.type_to_basic_type_enum(inner) {
-                    t.ptr_type(AddressSpace::default())
-                } else {
-                    // Void Pointer Type
-                    self.llvm_context
-                        .i8_type()
-                        .ptr_type(AddressSpace::default())
-                },
+            ConcreteType::Ptr(_inner) => BasicMetadataTypeEnum::PointerType(
+                // LLVM 15+ uses opaque pointers, no distinction between pointer types
+                self.llvm_context.ptr_type(AddressSpace::default()),
             ),
             ConcreteType::Bool => BasicMetadataTypeEnum::IntType(self.llvm_context.bool_type()),
             ConcreteType::Void => return None,

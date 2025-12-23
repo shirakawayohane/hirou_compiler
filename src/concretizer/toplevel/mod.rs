@@ -109,11 +109,6 @@ fn concretize_expression(
                     .iter()
                     .map(|e| concretize_expression(ctx, e))
                     .collect(),
-                generic_args: call_expr.generic_args.as_ref().map(|args| {
-                    args.iter()
-                        .map(|ty| concretize_type(ctx, ty))
-                        .collect()
-                }),
             })
         }
         resolved_ast::ExpressionKind::Deref(deref_expr) => {
@@ -243,14 +238,6 @@ pub fn concretize_toplevel(
         resolved_ast::TopLevel::Function(func) => {
             let concretized = concretize_function(ctx, func);
             Some(vec![concrete_ast::TopLevel::Function(concretized)])
-        }
-        resolved_ast::TopLevel::Implemantation(_imp) => {
-            // TODO: Implement when interface/implementation is needed
-            None
-        }
-        resolved_ast::TopLevel::Interface(_interface) => {
-            // Interfaces don't generate code directly
-            None
         }
     }
 }

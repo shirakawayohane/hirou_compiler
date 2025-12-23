@@ -84,5 +84,6 @@ pub(super) fn register_intrinsic_types(types: &mut TypeScopes) {
     types.add("u64".into(), ResolvedType::U64);
     types.add("usize".into(), ResolvedType::USize);
     types.add("u8".into(), ResolvedType::U8);
+    types.add("bool".into(), ResolvedType::Bool);
     types.add("void".into(), ResolvedType::Void);
 }

@@ -84,7 +84,7 @@ pub struct VariableScopes {
     scopes: Vec<HashMap<String, ResolvedType>>,
 }
 
-impl<'a> VariableScopes {
+impl VariableScopes {
     fn new() -> Self {
         Self { scopes: Vec::new() }
     }
@@ -105,7 +105,7 @@ impl<'a> VariableScopes {
         self.scopes.last_mut().unwrap().insert(name, ty);
     }
 
-    fn get(&'a self, name: &str) -> Option<&ResolvedType> {
+    fn get(&self, name: &str) -> Option<&ResolvedType> {
         for scope in self.scopes.iter().rev() {
             if let Some(ty) = scope.get(name) {
                 return Some(ty);
@@ -124,7 +124,7 @@ pub struct TypeScopes {
     scopes: Vec<HashMap<String, ResolvedType>>,
 }
 
-impl<'a> TypeScopes {
+impl TypeScopes {
     pub fn new() -> Self {
         Self { scopes: Vec::new() }
     }
@@ -141,11 +141,11 @@ impl<'a> TypeScopes {
         self.scopes.pop().unwrap()
     }
 
-    fn add(&mut self, name: String, ty: ResolvedType) {
+    pub fn add(&mut self, name: String, ty: ResolvedType) {
         self.scopes.last_mut().unwrap().insert(name, ty);
     }
 
-    fn get(&'a self, name: &str) -> Option<&ResolvedType> {
+    fn get(&self, name: &str) -> Option<&ResolvedType> {
         for scope in self.scopes.iter().rev() {
             if let Some(ty) = scope.get(name) {
                 return Some(ty);
@@ -191,24 +191,57 @@ fn resolve_function(
     context: &ResolverContext,
     current_fn: &ast::Function,
 ) -> Result<(), FaitalError> {
-    let result_type = resolve_type(context, &current_fn.decl.return_type)?;
-    in_new_scope!(context.scopes, {
-        let mut resolved_args: Vec<resolved_ast::Argument> = Vec::new();
-        for arg in &current_fn.decl.args {
-            match arg {
-                Argument::VarArgs => {
-                    resolved_args.push(resolved_ast::Argument::VarArgs);
-                }
-                Argument::Normal(arg_ty, arg_name) => {
-                    let arg_type = resolve_type(context, arg_ty)?;
-                    context
-                        .scopes
-                        .borrow_mut()
-                        .add(arg_name.clone(), arg_type.clone());
-                    resolved_args.push(resolved_ast::Argument::Normal(arg_type, arg_name.clone()));
+    // Register generic type parameters first (only if not already registered with concrete types)
+    in_new_scope!(context.types, {
+        if let Some(generic_args) = &current_fn.decl.generic_args {
+            for generic_arg in generic_args {
+                // Check if a concrete type is already registered (from call site)
+                if context.types.borrow().get(&generic_arg.name).is_none() {
+                    let restrictions = generic_arg
+                        .restrictions
+                        .iter()
+                        .map(|r| match r {
+                            ast::Restriction::Interface(name) => {
+                                resolved_ast::Restriction::Interface(
+                                    resolved_ast::InterfaceRestriction { name: name.clone() },
+                                )
+                            }
+                        })
+                        .collect();
+                    context.types.borrow_mut().add(
+                        generic_arg.name.clone(),
+                        ResolvedType::Generics(resolved_ast::ResolvedGenericType {
+                            name: generic_arg.name.clone(),
+                            restrictions,
+                        }),
+                    );
                 }
             }
         }
+
+        let result_type = resolve_type(context, &current_fn.decl.return_type)?;
+        in_new_scope!(context.scopes, {
+            let mut resolved_args: Vec<resolved_ast::Argument> = Vec::new();
+            for arg in &current_fn.decl.args {
+                match arg {
+                    Argument::VarArgs => {
+                        resolved_args.push(resolved_ast::Argument::VarArgs);
+                    }
+                    Argument::SelfArg => {
+                        // SelfArg is only valid in interface implementations
+                        unreachable!("SelfArg is not allowed in regular functions")
+                    }
+                    Argument::Normal(arg_ty, arg_name) => {
+                        let arg_type = resolve_type(context, arg_ty)?;
+                        context
+                            .scopes
+                            .borrow_mut()
+                            .add(arg_name.clone(), arg_type.clone());
+                        resolved_args
+                            .push(resolved_ast::Argument::Normal(arg_type, arg_name.clone()));
+                    }
+                }
+            }
 
         let name = if current_fn.decl.generic_args.is_some() {
             let arg_type_scopes = resolved_args
@@ -295,7 +328,97 @@ fn resolve_function(
             .resolved_functions
             .borrow_mut()
             .insert(name, resolved_function);
+        });
     });
+    Ok(())
+}
+
+// Resolve an implementation as a function
+pub(crate) fn resolve_implementation(
+    context: &ResolverContext,
+    implementation: &ast::Implementation,
+    fn_name: &str,
+) -> Result<(), FaitalError> {
+    // Check if already resolved
+    if context.resolved_functions.borrow().contains_key(fn_name) {
+        return Ok(());
+    }
+
+    // Resolve the target type (e.g., i32)
+    let target_ty = resolve_type(context, &implementation.decl.target_ty)?;
+
+    // Get the interface to get return type
+    let interface_name = &implementation.decl.name;
+    let interface = context
+        .interface_by_name
+        .borrow()
+        .get(interface_name)
+        .cloned()
+        .ok_or_else(|| {
+            FaitalError(format!("Interface {} not found", interface_name))
+        })?;
+
+    let return_type = resolve_type(context, &interface.return_type)?;
+
+    in_new_scope!(context.scopes, {
+        // Register 'self' as the target type in scope
+        context
+            .scopes
+            .borrow_mut()
+            .add("self".to_string(), target_ty.clone());
+
+        // Build resolved arguments (self)
+        let resolved_args = vec![resolved_ast::Argument::Normal(target_ty, "self".to_string())];
+
+        // Resolve body statements
+        let mut resolved_statements = Vec::new();
+        for statement in &implementation.body {
+            resolved_statements.push(resolve_statement(context, statement)?);
+        }
+
+        // Add return statement if needed
+        if resolved_statements.is_empty() {
+            resolved_statements.push(resolved_ast::Statement::Return(resolved_ast::Return {
+                expression: None,
+            }));
+        } else {
+            let last_stmt = resolved_statements.pop().unwrap();
+            match last_stmt {
+                resolved_ast::Statement::Return(_) => {
+                    resolved_statements.push(last_stmt);
+                }
+                resolved_ast::Statement::Effect(effect) => {
+                    if return_type == ResolvedType::Void {
+                        resolved_statements.push(resolved_ast::Statement::Effect(effect));
+                        resolved_statements.push(resolved_ast::Statement::Return(
+                            resolved_ast::Return { expression: None },
+                        ));
+                    } else {
+                        resolved_statements.push(resolved_ast::Statement::Return(
+                            resolved_ast::Return {
+                                expression: Some(effect.expression.clone()),
+                            },
+                        ));
+                    }
+                }
+            }
+        }
+
+        let resolved_function = resolved_ast::Function {
+            decl: resolved_ast::FunctionDecl {
+                name: fn_name.to_string(),
+                args: resolved_args,
+                return_type,
+            },
+            body: resolved_statements,
+        };
+
+        context
+            .resolved_functions
+            .borrow_mut()
+            .insert(fn_name.to_string(), resolved_function);
+    });
+
     Ok(())
 }
 
@@ -344,19 +467,18 @@ pub(crate) fn resolve_module(
         match &toplevel.value {
             TopLevel::Implemantation(implementation) => {
                 let mut impls_by_name = context.impls_by_name.borrow_mut();
-                let mut impl_by_target = impls_by_name
+                let impl_by_target = impls_by_name
                     .entry(implementation.decl.name.clone())
                     .or_insert_with(Vec::new);
 
-                if let Ok(resolved_ty) = resolve_type(context, &implementation.decl.target_ty) {
+                if resolve_type(context, &implementation.decl.target_ty).is_ok() {
                     impl_by_target.push(implementation.clone());
                     continue;
                 }
 
                 match &implementation.decl.target_ty.value {
                     UnresolvedType::TypeRef(typeref) => {
-                        if let Some(interface) =
-                            context.interface_by_name.borrow().get(&typeref.name)
+                        if context.interface_by_name.borrow().contains_key(&typeref.name)
                         {
                             context.errors.borrow_mut().push(CompileError::new(
                                 implementation.decl.target_ty.range,
@@ -425,8 +547,12 @@ pub(crate) fn resolve_module(
                     }
                 }
                 TopLevel::TypeDef(_) => {}
-                TopLevel::Implemantation(_) => todo!(),
-                TopLevel::Interface(_) => todo!(),
+                // Implementations are resolved on-demand when interface calls are made
+                // The resolved implementation is added as a Function to resolved_toplevels
+                TopLevel::Implemantation(_) => {}
+                // Interfaces don't need separate resolution - they're already in context.interface_by_name
+                // and are used during interface call resolution
+                TopLevel::Interface(_) => {}
             }
         }
     }

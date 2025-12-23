@@ -15,22 +15,14 @@ use inkwell::values::PointerValue;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum ScopeKind {
-    Global,
-    Function,
-}
-
 #[derive(Debug)]
 pub struct Scope<'a> {
-    pub kind: ScopeKind,
     pub values: HashMap<String, PointerValue<'a>>,
 }
 
 impl Scope<'_> {
-    pub fn new(kind: ScopeKind) -> Self {
+    pub fn new() -> Self {
         Self {
-            kind,
             values: HashMap::new(),
         }
     }
@@ -96,8 +88,7 @@ impl<'a> LLVMCodeGenerator<'a> {
         }
     }
     pub fn gen_module(&mut self, module: &'a ConcreteModule) {
-        self.scopes
-            .push(RefCell::new(Scope::new(ScopeKind::Global)));
+        self.scopes.push(RefCell::new(Scope::new()));
 
         // self.gen_intrinsic_functions_on_llvm();
         for top in &module.toplevels {

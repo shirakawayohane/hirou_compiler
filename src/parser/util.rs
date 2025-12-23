@@ -42,7 +42,7 @@ pub(super) fn skip1(input: Span<'_>) -> IResult<Span<'_>, (), VerboseError<Span<
 
 pub(super) fn located<'a, O>(
     mut parser: impl Parser<Span<'a>, O, VerboseError<Span<'a>>>,
-) -> impl FnMut(Span<'a>) -> ParseResult<O> {
+) -> impl FnMut(Span<'a>) -> ParseResult<'a, O> {
     move |input: Span<'a>| {
         let (s, _) = skip0(input)?;
         let (s, from) = position(s)?;

@@ -164,7 +164,6 @@ impl Display for ResolvedType {
 pub struct CallExpr {
     pub callee: String,
     pub args: Vec<ResolvedExpression>,
-    pub generic_args: Option<Vec<ResolvedType>>,
 }
 
 #[derive(Debug, Clone)]
@@ -335,24 +334,8 @@ pub struct ImplementationDecl {
 }
 
 #[derive(Debug, Clone)]
-pub struct Implementation {
-    pub decl: ImplementationDecl,
-    pub body: Vec<Statement>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Interface {
-    pub name: String,
-    pub generic_args: Vec<ResolvedType>,
-    pub args: Vec<Argument>,
-    pub return_type: ResolvedType,
-}
-
-#[derive(Debug, Clone)]
 pub enum TopLevel {
     Function(Function),
-    Implemantation(Implementation),
-    Interface(Interface),
 }
 
 #[derive(Debug)]

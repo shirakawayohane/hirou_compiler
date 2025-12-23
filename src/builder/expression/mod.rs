@@ -315,7 +315,7 @@ impl LLVMCodeGenerator<'_> {
             let index = self.gen_expression(index_access)?.unwrap();
             ptr = self
                 .llvm_builder
-                .build_load(pointee_type.ptr_type(AddressSpace::default()), ptr, "")
+                .build_load(self.llvm_context.ptr_type(AddressSpace::default()), ptr, "")
                 .unwrap()
                 .into_pointer_value();
 

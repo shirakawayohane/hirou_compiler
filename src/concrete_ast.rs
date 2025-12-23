@@ -14,22 +14,6 @@ pub struct ConcreteStructType {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct InterfaceRestriction {
-    pub name: String,
-}
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub enum Restriction {
-    Interface(InterfaceRestriction),
-}
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct ConcreteGenericType {
-    pub name: String,
-    pub restrictions: Vec<Restriction>,
-}
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum ConcreteType {
     I32,
     I64,
@@ -138,7 +122,6 @@ impl Display for ConcreteType {
 pub struct CallExpr {
     pub callee: String,
     pub args: Vec<ConcreteExpression>,
-    pub generic_args: Option<Vec<ConcreteType>>,
 }
 
 #[derive(Debug, Clone)]
@@ -267,11 +250,6 @@ pub struct VariableDecls {
 #[derive(Debug, Clone)]
 pub struct Return {
     pub expression: Option<Box<ConcreteExpression>>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Effect {
-    pub expression: ConcreteExpression,
 }
 
 #[derive(Debug, Clone)]

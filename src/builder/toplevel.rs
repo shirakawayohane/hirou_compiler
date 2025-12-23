@@ -23,10 +23,7 @@ impl<'a> LLVMCodeGenerator<'a> {
         let mut param_types: Vec<BasicMetadataTypeEnum> = Vec::new();
         // structを返す関数の場合は第一引数にポインタを追加する
         if returns_struct {
-            let param = self
-                .llvm_context
-                .i8_type()
-                .ptr_type(AddressSpace::default());
+            let param = self.llvm_context.ptr_type(AddressSpace::default());
             param_types.push(param.into());
         }
 
@@ -97,7 +94,7 @@ impl<'a> LLVMCodeGenerator<'a> {
             .llvm_context
             .append_basic_block(function_value, "entry");
 
-        let scope = Scope::new(ScopeKind::Function);
+        let scope = Scope::new();
         self.push_scope(scope);
         {
             self.llvm_builder.position_at_end(entry_basic_block);

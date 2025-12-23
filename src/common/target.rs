@@ -1,4 +1,4 @@
-use std::{default, env};
+use std::env;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TargetPlatform {
@@ -253,8 +253,6 @@ pub enum Arch {
     _386,
     Arm64,
     Wasm32,
-
-    #[allow(unused)]
     Wasm64,
 }
 

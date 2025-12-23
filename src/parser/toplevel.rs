@@ -34,6 +34,7 @@ fn test_parse_generic_arguments() {
 fn parse_argument(input: Span) -> NotLocatedParseResult<Argument> {
     alt((
         map(threedots, |_| Argument::VarArgs),
+        map(self_token, |_| Argument::SelfArg),
         map(
             tuple((parse_identifier, colon, parse_type)),
             |(name, _, ty)| Argument::Normal(ty, name),
@@ -197,14 +198,14 @@ fn parse_interface(input: Span) -> ParseResult<TopLevel> {
             tuple((
                 context("interface", interface_token),
                 context("identifier", parse_identifier),
-                context("generic_arguments", parse_generic_argument_decls),
+                opt(parse_generic_argument_decls),
                 context("arguments", parse_arguments),
                 preceded(colon, parse_type),
             )),
             |(_, name, generic_args, args, return_type)| {
                 TopLevel::Interface(Interface {
                     name,
-                    generic_args,
+                    generic_args: generic_args.unwrap_or_default(),
                     args,
                     return_type,
                 })
@@ -234,7 +235,7 @@ fn parse_impl(input: Span) -> ParseResult<TopLevel> {
                 for_token,
                 parse_type,
                 parse_arguments,
-                preceded(colon, parse_type),
+                opt(preceded(colon, parse_type)),
                 parse_block,
             )),
             |(alloc_mode, _, name, generic_args, _, target_ty, args, return_type, body)| {

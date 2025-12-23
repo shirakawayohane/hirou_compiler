@@ -32,8 +32,4 @@ impl LLVMCodeGenerator<'_> {
             self.llvm_builder.build_return(None)
         }
     }
-    pub(super) fn gen_effect(&self, effect: &Effect) -> Result<(), BuilderError> {
-        self.gen_expression(&effect.expression)?;
-        Ok(())
-    }
 }

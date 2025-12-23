@@ -1,0 +1,54 @@
+// Interface and Implementation Test
+// Tests: interface definition, impl for different types, generic constraints
+
+// Define an interface for conversion to bool
+interface ->bool(self) : bool
+
+// Implement ->bool for i32: positive numbers are truthy
+impl ->bool for i32 (self) {
+  (> self 0)
+}
+
+// Generic function with interface constraint
+fn is_truthy<T: ->bool>(value: T): bool {
+  (->bool value)
+}
+
+// Define another interface for conversion to i32
+interface ->i32(self) : i32
+
+// Implement ->i32 for bool
+impl ->i32 for bool (self) {
+  (if self 1 0)
+}
+
+// Function that uses ->i32 interface
+fn bool_to_int<T: ->i32>(value: T): i32 {
+  (->i32 value)
+}
+
+fn main(): void {
+  // Test ->bool interface with i32
+  (printf "Testing ->bool interface:\n")
+  (printf "  (->bool 5) = %s\n" (if (->bool 5) "true" "false"))
+  (printf "  (->bool 0) = %s\n" (if (->bool 0) "true" "false"))
+  (printf "  (->bool 1) = %s\n" (if (->bool 1) "true" "false"))
+
+  // Test generic function with interface constraint
+  (printf "\nTesting generic is_truthy<T: ->bool>:\n")
+  (printf "  is_truthy<i32>(10) = %s\n" (if (is_truthy<i32> 10) "true" "false"))
+  (printf "  is_truthy<i32>(0) = %s\n" (if (is_truthy<i32> 0) "true" "false"))
+  (printf "  is_truthy<i32>(100) = %s\n" (if (is_truthy<i32> 100) "true" "false"))
+
+  // Test ->i32 interface
+  (printf "\nTesting ->i32 interface:\n")
+  (printf "  (->i32 true) = %d\n" (->i32 true))
+  (printf "  (->i32 false) = %d\n" (->i32 false))
+
+  // Test generic bool_to_int
+  (printf "\nTesting generic bool_to_int<T: ->i32>:\n")
+  (printf "  bool_to_int<bool>(true) = %d\n" (bool_to_int<bool> true))
+  (printf "  bool_to_int<bool>(false) = %d\n" (bool_to_int<bool> false))
+
+  (printf "\nAll tests completed!\n")
+}

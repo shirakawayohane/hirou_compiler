@@ -344,6 +344,7 @@ impl Display for GenericArgument {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Argument {
     VarArgs,
+    SelfArg,
     Normal(Located<UnresolvedType>, String),
 }
 
@@ -378,7 +379,7 @@ pub struct ImplementationDecl {
     pub generic_args: Option<Vec<Located<GenericArgument>>>,
     pub target_ty: Located<UnresolvedType>,
     pub args: Vec<Argument>,
-    pub return_type: Located<UnresolvedType>,
+    pub return_type: Option<Located<UnresolvedType>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

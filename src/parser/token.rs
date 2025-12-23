@@ -9,9 +9,9 @@ use nom::{
 };
 
 // トークン間の空白をスキップし、本筋に集中するためのコンビネーター
-fn token<'a, F, O>(f: F) -> impl FnMut(Span<'a>) -> NotLocatedParseResult<()>
+fn token<'a, F, O>(f: F) -> impl FnMut(Span<'a>) -> NotLocatedParseResult<'a, ()>
 where
-    F: FnMut(Span<'a>) -> NotLocatedParseResult<O>,
+    F: FnMut(Span<'a>) -> NotLocatedParseResult<'a, O>,
 {
     map(preceded(skip0, f), |_| ())
 }
@@ -80,6 +80,7 @@ token_tag!(salloc_token, "salloc");
 token_tag!(interface_token, "interface");
 token_tag!(impl_token, "impl");
 token_tag!(for_token, "for");
+token_tag!(self_token, "self");
 
 pub(super) fn parse_identifier(input: Span) -> NotLocatedParseResult<String> {
     let (first_skipped, _) = skip0(input)?;
