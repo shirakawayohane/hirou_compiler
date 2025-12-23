@@ -145,6 +145,10 @@ impl TypeScopes {
         self.scopes.last_mut().unwrap().insert(name, ty);
     }
 
+    pub fn add_to_root(&mut self, name: String, ty: ResolvedType) {
+        self.scopes.first_mut().unwrap().insert(name, ty);
+    }
+
     fn get(&self, name: &str) -> Option<&ResolvedType> {
         for scope in self.scopes.iter().rev() {
             if let Some(ty) = scope.get(name) {

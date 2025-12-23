@@ -164,9 +164,9 @@ pub fn resolve_infer_generic_from_arguments(
                 // 引数の型がジェネリックパラメータ名と一致するか確認
                 for (gen_idx, gen_arg) in callee_generic_args.iter().enumerate() {
                     if typeref.name == gen_arg.name {
-                        // 実引数から型を取得し、ジェネリック型として登録
+                        // 実引数から型を取得し、ジェネリック型としてルートスコープに登録
                         if let Some(resolved_arg) = resolved_args.get(i) {
-                            context.types.borrow_mut().add(
+                            context.types.borrow_mut().add_to_root(
                                 gen_arg.name.clone(),
                                 resolved_arg.ty.clone(),
                             );
@@ -211,8 +211,10 @@ pub fn resolve_infer_generic_from_annotation(
                 if inferred {
                     context.errors.borrow_mut().extend(temp_errors);
                     resolve_function(context, callee)?;
+                    Ok((0..callee.decl.generic_args.as_ref().unwrap().len()).collect_vec())
+                } else {
+                    Ok(vec![])
                 }
-                Ok((0..callee.decl.generic_args.as_ref().unwrap().len()).collect_vec())
             })
         })
     } else {
@@ -295,17 +297,25 @@ fn resolve_function_call_expr(
             // 推論されたジェネリクスの境界をチェック
             if !inferred_indices.is_empty() {
                 if let Some(callee_generic_args) = &callee.decl.generic_args {
-                    let resolved_generic_args: Vec<_> = callee_generic_args
+                    // 推論した型を保存（ネストした呼び出しで上書きされる可能性があるため）
+                    let saved_generic_types: Vec<_> = callee_generic_args
                         .iter()
                         .map(|g| {
-                            context
-                                .types
-                                .borrow()
-                                .get(&g.name)
-                                .cloned()
-                                .unwrap_or(ResolvedType::Unknown)
+                            (
+                                g.name.clone(),
+                                context
+                                    .types
+                                    .borrow()
+                                    .get(&g.name)
+                                    .cloned()
+                                    .unwrap_or(ResolvedType::Unknown),
+                            )
                         })
                         .collect();
+
+                    let resolved_generic_args: Vec<_> =
+                        saved_generic_types.iter().map(|(_, ty)| ty.clone()).collect();
+
                     if let Err(e) = check_generic_bounds(
                         context,
                         callee_generic_args,
@@ -313,6 +323,18 @@ fn resolve_function_call_expr(
                         &resolved_generic_args,
                     ) {
                         context.errors.borrow_mut().push(e);
+                    }
+
+                    // 推論した型で関数を解決（グローバルスコープで実行）
+                    in_global_scope!(context.scopes, {
+                        in_global_scope!(context.types, {
+                            resolve_function(context, callee)?;
+                        });
+                    });
+
+                    // ネストした呼び出しで上書きされた可能性があるので、元の型を復元
+                    for (name, ty) in saved_generic_types {
+                        context.types.borrow_mut().add_to_root(name, ty);
                     }
                 }
             }

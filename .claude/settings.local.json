@@ -4,7 +4,13 @@
       "Bash(cargo build:*)",
       "Bash(pkill:*)",
       "Bash(LLVM_SYS_201_PREFIX=/opt/homebrew/opt/llvm cargo build:*)",
-      "Bash(cargo run:*)"
+      "Bash(cargo run:*)",
+      "Bash(git checkout:*)",
+      "Bash(cargo test:*)",
+      "Bash(LLVM_SYS_201_PREFIX=/opt/homebrew/opt/llvm cargo run:*)",
+      "Bash(/tmp/interface_test)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
