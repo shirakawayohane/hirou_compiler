@@ -10,6 +10,5 @@ pub enum StructKind {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum AllocMode {
-    Heap,
     Stack,
 }

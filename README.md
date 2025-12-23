@@ -71,7 +71,6 @@ ConcreteASTからJavaScriptを生成するモジュール。
     - セットリテラル #{}
 
 以下は細かいの
-- Statementいらなかったので削除
 - 関数定義のアノテーションがなかったらvoid型
 - indexがintであるかの検証
 - structのフィールドにVoidを入れることは出来ないことの検証
@@ -117,29 +116,7 @@ alloc {
 ・・・
 }
 ```
-- heap alloc scopeでヒープメモリに確保するリージョンを作れる。
-```
-heap_alloc {
-    ...
-}
-```
 - スレッドごとに必ずルートアロケータが存在する。リージョンはネストすることができ、スレッドごとのスタック構造になる
 - リージョンのアロケーターはスレッドごとに管理される。
 - 他のスレッドに record を渡すときは必ずコピーとなる。
 - クロージャーは常にリージョンを持つ。リージョンはクロージャーが作られたスコープのリージョンとなる。
-
-- Interface
-```
-interface as_bool(self): bool
-
-interace into<T>(self): T
-
-impl as_bool for i32 (self) {
-    (> self 0)
-}
-
-impl into<i64> for i32(self) {
-    // i64 is built-in interface
-    (i64 self)
-}
-```

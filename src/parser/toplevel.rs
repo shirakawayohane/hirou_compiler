@@ -129,7 +129,7 @@ fn test_parse_argument_with_error() {
 
 fn parse_alloc_mode(input: Span) -> NotLocatedParseResult<AllocMode> {
     alt((
-        map(alloc_token, |_| AllocMode::Heap),
+        map(alloc_token, |_| AllocMode::Stack),
         map(salloc_token, |_| AllocMode::Stack),
     ))(input)
 }

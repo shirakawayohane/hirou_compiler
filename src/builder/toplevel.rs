@@ -134,14 +134,14 @@ impl<'a> LLVMCodeGenerator<'a> {
             }
 
             // Generate function body
-            for (i, statement) in function.body.iter().enumerate() {
+            for (i, expr) in function.body.iter().enumerate() {
                 if i == function.body.len() - 1 {
                     // 構造体を返す場合、最後のreturn文はreturn voidにする
                     if returns_struct {
-                        match statement {
-                            Statement::Return(return_stmt) => {
-                                let value = self
-                                    .gen_expression(return_stmt.expression.as_ref().unwrap())?
+                        match &expr.kind {
+                            ExpressionKind::Return(return_val) => {
+                                let value: inkwell::values::BasicValueEnum = self
+                                    .gen_expression(return_val.expression.as_ref().unwrap())?
                                     .unwrap();
                                 let first_param_ptr = function_value
                                     .get_first_param()
@@ -150,7 +150,7 @@ impl<'a> LLVMCodeGenerator<'a> {
                                 let struct_ptr = value.into_pointer_value();
                                 let struct_ty = self
                                     .type_to_basic_type_enum(
-                                        &return_stmt.expression.as_ref().unwrap().ty,
+                                        &return_val.expression.as_ref().unwrap().ty,
                                     )
                                     .unwrap()
                                     .into_struct_type();
@@ -168,7 +168,7 @@ impl<'a> LLVMCodeGenerator<'a> {
                         }
                     }
                 }
-                self.gen_statement(statement)?;
+                self.gen_expression(expr)?;
             }
         }
         self.pop_scope();

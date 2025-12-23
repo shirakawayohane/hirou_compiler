@@ -1,4 +1,4 @@
-use std::env;
+use std::{default, env};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TargetPlatform {
@@ -296,9 +296,10 @@ impl Endianness {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PointerSizedIntWidth {
     ThirtyTwo,
+    #[default]
     SixtyFour,
 }
 

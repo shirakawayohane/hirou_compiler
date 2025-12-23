@@ -235,6 +235,7 @@ pub enum ExpressionKind {
     When(WhenExpr),
     VariableDecls(VariableDecls),
     Assignment(Assignment),
+    Return(Return),
     Unknown,
 }
 
@@ -265,18 +266,12 @@ pub struct VariableDecls {
 
 #[derive(Debug, Clone)]
 pub struct Return {
-    pub expression: Option<ConcreteExpression>,
+    pub expression: Option<Box<ConcreteExpression>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Effect {
     pub expression: ConcreteExpression,
-}
-
-#[derive(Debug, Clone)]
-pub enum Statement {
-    Return(Return),
-    Effect(Effect),
 }
 
 #[derive(Debug, Clone)]
@@ -295,7 +290,7 @@ pub struct FunctionDecl {
 #[derive(Debug, Clone)]
 pub struct Function {
     pub decl: FunctionDecl,
-    pub body: Vec<Statement>,
+    pub body: Vec<ConcreteExpression>,
 }
 
 #[derive(Debug, Clone)]

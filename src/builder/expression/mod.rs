@@ -208,7 +208,7 @@ impl LLVMCodeGenerator<'_> {
             return Ok(Some(ptr.as_basic_value_enum()));
         }
         let value = self.llvm_builder.build_call(func, &args, "").unwrap();
-        Ok(value.try_as_basic_value().left())
+        Ok(value.try_as_basic_value().basic())
     }
     pub(super) fn eval_if_expr<'a>(
         &'a self,
@@ -379,6 +379,10 @@ impl LLVMCodeGenerator<'_> {
             }
             ExpressionKind::Assignment(assignment) => {
                 self.eval_assignment(assignment).map(|_| None)
+            }
+            ExpressionKind::Return(ret) => {
+                self.gen_return(ret)?;
+                Ok(None)
             }
         }
     }
