@@ -7,32 +7,40 @@ impl LLVMCodeGenerator<'_> {
         value: BasicValueEnum<'ctx>,
         ty: &ConcreteType,
     ) -> BasicValueEnum<'ctx> {
-        dbg!(ty, value);
-        let value = value.into_int_value();
         match ty {
             ConcreteType::I32 => self
                 .llvm_builder
-                .build_int_cast_sign_flag(value, self.llvm_context.i32_type(), true, "(i32)")
+                .build_int_cast_sign_flag(value.into_int_value(), self.llvm_context.i32_type(), true, "(i32)")
                 .unwrap()
                 .as_basic_value_enum(),
             ConcreteType::U32 => self
                 .llvm_builder
-                .build_int_cast_sign_flag(value, self.llvm_context.i32_type(), false, "(u32)")
+                .build_int_cast_sign_flag(value.into_int_value(), self.llvm_context.i32_type(), false, "(u32)")
                 .unwrap()
                 .as_basic_value_enum(),
             ConcreteType::U64 => self
                 .llvm_builder
-                .build_int_cast_sign_flag(value, self.llvm_context.i64_type(), false, "(u64)")
+                .build_int_cast_sign_flag(value.into_int_value(), self.llvm_context.i64_type(), false, "(u64)")
                 .unwrap()
                 .as_basic_value_enum(),
             ConcreteType::U8 => self
                 .llvm_builder
-                .build_int_cast_sign_flag(value, self.llvm_context.i8_type(), false, "(u8)")
+                .build_int_cast_sign_flag(value.into_int_value(), self.llvm_context.i8_type(), false, "(u8)")
                 .unwrap()
                 .as_basic_value_enum(),
             ConcreteType::I64 => self
                 .llvm_builder
-                .build_int_cast(value, self.llvm_context.i64_type(), "(i64)")
+                .build_int_cast(value.into_int_value(), self.llvm_context.i64_type(), "(i64)")
+                .unwrap()
+                .as_basic_value_enum(),
+            ConcreteType::F32 => self
+                .llvm_builder
+                .build_float_cast(value.into_float_value(), self.llvm_context.f32_type(), "(f32)")
+                .unwrap()
+                .as_basic_value_enum(),
+            ConcreteType::F64 => self
+                .llvm_builder
+                .build_float_cast(value.into_float_value(), self.llvm_context.f64_type(), "(f64)")
                 .unwrap()
                 .as_basic_value_enum(),
             ConcreteType::Ptr(_) => unreachable!(),

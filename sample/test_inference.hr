@@ -1,0 +1,56 @@
+// Test generic type argument inference from function arguments
+// Tests that Vec methods can be called without explicit <i32> when the type can be inferred
+
+fn test_inference(): void {
+  (:= v : Vec<i32> [1, 2, 3])
+
+  // These should work without <i32>
+  (printf "len=%d\n" (Vec::len v))
+  (printf "v[0]=%d\n" (Vec::get v 0))
+  (Vec::set v 0 100)
+  (printf "first=%d\n" (Vec::first v))
+  (printf "last=%d\n" (Vec::last v))
+
+  // Verify the changes
+  (printf "After set v[0]=100: v[0]=%d\n" (Vec::get v 0))
+}
+
+fn test_inference_with_push(): void {
+  (:= v (Vec::new<i32>))
+
+  // Push without explicit type argument - type should be inferred from v
+  (:=< v (Vec::push v 10))
+  (:=< v (Vec::push v 20))
+  (:=< v (Vec::push v 30))
+
+  (printf "After pushes: len=%d\n" (Vec::len v))
+  (printf "v[0]=%d, v[1]=%d, v[2]=%d\n"
+    (Vec::get v 0)
+    (Vec::get v 1)
+    (Vec::get v 2))
+}
+
+fn test_inference_with_pop(): void {
+  (:= v : Vec<i32> [100, 200, 300])
+
+  (printf "Before pop: len=%d\n" (Vec::len v))
+
+  (:=< v (Vec::pop v))
+  (printf "After pop: len=%d\n" (Vec::len v))
+
+  (:=< v (Vec::pop v))
+  (printf "After second pop: len=%d\n" (Vec::len v))
+}
+
+alloc fn main(): void {
+  (printf "=== Test Inference ===\n")
+  (test_inference)
+
+  (printf "\n=== Test Inference with Push ===\n")
+  (test_inference_with_push)
+
+  (printf "\n=== Test Inference with Pop ===\n")
+  (test_inference_with_pop)
+
+  (printf "\n=== All inference tests passed! ===\n")
+}

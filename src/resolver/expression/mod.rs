@@ -33,14 +33,10 @@ pub(crate) fn resolve_expression(
                 });
 
             if let Some(ty) = context.scopes.borrow().get(&variable_ref.name) {
-                let resolved_type = if let Some(annotation) = annotation {
-                    annotation
-                } else {
-                    ty
-                };
-
+                // Always use the variable's actual type, not the annotation
+                // The annotation is used for type checking, but the expression keeps its original type
                 Ok(resolved_ast::ResolvedExpression {
-                    ty: resolved_type.clone(),
+                    ty: ty.clone(),
                     kind: expr_kind,
                 })
             } else {
@@ -60,8 +56,16 @@ pub(crate) fn resolve_expression(
             let kind = resolved_ast::ExpressionKind::NumberLiteral(resolved_ast::NumberLiteral {
                 value: number_literal.value.clone(),
             });
+            let is_float = number_literal.value.contains('.');
             let ty = if let Some(annotation) = annotation {
                 annotation.clone()
+            } else if is_float {
+                // Float literal: default to f64
+                if number_literal.value.parse::<f32>().is_ok() {
+                    ResolvedType::F64
+                } else {
+                    ResolvedType::F64
+                }
             } else if number_literal.value.parse::<i32>().is_ok() {
                 ResolvedType::I32
             } else if number_literal.value.parse::<i64>().is_ok() {
@@ -69,7 +73,13 @@ pub(crate) fn resolve_expression(
             } else if number_literal.value.parse::<u64>().is_ok() {
                 ResolvedType::U64
             } else {
-                unreachable!()
+                context.errors.borrow_mut().push(CompileError::new(
+                    loc_expr.range,
+                    CompileErrorKind::InvalidNumberLiteral {
+                        value: number_literal.value.clone(),
+                    },
+                ));
+                ResolvedType::Unknown
             };
 
             Ok(ResolvedExpression { ty, kind })
@@ -130,11 +140,33 @@ pub(crate) fn resolve_expression(
         }
         Expression::DerefExpr(deref_expr) => {
             let target = resolve_expression(context, deref_expr.target.as_deref(), None)?;
+            let resolved_ty = if let ResolvedType::Ptr(inner) = &target.ty {
+                *inner.clone()
+            } else {
+                context.errors.borrow_mut().push(CompileError::new(
+                    loc_expr.range,
+                    CompileErrorKind::InvalidDeref {
+                        name: format!("{:?}", target.kind),
+                        deref_count: 1,
+                    },
+                ));
+                ResolvedType::Unknown
+            };
             Ok(resolved_ast::ResolvedExpression {
                 kind: resolved_ast::ExpressionKind::Deref(resolved_ast::DerefExpr {
                     target: Box::new(target),
                 }),
-                ty: ResolvedType::I32,
+                ty: resolved_ty,
+            })
+        }
+        Expression::AddressOf(address_of_expr) => {
+            let target = resolve_expression(context, address_of_expr.target.as_deref(), None)?;
+            let resolved_ty = ResolvedType::Ptr(Box::new(target.ty.clone()));
+            Ok(resolved_ast::ResolvedExpression {
+                kind: resolved_ast::ExpressionKind::AddressOf(resolved_ast::AddressOfExpr {
+                    target: Box::new(target),
+                }),
+                ty: resolved_ty,
             })
         }
         Expression::IndexAccess(index_access_expr) => {
@@ -393,11 +425,124 @@ pub(crate) fn resolve_expression(
                 }),
             })
         }
+        Expression::While(while_expr) => {
+            let condition_expr = resolve_expression(
+                context,
+                while_expr.cond.as_deref(),
+                Some(&ResolvedType::Bool),
+            )?;
+            if !matches!(condition_expr.ty, ResolvedType::Bool) {
+                context.errors.borrow_mut().push(CompileError::new(
+                    loc_expr.range,
+                    CompileErrorKind::TypeMismatch {
+                        expected: ResolvedType::Bool,
+                        actual: condition_expr.ty.clone(),
+                    },
+                ));
+            }
+            let body_expr = resolve_expression(context, while_expr.body.as_deref(), annotation)?;
+            Ok(resolved_ast::ResolvedExpression {
+                ty: ResolvedType::Void,
+                kind: resolved_ast::ExpressionKind::While(resolved_ast::WhileExpr {
+                    cond: Box::new(condition_expr),
+                    body: Box::new(body_expr),
+                }),
+            })
+        }
         Expression::Assignment(assign_expr) => {
             resolve_assignment(context, &Located::transfer(loc_expr, assign_expr))
         }
         Expression::VariableDecl(variable_decl_expr) => {
             resolve_variable_decl(context, &Located::transfer(loc_expr, variable_decl_expr))
+        }
+        Expression::ArrayLiteral(array_literal) => {
+            // Extract element type from annotation if it's Vec<T>
+            let element_type_annotation = if let Some(ResolvedType::StructLike(struct_ty)) = annotation {
+                if struct_ty.non_generic_name == "Vec" {
+                    struct_ty.generic_args.as_ref().and_then(|args| args.first().cloned())
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            let mut resolved_elements = Vec::new();
+            let mut inferred_element_type: Option<ResolvedType> = element_type_annotation.clone();
+
+            for element in &array_literal.elements {
+                let resolved_element = resolve_expression(
+                    context,
+                    element.as_deref(),
+                    inferred_element_type.as_ref(),
+                )?;
+                if inferred_element_type.is_none() {
+                    inferred_element_type = Some(resolved_element.ty.clone());
+                }
+                resolved_elements.push(resolved_element);
+            }
+
+            // Verify all elements have the same type
+            let element_ty = inferred_element_type.clone().unwrap_or(ResolvedType::Unknown);
+            for (i, elem) in resolved_elements.iter().enumerate() {
+                if !element_ty.can_insert(&elem.ty) {
+                    context.errors.borrow_mut().push(CompileError::new(
+                        array_literal.elements[i].range,
+                        CompileErrorKind::TypeMismatch {
+                            expected: element_ty.clone(),
+                            actual: elem.ty.clone(),
+                        },
+                    ));
+                }
+            }
+
+            // If annotation is provided (Vec<T>), use it as the result type
+            let result_ty = if let Some(ann) = annotation {
+                ann.clone()
+            } else if let Some(elem_ty) = inferred_element_type {
+                // Create Vec<elem_ty> type
+                // Look up Vec typedef and create a resolved struct type
+                if let Some(vec_typedef) = context.type_defs.borrow().get("Vec").cloned() {
+                    let ast::TypeDefKind::StructLike(struct_def) = &vec_typedef.kind;
+                    in_new_scope!(context.types, {
+                        if let Some(generic_args) = &struct_def.generic_args {
+                            if !generic_args.is_empty() {
+                                context.types.borrow_mut().add(
+                                    generic_args[0].name.clone(),
+                                    elem_ty.clone(),
+                                );
+                            }
+                        }
+                        let fields = struct_def
+                            .fields
+                            .iter()
+                            .filter_map(|(name, unresolved_ty)| {
+                                resolve_type(context, unresolved_ty)
+                                    .ok()
+                                    .map(|ty| (name.clone(), ty))
+                            })
+                            .collect();
+                        ResolvedType::StructLike(ResolvedStructType {
+                            name: format!("Vec<{}>", elem_ty),
+                            non_generic_name: "Vec".to_string(),
+                            fields,
+                            generic_args: Some(vec![elem_ty]),
+                        })
+                    })
+                } else {
+                    // No Vec type defined, fall back to unknown
+                    ResolvedType::Unknown
+                }
+            } else {
+                ResolvedType::Unknown
+            };
+
+            Ok(resolved_ast::ResolvedExpression {
+                ty: result_ty,
+                kind: resolved_ast::ExpressionKind::ArrayLiteral(resolved_ast::ArrayLiteral {
+                    elements: resolved_elements,
+                }),
+            })
         }
     }
 }

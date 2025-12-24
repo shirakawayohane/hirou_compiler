@@ -10,7 +10,25 @@
       "Bash(LLVM_SYS_201_PREFIX=/opt/homebrew/opt/llvm cargo run:*)",
       "Bash(/tmp/interface_test)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(RUST_BACKTRACE=1 cargo run:*)",
+      "Bash(timeout 10 cargo run:*)",
+      "Bash(timeout 5 RUST_BACKTRACE=1 cargo run:*)",
+      "Bash(export RUST_BACKTRACE=1)",
+      "Bash(timeout 5 cargo run:*)",
+      "Bash(ls:*)",
+      "Bash(echo \"TIMEOUT or ERROR: $?\")",
+      "Bash(cat:*)",
+      "Bash(/tmp/test_namespace_use:*)",
+      "Bash(./test_while)",
+      "Bash(find:*)",
+      "Bash(./target/release/hirou_compiler:*)",
+      "Bash(awk:*)",
+      "Bash(./sample/test_vec_push_simple)",
+      "Bash(RUST_BACKTRACE=1 ./target/release/hirou_compiler:*)",
+      "Bash(./sample/test_vec_push)",
+      "Bash(./target/debug/hirou_compiler:*)",
+      "Bash(grep:*)"
     ]
   }
 }

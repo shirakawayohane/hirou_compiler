@@ -26,7 +26,7 @@ pub fn resolve_call_with_generic_args(
         context.errors.borrow_mut().push(CompileError::new(
             call_expr.range,
             CompileErrorKind::MismatchGenericArgCount {
-                name: call_expr.name.to_owned(),
+                name: call_expr.name.to_string(),
                 expected: callee_generic_args.len(),
                 actual: call_generic_args.len(),
             },
@@ -135,8 +135,75 @@ fn infer_generic_args_recursively(
     Ok(false)
 }
 
+// Helper function to recursively infer generic types from argument types
+fn infer_generic_type_from_match(
+    context: &ResolverContext,
+    callee_generic_args: &[Located<ast::GenericArg>],
+    param_ty: &UnresolvedType,
+    arg_ty: &ResolvedType,
+    inferred_indices: &mut Vec<usize>,
+) -> Result<(), FaitalError> {
+    match param_ty {
+        UnresolvedType::TypeRef(typeref) => {
+            // Check if this is a direct generic parameter (e.g., T)
+            if typeref.generic_args.is_none() {
+                for (gen_idx, gen_arg) in callee_generic_args.iter().enumerate() {
+                    if typeref.name == gen_arg.name {
+                        // Direct match: parameter is T, infer from argument type
+                        context.types.borrow_mut().add_to_root(
+                            gen_arg.name.clone(),
+                            arg_ty.clone(),
+                        );
+                        if !inferred_indices.contains(&gen_idx) {
+                            inferred_indices.push(gen_idx);
+                        }
+                        return Ok(());
+                    }
+                }
+            } else {
+                // Parameter has generic arguments (e.g., Vec<T>)
+                // Check if argument type is a struct with matching name
+                if let ResolvedType::StructLike(resolved_struct) = arg_ty {
+                    if resolved_struct.non_generic_name == typeref.name {
+                        // Names match, now match generic arguments recursively
+                        if let Some(param_generic_args) = &typeref.generic_args {
+                            if let Some(arg_generic_args) = &resolved_struct.generic_args {
+                                // Match each generic argument
+                                for (param_gen_ty, arg_gen_ty) in param_generic_args.iter().zip(arg_generic_args.iter()) {
+                                    infer_generic_type_from_match(
+                                        context,
+                                        callee_generic_args,
+                                        &param_gen_ty.value,
+                                        arg_gen_ty,
+                                        inferred_indices,
+                                    )?;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        UnresolvedType::Ptr(inner_param_ty) => {
+            // Parameter is a pointer type
+            if let ResolvedType::Ptr(inner_arg_ty) = arg_ty {
+                infer_generic_type_from_match(
+                    context,
+                    callee_generic_args,
+                    &inner_param_ty.value,
+                    inner_arg_ty,
+                    inferred_indices,
+                )?;
+            }
+        }
+        UnresolvedType::Infer => {
+            // Cannot infer from infer type
+        }
+    }
+    Ok(())
+}
+
 // 関数のジェネリック引数を引数から推論する関数
-// TODO: 実際の推論ロジックを実装する
 pub fn resolve_infer_generic_from_arguments(
     context: &ResolverContext,
     call_expr: &Located<&ast::CallExpr>,
@@ -160,22 +227,14 @@ pub fn resolve_infer_generic_from_arguments(
     // 各引数からジェネリック型を推論
     for (i, callee_arg) in callee.decl.args.iter().enumerate() {
         if let ast::Argument::Normal(arg_ty, _) = callee_arg {
-            if let UnresolvedType::TypeRef(typeref) = &arg_ty.value {
-                // 引数の型がジェネリックパラメータ名と一致するか確認
-                for (gen_idx, gen_arg) in callee_generic_args.iter().enumerate() {
-                    if typeref.name == gen_arg.name {
-                        // 実引数から型を取得し、ジェネリック型としてルートスコープに登録
-                        if let Some(resolved_arg) = resolved_args.get(i) {
-                            context.types.borrow_mut().add_to_root(
-                                gen_arg.name.clone(),
-                                resolved_arg.ty.clone(),
-                            );
-                            if !inferred_indices.contains(&gen_idx) {
-                                inferred_indices.push(gen_idx);
-                            }
-                        }
-                    }
-                }
+            if let Some(resolved_arg) = resolved_args.get(i) {
+                infer_generic_type_from_match(
+                    context,
+                    callee_generic_args,
+                    &arg_ty.value,
+                    &resolved_arg.ty,
+                    &mut inferred_indices,
+                )?;
             }
         }
     }
@@ -255,7 +314,7 @@ fn resolve_function_call_expr(
         context.errors.borrow_mut().push(CompileError::new(
             call_expr.range,
             CompileErrorKind::MismatchFunctionArgCount {
-                name: call_expr.name.to_owned(),
+                name: call_expr.name.to_string(),
                 expected: callee.decl.args.len(),
                 actual: call_expr.args.len(),
             },
@@ -393,7 +452,7 @@ fn resolve_function_call_expr(
         kind: resolved_ast::ExpressionKind::CallExpr(resolved_ast::CallExpr {
             callee: if callee.decl.generic_args.is_some() {
                 mangle_fn_name(
-                    &call_expr.name,
+                    &callee.decl.name,
                     resolved_args
                         .iter()
                         .map(|x| &x.ty)
@@ -402,7 +461,7 @@ fn resolve_function_call_expr(
                     &resolved_return_ty,
                 )
             } else {
-                call_expr.name.clone()
+                callee.decl.name.clone()
             },
             args: resolved_args,
         }),
@@ -416,75 +475,106 @@ pub fn resolve_call_expr(
     call_expr: &Located<&ast::CallExpr>,
     annotation: Option<&ResolvedType>,
 ) -> Result<ResolvedExpression, FaitalError> {
+    // Convert namespace path to string for lookup
+    let function_name = call_expr.name.to_string();
+
     // 関数名から関数を取得し、見つからない場合はエラーを返す
     let function_by_name = context.function_by_name.borrow();
     let interface_by_name = context.interface_by_name.borrow();
     let impls_by_name = context.impls_by_name.borrow();
-    if let Some(callee) = function_by_name.get(&call_expr.name) {
+
+    // First try direct lookup
+    if let Some(callee) = function_by_name.get(&function_name) {
         resolve_function_call_expr(context, call_expr, callee, annotation)
-    } else if let Some(interface) = interface_by_name.get(&call_expr.name) {
-        let mut resolved_arg_types = vec![];
-        for arg in &call_expr.args {
-            resolved_arg_types.push(resolve_expression(context, arg.as_inner_deref(), None)?.ty);
-        }
-        let mut generic_annotations: Vec<ResolvedType> = vec![];
-        if let Some(generic_args) = &call_expr.generic_args {
-            for generic_arg in generic_args {
-                generic_annotations.push(resolve_type(context, generic_arg)?);
-            }
+    } else {
+        // If not found, check if it's an imported name
+        let imported_names = context.imported_names.borrow();
+        let resolved_name = if let Some(full_name) = imported_names.get(&function_name) {
+            // Use the full namespaced name
+            full_name.clone()
         } else {
-            let required_generic_args_len = interface.generic_args.len();
-            for _ in 0..required_generic_args_len {
-                generic_annotations.push(ResolvedType::Unknown);
+            function_name.clone()
+        };
+        drop(imported_names); // Release the borrow before further lookups
+
+        if let Some(callee) = function_by_name.get(&resolved_name) {
+            resolve_function_call_expr(context, call_expr, callee, annotation)
+        } else if let Some(interface) = interface_by_name.get(&resolved_name) {
+            let mut resolved_arg_types = vec![];
+            for arg in &call_expr.args {
+                resolved_arg_types.push(resolve_expression(context, arg.as_inner_deref(), None)?.ty);
             }
-        }
-        if let Some(impls) = impls_by_name.get(&interface.name) {
-            // Find the implementation that matches the argument type
-            if let Some(implementation) = impls.iter().find(|implementation| {
-                let resolved_target_ty =
-                    resolve_type(context, &implementation.decl.target_ty).unwrap();
-                // Check if the first argument type matches the implementation's target type
-                if let Some(first_arg_ty) = resolved_arg_types.first() {
-                    *first_arg_ty == resolved_target_ty
-                } else {
-                    false
+            let mut generic_annotations: Vec<ResolvedType> = vec![];
+            if let Some(generic_args) = &call_expr.generic_args {
+                for generic_arg in generic_args {
+                    generic_annotations.push(resolve_type(context, generic_arg)?);
                 }
-            }) {
-                // Resolve the implementation and generate a function call
-                let resolved_target_ty =
-                    resolve_type(context, &implementation.decl.target_ty).unwrap();
-                let impl_fn_name = format!(
-                    "impl_{}_for_{}",
-                    interface.name.replace("->", "to_"),
-                    resolved_target_ty.to_string()
-                );
+            } else {
+                let required_generic_args_len = interface.generic_args.len();
+                for _ in 0..required_generic_args_len {
+                    generic_annotations.push(ResolvedType::Unknown);
+                }
+            }
+            if let Some(impls) = impls_by_name.get(&interface.name) {
+                // Find the implementation that matches the argument type
+                if let Some(implementation) = impls.iter().find(|implementation| {
+                    let resolved_target_ty =
+                        resolve_type(context, &implementation.decl.target_ty).unwrap();
+                    // Check if the first argument type matches the implementation's target type
+                    if let Some(first_arg_ty) = resolved_arg_types.first() {
+                        *first_arg_ty == resolved_target_ty
+                    } else {
+                        false
+                    }
+                }) {
+                    // Resolve the implementation and generate a function call
+                    let resolved_target_ty =
+                        resolve_type(context, &implementation.decl.target_ty).unwrap();
+                    let impl_fn_name = format!(
+                        "impl_{}_for_{}",
+                        interface.name.replace("->", "to_"),
+                        resolved_target_ty.to_string()
+                    );
 
-                // Resolve implementation body as a function
-                resolve_implementation(context, implementation, &impl_fn_name)?;
+                    // Resolve implementation body as a function
+                    resolve_implementation(context, implementation, &impl_fn_name)?;
 
-                // Resolve the return type from interface
-                let resolved_return_ty = resolve_type(context, &interface.return_type)?;
+                    // Resolve the return type from interface
+                    let resolved_return_ty = resolve_type(context, &interface.return_type)?;
 
-                // Generate call expression to the implementation function
-                let resolved_args: Vec<ResolvedExpression> = call_expr
-                    .args
-                    .iter()
-                    .map(|arg| resolve_expression(context, arg.as_inner_deref(), None))
-                    .collect::<Result<Vec<_>, _>>()?;
+                    // Generate call expression to the implementation function
+                    let resolved_args: Vec<ResolvedExpression> = call_expr
+                        .args
+                        .iter()
+                        .map(|arg| resolve_expression(context, arg.as_inner_deref(), None))
+                        .collect::<Result<Vec<_>, _>>()?;
 
-                Ok(ResolvedExpression {
-                    kind: ExpressionKind::CallExpr(resolved_ast::CallExpr {
-                        callee: impl_fn_name,
-                        args: resolved_args,
-                    }),
-                    ty: resolved_return_ty,
-                })
+                    Ok(ResolvedExpression {
+                        kind: ExpressionKind::CallExpr(resolved_ast::CallExpr {
+                            callee: impl_fn_name,
+                            args: resolved_args,
+                        }),
+                        ty: resolved_return_ty,
+                    })
+                } else {
+                    context.errors.borrow_mut().push(CompileError::new(
+                        call_expr.range,
+                        CompileErrorKind::InterfaceNotImplemented {
+                            name: resolved_name.clone(),
+                            ty: resolved_arg_types.first().cloned().unwrap_or(ResolvedType::Unknown),
+                        },
+                    ));
+                    Ok(ResolvedExpression {
+                        ty: ResolvedType::Unknown,
+                        kind: ExpressionKind::Unknown,
+                    })
+                }
             } else {
                 context.errors.borrow_mut().push(CompileError::new(
                     call_expr.range,
                     CompileErrorKind::InterfaceNotImplemented {
-                        name: call_expr.name.to_owned(),
-                        ty: resolved_arg_types.first().cloned().unwrap_or(ResolvedType::Unknown),
+                        name: resolved_name.clone(),
+                        ty: ResolvedType::Unknown,
                     },
                 ));
                 Ok(ResolvedExpression {
@@ -495,9 +585,8 @@ pub fn resolve_call_expr(
         } else {
             context.errors.borrow_mut().push(CompileError::new(
                 call_expr.range,
-                CompileErrorKind::InterfaceNotImplemented {
-                    name: call_expr.name.to_owned(),
-                    ty: ResolvedType::Unknown,
+                CompileErrorKind::FunctionNotFound {
+                    name: resolved_name,
                 },
             ));
             Ok(ResolvedExpression {
@@ -505,16 +594,5 @@ pub fn resolve_call_expr(
                 kind: ExpressionKind::Unknown,
             })
         }
-    } else {
-        context.errors.borrow_mut().push(CompileError::new(
-            call_expr.range,
-            CompileErrorKind::FunctionNotFound {
-                name: call_expr.name.to_owned(),
-            },
-        ));
-        Ok(ResolvedExpression {
-            ty: ResolvedType::Unknown,
-            kind: ExpressionKind::Unknown,
-        })
     }
 }

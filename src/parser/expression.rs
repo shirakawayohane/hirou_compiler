@@ -1,7 +1,7 @@
 use nom::{
     branch::alt,
-    bytes::complete::tag,
-    character::complete::{digit1, none_of},
+    bytes::complete::{tag, take},
+    character::complete::none_of,
     combinator::{cut, opt},
     error::context,
     multi::many0,
@@ -18,11 +18,49 @@ use super::{
 };
 
 fn parse_number_literal(input: Span) -> NotLocatedParseResult<Expression> {
-    map(digit1, |str: Span| {
+    // Parse integer or float literal
+    // Supports: 123, 123.456, .456
+    let (rest, _) = skip0(input)?;
+    let mut take_count: usize = 0;
+    let mut has_dot = false;
+    let chars: Vec<char> = rest.fragment().chars().collect();
+
+    while take_count < chars.len() {
+        let c = chars[take_count];
+        match c {
+            '0'..='9' => take_count += 1,
+            '.' => {
+                // Check if this is a float or field access
+                if has_dot {
+                    break; // Already have a dot, stop
+                }
+                // Check next char is a digit (to distinguish from field access like "1.field")
+                if take_count + 1 < chars.len() && chars[take_count + 1].is_ascii_digit() {
+                    has_dot = true;
+                    take_count += 1;
+                } else if take_count == 0 {
+                    // .456 style
+                    has_dot = true;
+                    take_count += 1;
+                } else {
+                    break;
+                }
+            }
+            _ => break,
+        }
+    }
+
+    if take_count == 0 || (take_count == 1 && has_dot) {
+        return Err(nom::Err::Error(nom::error::VerboseError {
+            errors: vec![(rest, nom::error::VerboseErrorKind::Context("number_literal"))],
+        }));
+    }
+
+    map(take(take_count), |str: Span| {
         Expression::NumberLiteral(NumberLiteralExpr {
             value: str.to_string(),
         })
-    })(input)
+    })(rest)
 }
 
 fn parse_variable_ref(input: Span) -> NotLocatedParseResult<Expression> {
@@ -133,7 +171,7 @@ pub(super) fn parse_function_call_expression(input: Span) -> NotLocatedParseResu
         delimited(
             lparen,
             tuple((
-                parse_identifier,
+                parse_namespace_path,
                 opt(parse_generic_arguments),
                 parse_arguments,
             )),
@@ -158,7 +196,7 @@ fn test_parse_function_call_expression() {
     assert_eq!(rest.to_string().as_str(), "");
     match expr {
         Expression::Call(call_expr) => {
-            assert_eq!(call_expr.name, "write");
+            assert_eq!(call_expr.name.segments, vec!["write"]);
             assert!(call_expr.generic_args.is_none());
             assert_eq!(call_expr.args.len(), 2);
             assert_eq!(
@@ -205,6 +243,17 @@ fn parse_when_expression(input: Span) -> NotLocatedParseResult<Expression> {
     )(input)
 }
 
+fn parse_while_expression(input: Span) -> NotLocatedParseResult<Expression> {
+    map(
+        delimited(
+            lparen,
+            tuple((while_token, parse_boxed_expression, parse_boxed_expression)),
+            rparen,
+        ),
+        |(_, cond, body)| Expression::While(WhileExpr { cond, body }),
+    )(input)
+}
+
 #[test]
 fn test_parse_if_expression() {
     let result = parse_if_expression(Span::new("(if a b c)"));
@@ -238,6 +287,12 @@ fn test_parse_if_expression() {
 fn parse_deref_expression(input: Span) -> NotLocatedParseResult<Expression> {
     map(preceded(asterisk, parse_boxed_expression), |expr| {
         Expression::DerefExpr(DerefExpr { target: expr })
+    })(input)
+}
+
+fn parse_address_of_expression(input: Span) -> NotLocatedParseResult<Expression> {
+    map(preceded(ampersand, parse_boxed_expression), |expr| {
+        Expression::AddressOf(AddressOfExpr { target: expr })
     })(input)
 }
 
@@ -446,17 +501,44 @@ fn parse_variable_decl(input: Span) -> NotLocatedParseResult<Expression> {
     )(input)
 }
 
+fn parse_array_literal(input: Span) -> NotLocatedParseResult<Expression> {
+    let (rest, _) = lsqrbracket(input)?;
+    let mut elements = Vec::new();
+    let mut s = rest;
+
+    loop {
+        (s, _) = skip0(s)?;
+        if rsqrbracket(s).is_ok() {
+            break;
+        }
+        let (rest_s, expr) = parse_boxed_expression(s)?;
+        elements.push(expr);
+        s = rest_s;
+        (s, _) = skip0(s)?;
+        // Optional comma
+        if let Ok((new_s, _)) = comma(s) {
+            s = new_s;
+        }
+    }
+
+    let (rest, _) = rsqrbracket(s)?;
+    Ok((rest, Expression::ArrayLiteral(ArrayLiteralExpr { elements })))
+}
+
 pub(super) fn parse_boxed_expression(input: Span) -> ParseResult<Box<Expression>> {
     let (rest, expr) = located(map(
         alt((
             context("sizeof", parse_sizeof),
             context("deref", parse_deref_expression),
+            context("address_of", parse_address_of_expression),
             context("string_literal", parse_string_literal),
+            context("array_literal", parse_array_literal),
             context("number_literal", parse_number_literal),
             context("bool_literal", parse_bool_literal),
             context("struct_literal", parse_struct_literal),
             context("if", parse_if_expression),
             context("when", parse_when_expression),
+            context("while", parse_while_expression),
             context("assignment", parse_asignment),
             context("variable_decl", parse_variable_decl),
             context("unary_op", parse_intrinsic_unary_op_expression),

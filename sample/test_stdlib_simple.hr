@@ -1,0 +1,13 @@
+// Simple Vec test
+
+fn test_vec_basic(): void {
+  // Create a new Vec<i32> using array literal
+  (:= v : Vec<i32> [1, 2, 3])
+  (printf "Vec created: size=%d\n" (vec_len<i32> v))
+  (printf "v[0]=%d\n" (vec_get<i32> v 0))
+}
+
+alloc fn main(): void {
+  (printf "=== Test Vec Basic ===\n")
+  (test_vec_basic)
+}

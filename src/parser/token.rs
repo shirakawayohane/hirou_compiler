@@ -55,6 +55,7 @@ token_char!(asterisk, '*');
 token_char!(slash, '/');
 token_char!(dot, '.');
 token_char!(underscore, '_');
+token_char!(ampersand, '&');
 token_tag!(fn_token, "fn");
 token_tag!(struct_token, "struct");
 token_tag!(record_token, "record");
@@ -81,6 +82,9 @@ token_tag!(interface_token, "interface");
 token_tag!(impl_token, "impl");
 token_tag!(for_token, "for");
 token_tag!(self_token, "self");
+token_tag!(use_token, "use");
+token_tag!(double_colon, "::");
+token_tag!(while_token, "while");
 
 pub(super) fn parse_identifier(input: Span) -> NotLocatedParseResult<String> {
     let (first_skipped, _) = skip0(input)?;
@@ -144,4 +148,27 @@ fn parse_identifier_test() {
     let (rest, ident) = parse_identifier("vec<T>".into()).unwrap();
     assert_eq!(ident, "vec");
     assert_eq!(rest.to_string().as_str(), "<T>");
+}
+
+pub(super) fn parse_namespace_path(input: Span) -> NotLocatedParseResult<crate::ast::NamespacePath> {
+    use nom::multi::separated_list1;
+    map(
+        separated_list1(double_colon, parse_identifier),
+        |segments| crate::ast::NamespacePath { segments }
+    )(input)
+}
+
+#[test]
+fn parse_namespace_path_test() {
+    let (rest, path) = parse_namespace_path("Vec::push".into()).unwrap();
+    assert_eq!(path.segments, vec!["Vec", "push"]);
+    assert_eq!(rest.fragment(), &"");
+
+    let (rest, path) = parse_namespace_path("std::Vec::push".into()).unwrap();
+    assert_eq!(path.segments, vec!["std", "Vec", "push"]);
+    assert_eq!(rest.fragment(), &"");
+
+    let (rest, path) = parse_namespace_path("simple".into()).unwrap();
+    assert_eq!(path.segments, vec!["simple"]);
+    assert_eq!(rest.fragment(), &"");
 }

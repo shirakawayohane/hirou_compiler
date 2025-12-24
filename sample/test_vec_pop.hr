@@ -1,0 +1,82 @@
+// Test Vec::pop function
+// Tests removing elements from a Vec and verifying size management
+
+fn test_pop_basic(): void {
+  (:= v (Vec::new<i32>))
+  (printf "Initial: size=%d, capacity=%d\n" (Vec::len<i32> v) (Vec::capacity<i32> v))
+
+  // Push three elements
+  (:=< v (Vec::push<i32> v 10))
+  (:=< v (Vec::push<i32> v 20))
+  (:=< v (Vec::push<i32> v 30))
+  (printf "After pushing 10, 20, 30: size=%d, capacity=%d\n" (Vec::len<i32> v) (Vec::capacity<i32> v))
+  (printf "v[0]=%d, v[1]=%d, v[2]=%d\n"
+    (Vec::get<i32> v 0)
+    (Vec::get<i32> v 1)
+    (Vec::get<i32> v 2))
+
+  // Get last element before popping
+  (:= last (Vec::last<i32> v))
+  (printf "Last element before pop: %d\n" last)
+
+  // Pop the last element
+  (:=< v (Vec::pop<i32> v))
+  (printf "After pop: size=%d, capacity=%d\n" (Vec::len<i32> v) (Vec::capacity<i32> v))
+
+  // Verify remaining elements are still accessible
+  (printf "Remaining elements: v[0]=%d, v[1]=%d\n"
+    (Vec::get<i32> v 0)
+    (Vec::get<i32> v 1))
+
+  // Get and pop again
+  (:= last2 (Vec::last<i32> v))
+  (printf "Last element before second pop: %d\n" last2)
+  (:=< v (Vec::pop<i32> v))
+  (printf "After second pop: size=%d, capacity=%d\n" (Vec::len<i32> v) (Vec::capacity<i32> v))
+  (printf "Remaining element: v[0]=%d\n" (Vec::get<i32> v 0))
+}
+
+fn test_push_and_pop(): void {
+  (:= v (Vec::new<i32>))
+  (printf "\n=== Testing Push and Pop together ===\n")
+
+  // Build up a vec
+  (:=< v (Vec::push<i32> v 100))
+  (:=< v (Vec::push<i32> v 200))
+  (:=< v (Vec::push<i32> v 300))
+  (:=< v (Vec::push<i32> v 400))
+  (:=< v (Vec::push<i32> v 500))
+  (printf "After pushing 5 elements: size=%d, capacity=%d\n" (Vec::len<i32> v) (Vec::capacity<i32> v))
+
+  // Pop some elements
+  (:= elem5 (Vec::last<i32> v))
+  (:=< v (Vec::pop<i32> v))
+  (printf "Popped: %d, size=%d\n" elem5 (Vec::len<i32> v))
+
+  (:= elem4 (Vec::last<i32> v))
+  (:=< v (Vec::pop<i32> v))
+  (printf "Popped: %d, size=%d\n" elem4 (Vec::len<i32> v))
+
+  (:= elem3 (Vec::last<i32> v))
+  (:=< v (Vec::pop<i32> v))
+  (printf "Popped: %d, size=%d\n" elem3 (Vec::len<i32> v))
+
+  // Push again
+  (:=< v (Vec::push<i32> v 600))
+  (printf "After pushing 600: size=%d\n" (Vec::len<i32> v))
+
+  // Verify final state
+  (printf "Final elements: v[0]=%d, v[1]=%d, v[2]=%d\n"
+    (Vec::get<i32> v 0)
+    (Vec::get<i32> v 1)
+    (Vec::get<i32> v 2))
+}
+
+alloc fn main(): void {
+  (printf "=== Test Pop Basic ===\n")
+  (test_pop_basic)
+
+  (test_push_and_pop)
+
+  (printf "\n=== All Vec::pop tests passed! ===\n")
+}

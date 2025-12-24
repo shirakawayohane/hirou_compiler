@@ -22,6 +22,8 @@ impl<'a> LLVMCodeGenerator<'a> {
             ConcreteType::U32 => BasicMetadataTypeEnum::IntType(self.llvm_context.i32_type()),
             ConcreteType::U64 => BasicMetadataTypeEnum::IntType(self.llvm_context.i64_type()),
             ConcreteType::I64 => BasicMetadataTypeEnum::IntType(self.llvm_context.i64_type()),
+            ConcreteType::F32 => BasicMetadataTypeEnum::FloatType(self.llvm_context.f32_type()),
+            ConcreteType::F64 => BasicMetadataTypeEnum::FloatType(self.llvm_context.f64_type()),
             ConcreteType::Ptr(_inner) => BasicMetadataTypeEnum::PointerType(
                 // LLVM 15+ uses opaque pointers, no distinction between pointer types
                 self.llvm_context.ptr_type(AddressSpace::default()),

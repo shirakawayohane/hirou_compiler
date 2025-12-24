@@ -37,6 +37,16 @@ impl LLVMCodeGenerator<'_> {
         let int_value = self.llvm_context.i64_type().const_int(n, true);
         int_value.into()
     }
+    fn eval_f32(&self, value_str: &str) -> BasicValueEnum {
+        let n = value_str.parse::<f32>().unwrap();
+        let float_value = self.llvm_context.f32_type().const_float(n as f64);
+        float_value.into()
+    }
+    fn eval_f64(&self, value_str: &str) -> BasicValueEnum {
+        let n = value_str.parse::<f64>().unwrap();
+        let float_value = self.llvm_context.f64_type().const_float(n);
+        float_value.into()
+    }
     fn eval_number_literal(
         &self,
         integer_literal: &NumberLiteral,
@@ -49,6 +59,8 @@ impl LLVMCodeGenerator<'_> {
             ConcreteType::I32 => self.eval_i32(value_str),
             ConcreteType::I64 => self.eval_i64(value_str),
             ConcreteType::U64 => self.eval_u64(value_str),
+            ConcreteType::F32 => self.eval_f32(value_str),
+            ConcreteType::F64 => self.eval_f64(value_str),
             ConcreteType::Ptr(_) => unreachable!(),
             ConcreteType::Void => unreachable!(),
             ConcreteType::StructLike(_) => unreachable!(),
@@ -86,6 +98,87 @@ impl LLVMCodeGenerator<'_> {
             self.llvm_builder.build_store(ptr, value)?;
         }
         Ok(ptr.as_basic_value_enum())
+    }
+    fn eval_array_literal(
+        &self,
+        array_literal: &ArrayLiteral,
+        ty: &ConcreteType,
+    ) -> Result<BasicValueEnum, BuilderError> {
+        // ty should be Vec<T> which is a struct with { capacity: i32, size: i32, buf: *T }
+        if let ConcreteType::StructLike(struct_ty) = ty {
+            let vec_ty = self.type_to_basic_type_enum(ty).unwrap();
+            let vec_ptr = self.llvm_builder.build_alloca(vec_ty, "vec")?;
+
+            // Get element type from the buf field (the 3rd field with type *T)
+            let element_ty = if let Some((_, ConcreteType::Ptr(inner))) = struct_ty.fields.get(2) {
+                self.type_to_basic_type_enum(inner).unwrap()
+            } else {
+                // Fallback: use the first element's type
+                if !array_literal.elements.is_empty() {
+                    self.type_to_basic_type_enum(&array_literal.elements[0].ty).unwrap()
+                } else {
+                    self.llvm_context.i32_type().into()
+                }
+            };
+
+            let element_count = array_literal.elements.len();
+            let element_size = element_ty.size_of().unwrap();
+            let total_size = self.llvm_builder.build_int_mul(
+                element_size,
+                self.llvm_context.i64_type().const_int(element_count as u64, false),
+                "array_size",
+            )?;
+
+            // Call malloc to allocate buffer
+            let malloc_fn = self.llvm_module.get_function("malloc").unwrap_or_else(|| {
+                // Declare malloc if it doesn't exist
+                let ptr_type = self.llvm_context.ptr_type(inkwell::AddressSpace::default());
+                let usize_type = self.llvm_context.i64_type();
+                let malloc_type = ptr_type.fn_type(&[usize_type.into()], false);
+                self.llvm_module.add_function("malloc", malloc_type, None)
+            });
+            let buf_ptr = self.llvm_builder.build_call(
+                malloc_fn,
+                &[total_size.into()],
+                "buf",
+            )?.try_as_basic_value().basic().unwrap().into_pointer_value();
+
+            // Store each element
+            for (i, elem) in array_literal.elements.iter().enumerate() {
+                let value = self.gen_expression(elem)?.unwrap();
+                let elem_ptr = unsafe {
+                    self.llvm_builder.build_in_bounds_gep(
+                        element_ty,
+                        buf_ptr,
+                        &[self.llvm_context.i64_type().const_int(i as u64, false)],
+                        "",
+                    )?
+                };
+                self.llvm_builder.build_store(elem_ptr, value)?;
+            }
+
+            // Store capacity (field 0)
+            let capacity_ptr = self.llvm_builder.build_struct_gep(vec_ty, vec_ptr, 0, "capacity_ptr")?;
+            self.llvm_builder.build_store(
+                capacity_ptr,
+                self.llvm_context.i32_type().const_int(element_count as u64, false),
+            )?;
+
+            // Store size (field 1)
+            let size_ptr = self.llvm_builder.build_struct_gep(vec_ty, vec_ptr, 1, "size_ptr")?;
+            self.llvm_builder.build_store(
+                size_ptr,
+                self.llvm_context.i32_type().const_int(element_count as u64, false),
+            )?;
+
+            // Store buf pointer (field 2)
+            let buf_field_ptr = self.llvm_builder.build_struct_gep(vec_ty, vec_ptr, 2, "buf_field_ptr")?;
+            self.llvm_builder.build_store(buf_field_ptr, buf_ptr)?;
+
+            Ok(vec_ptr.as_basic_value_enum())
+        } else {
+            unreachable!("Array literal should have Vec<T> type")
+        }
     }
     fn eval_variable_ref(
         &self,
@@ -171,6 +264,23 @@ impl LLVMCodeGenerator<'_> {
     fn eval_sizeof(&self, ty: &ConcreteType) -> BasicValueEnum {
         let size = self.type_to_basic_type_enum(ty).unwrap().size_of().unwrap();
         size.as_basic_value_enum()
+    }
+    fn eval_address_of(
+        &self,
+        address_of: &AddressOfExpr,
+    ) -> Result<BasicValueEnum, BuilderError> {
+        // For address-of, we need to get the pointer to the target
+        // If target is a variable reference, return its pointer directly
+        match &address_of.target.kind {
+            ExpressionKind::VariableRef(var_ref) => {
+                let ptr = self.get_variable(&var_ref.name);
+                Ok(ptr.as_basic_value_enum())
+            }
+            _ => {
+                // For other expressions, evaluate them and they should return a pointer
+                self.gen_expression(&address_of.target).map(|v| v.unwrap())
+            }
+        }
     }
     pub(super) fn eval_call_expr<'a>(
         &'a self,
@@ -278,22 +388,81 @@ impl LLVMCodeGenerator<'_> {
         self.llvm_builder.position_at_end(merge_block);
         Ok(None)
     }
+    pub(super) fn eval_while_expr<'a>(
+        &'a self,
+        while_expr: &WhileExpr,
+    ) -> Result<Option<BasicValueEnum<'a>>, BuilderError> {
+        // Get the current function
+        let function: inkwell::values::FunctionValue<'_> = self
+            .llvm_builder
+            .get_insert_block()
+            .unwrap()
+            .get_parent()
+            .unwrap();
+
+        // Create basic blocks for the while loop
+        let loop_header = self.llvm_context.append_basic_block(function, "loop_header");
+        let loop_body = self.llvm_context.append_basic_block(function, "loop_body");
+        let loop_end = self.llvm_context.append_basic_block(function, "loop_end");
+
+        // Branch to loop header
+        self.llvm_builder.build_unconditional_branch(loop_header)?;
+
+        // Build loop header: check condition
+        self.llvm_builder.position_at_end(loop_header);
+        let cond = self
+            .gen_expression(&while_expr.cond)?
+            .unwrap()
+            .into_int_value();
+        self.llvm_builder
+            .build_conditional_branch(cond, loop_body, loop_end)?;
+
+        // Build loop body
+        self.llvm_builder.position_at_end(loop_body);
+        self.gen_expression(&while_expr.body)?;
+        self.llvm_builder.build_unconditional_branch(loop_header)?;
+
+        // Position at loop end for subsequent code
+        self.llvm_builder.position_at_end(loop_end);
+        Ok(None)
+    }
     pub(super) fn eval_variable_decls(&self, decls: &VariableDecls) -> Result<(), BuilderError> {
         for decl in &decls.decls {
-            let ty = self.type_to_basic_type_enum(&decl.value.ty).unwrap();
-            let value = self.gen_expression(&decl.value)?.unwrap();
-            if ty.is_struct_type() {
-                let ptr = self.llvm_builder.build_alloca(ty, "")?;
+            // Use the declared type of the variable, not the value type
+            let var_ty = self.type_to_basic_type_enum(&decl.ty).unwrap();
+            let mut value = self.gen_expression(&decl.value)?.unwrap();
+
+            // If the value type differs from the declared type, insert a cast
+            let value_ty = self.type_to_basic_type_enum(&decl.value.ty).unwrap();
+            if var_ty != value_ty && !var_ty.is_struct_type() && !value_ty.is_struct_type() {
+                // Need to cast value to var_ty
+                if var_ty.is_int_type() && value_ty.is_int_type() {
+                    // Integer type cast
+                    let var_int_ty = var_ty.into_int_type();
+                    let value_int_ty = value_ty.into_int_type();
+                    let value_int = value.into_int_value();
+                    if var_int_ty.get_bit_width() > value_int_ty.get_bit_width() {
+                        // Zero extend for unsigned types or sign extend for signed
+                        value = self.llvm_builder.build_int_z_extend(value_int, var_int_ty, "cast")?.into();
+                    } else if var_int_ty.get_bit_width() < value_int_ty.get_bit_width() {
+                        // Truncate
+                        value = self.llvm_builder.build_int_truncate(value_int, var_int_ty, "cast")?.into();
+                    }
+                }
+            }
+
+            if var_ty.is_struct_type() {
+                let ptr = self.llvm_builder.build_alloca(var_ty, "")?;
                 self.llvm_builder.build_memcpy(
                     ptr,
                     8,
                     value.into_pointer_value(),
                     8,
-                    ty.size_of().unwrap(),
+                    var_ty.size_of().unwrap(),
                 )?;
                 self.add_variable(&decl.name, ptr);
             } else {
-                let ptr = self.llvm_builder.build_alloca(ty, "")?;
+                let ptr = self.llvm_builder.build_alloca(var_ty, "")?;
                 self.llvm_builder.build_store(ptr, value)?;
                 self.add_variable(&decl.name, ptr);
             }
@@ -302,6 +471,7 @@ impl LLVMCodeGenerator<'_> {
     }
     pub(super) fn eval_assignment(&self, assignment: &Assignment) -> Result<(), BuilderError> {
         let value = self.gen_expression(&assignment.value)?.unwrap();
+        let value_ty = self.type_to_basic_type_enum(&assignment.value.ty).unwrap();
         let pointee_type = value.get_type();
         let mut ptr = self.get_variable(&assignment.name);
         for _ in 0..assignment.deref_count {
@@ -335,7 +505,18 @@ impl LLVMCodeGenerator<'_> {
                 return Ok(());
             }
         }
-        self.llvm_builder.build_store(ptr, value)?;
+        // For struct types, use memcpy instead of store
+        if assignment.value.ty.is_struct_type() {
+            self.llvm_builder.build_memcpy(
+                ptr,
+                8,
+                value.into_pointer_value(),
+                8,
+                value_ty.size_of().unwrap(),
+            )?;
+        } else {
+            self.llvm_builder.build_store(ptr, value)?;
+        }
         Ok(())
     }
     pub(super) fn gen_expression<'a>(
@@ -353,6 +534,7 @@ impl LLVMCodeGenerator<'_> {
                 self.eval_index_access(index_access, &expr.ty).map(Some)
             }
             ExpressionKind::Deref(deref) => self.eval_deref(deref, &expr.ty).map(Some),
+            ExpressionKind::AddressOf(address_of) => self.eval_address_of(address_of).map(Some),
             ExpressionKind::Binary(binary_expr) => self.eval_binary_expr(binary_expr).map(Some),
             ExpressionKind::Unary(unary_expr) => self.eval_unary_expr(unary_expr).map(Some),
             ExpressionKind::Multi(multi_expr) => self.eval_multi_expr(multi_expr).map(Some),
@@ -362,6 +544,9 @@ impl LLVMCodeGenerator<'_> {
             }
             ExpressionKind::StructLiteral(struct_literal) => {
                 self.eval_struct_literal(struct_literal, &expr.ty).map(Some)
+            }
+            ExpressionKind::ArrayLiteral(array_literal) => {
+                self.eval_array_literal(array_literal, &expr.ty).map(Some)
             }
             ExpressionKind::SizeOf(ty) => Ok(Some(self.eval_sizeof(ty))),
             ExpressionKind::FieldAccess(field_access_expr) => self
@@ -373,6 +558,7 @@ impl LLVMCodeGenerator<'_> {
             }
             ExpressionKind::If(if_expr) => self.eval_if_expr(if_expr, &expr.ty),
             ExpressionKind::When(when_expr) => self.eval_when_expr(when_expr),
+            ExpressionKind::While(while_expr) => self.eval_while_expr(while_expr),
             ExpressionKind::VariableDecls(decls) => {
                 self.eval_variable_decls(decls)?;
                 Ok(None)

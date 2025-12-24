@@ -1,0 +1,57 @@
+// Test Vec::push function
+// Tests adding elements to a Vec and verifying growth/capacity management
+
+fn test_push_basic(): void {
+  (:= v (Vec::new<i32>))
+  (printf "Initial: size=%d, capacity=%d\n" (Vec::len<i32> v) (Vec::capacity<i32> v))
+
+  (:=< v (Vec::push<i32> v 10))
+  (printf "After push 10: size=%d, capacity=%d\n" (Vec::len<i32> v) (Vec::capacity<i32> v))
+  (printf "v[0]=%d\n" (Vec::get<i32> v 0))
+
+  (:=< v (Vec::push<i32> v 20))
+  (printf "After push 20: size=%d, capacity=%d\n" (Vec::len<i32> v) (Vec::capacity<i32> v))
+  (printf "v[0]=%d, v[1]=%d\n" (Vec::get<i32> v 0) (Vec::get<i32> v 1))
+
+  (:=< v (Vec::push<i32> v 30))
+  (printf "After push 30: size=%d, capacity=%d\n" (Vec::len<i32> v) (Vec::capacity<i32> v))
+  (printf "v[0]=%d, v[1]=%d, v[2]=%d\n"
+    (Vec::get<i32> v 0)
+    (Vec::get<i32> v 1)
+    (Vec::get<i32> v 2))
+}
+
+fn test_push_growth(): void {
+  (:= v (Vec::new<i32>))
+  (printf "\n=== Testing Vec growth ===\n")
+
+  // Push 10 elements to trigger capacity doubling
+  (:=< v (Vec::push<i32> v 0))
+  (printf "Pushed 0: size=%d, capacity=%d\n" (Vec::len<i32> v) (Vec::capacity<i32> v))
+  (:=< v (Vec::push<i32> v 100))
+  (printf "Pushed 100: size=%d, capacity=%d\n" (Vec::len<i32> v) (Vec::capacity<i32> v))
+  (:=< v (Vec::push<i32> v 200))
+  (printf "Pushed 200: size=%d, capacity=%d\n" (Vec::len<i32> v) (Vec::capacity<i32> v))
+  (:=< v (Vec::push<i32> v 300))
+  (printf "Pushed 300: size=%d, capacity=%d\n" (Vec::len<i32> v) (Vec::capacity<i32> v))
+  (:=< v (Vec::push<i32> v 400))
+  (printf "Pushed 400: size=%d, capacity=%d\n" (Vec::len<i32> v) (Vec::capacity<i32> v))
+
+  // Verify elements
+  (printf "\nVerifying elements:\n")
+  (printf "v[0]=%d, v[1]=%d, v[2]=%d, v[3]=%d, v[4]=%d\n"
+    (Vec::get<i32> v 0)
+    (Vec::get<i32> v 1)
+    (Vec::get<i32> v 2)
+    (Vec::get<i32> v 3)
+    (Vec::get<i32> v 4))
+}
+
+alloc fn main(): void {
+  (printf "=== Test Push Basic ===\n")
+  (test_push_basic)
+
+  (test_push_growth)
+
+  (printf "\n=== All Vec::push tests passed! ===\n")
+}

@@ -3,6 +3,7 @@ mod expression;
 mod generics;
 mod intrinsic;
 mod statement;
+mod stdlib;
 mod ty;
 
 use std::{cell::RefCell, collections::HashMap, ops::DerefMut, rc::Rc};
@@ -18,6 +19,7 @@ use self::{
     error::{CompileError, FaitalError},
     intrinsic::{register_intrinsic_functions, register_intrinsic_types},
     statement::resolve_statement,
+    stdlib::register_stdlib,
 };
 
 pub(crate) type Result<T, E = FaitalError> = std::result::Result<T, E>;
@@ -33,6 +35,7 @@ pub struct ResolverContext {
     pub interface_by_name: Rc<RefCell<HashMap<String, ast::Interface>>>,
     pub impls_by_name: Rc<RefCell<HashMap<String, Vec<Implementation>>>>,
     pub resolved_functions: Rc<RefCell<HashMap<String, resolved_ast::Function>>>,
+    pub imported_names: Rc<RefCell<HashMap<String, String>>>, // Maps short name to full namespaced name
     pub ptr_sized_int_type: PointerSizedIntWidth,
 }
 
@@ -45,6 +48,7 @@ impl ResolverContext {
             type_defs: Default::default(),
             function_by_name: Default::default(),
             resolved_functions: Default::default(),
+            imported_names: Default::default(),
             ptr_sized_int_type,
             interface_by_name: Default::default(),
             impls_by_name: Default::default(),
@@ -426,6 +430,34 @@ pub(crate) fn resolve_implementation(
     Ok(())
 }
 
+/// Process use statements to populate imported names
+fn process_use_statement(
+    context: &ResolverContext,
+    use_stmt: &ast::UseStatement,
+) {
+    if !use_stmt.wildcard {
+        // Only wildcard imports are supported for now
+        return;
+    }
+
+    let namespace = use_stmt.path.to_string();
+    let function_by_name = context.function_by_name.borrow();
+
+    // Find all functions that start with this namespace
+    for (full_name, _) in function_by_name.iter() {
+        if let Some(suffix) = full_name.strip_prefix(&format!("{}::", namespace)) {
+            // Only import if the suffix doesn't contain another `::`
+            // This prevents importing nested namespaces
+            if !suffix.contains("::") {
+                context.imported_names.borrow_mut().insert(
+                    suffix.to_string(),
+                    full_name.clone(),
+                );
+            }
+        }
+    }
+}
+
 pub(crate) fn resolve_module(
     context: &ResolverContext,
     module: &crate::ast::Module,
@@ -439,6 +471,20 @@ pub(crate) fn resolve_module(
         register_intrinsic_functions(&mut function_by_name);
     }
     register_intrinsic_types(context.types.borrow_mut().deref_mut());
+
+    // 標準ライブラリを登録する
+    {
+        let mut type_defs = context.type_defs.borrow_mut();
+        let mut interface_by_name = context.interface_by_name.borrow_mut();
+        let mut impls_by_name = context.impls_by_name.borrow_mut();
+        let mut function_by_name = context.function_by_name.borrow_mut();
+        register_stdlib(
+            &mut type_defs,
+            &mut interface_by_name,
+            &mut impls_by_name,
+            &mut function_by_name,
+        );
+    }
 
     for toplevel in &module.toplevels {
         match &toplevel.value {
@@ -463,6 +509,14 @@ pub(crate) fn resolve_module(
                     .insert(interface.name.clone(), interface.clone());
             }
             TopLevel::Implemantation(_) => (),
+            TopLevel::Use(_) => (), // Use statements are processed after all functions are registered
+        }
+    }
+
+    // Process use statements after all functions are registered
+    for toplevel in &module.toplevels {
+        if let TopLevel::Use(use_stmt) = &toplevel.value {
+            process_use_statement(context, use_stmt);
         }
     }
 
@@ -557,6 +611,8 @@ pub(crate) fn resolve_module(
                 // Interfaces don't need separate resolution - they're already in context.interface_by_name
                 // and are used during interface call resolution
                 TopLevel::Interface(_) => {}
+                // Use statements don't need resolution - they affect name lookup
+                TopLevel::Use(_) => {}
             }
         }
     }

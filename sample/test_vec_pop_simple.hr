@@ -1,0 +1,31 @@
+// Simple test demonstrating Vec::pop usage
+// Shows the pattern: get last, then pop
+
+alloc fn main(): void {
+  (printf "=== Simple Vec::pop test ===\n")
+
+  // Create a vector and add some elements
+  (:= v (Vec::new<i32>))
+  (:=< v (Vec::push<i32> v 100))
+  (:=< v (Vec::push<i32> v 200))
+  (:=< v (Vec::push<i32> v 300))
+
+  (printf "Initial vec: size=%d\n" (Vec::len<i32> v))
+  (printf "Elements: %d, %d, %d\n"
+    (Vec::get<i32> v 0)
+    (Vec::get<i32> v 1)
+    (Vec::get<i32> v 2))
+
+  // Get the last element first
+  (:= last (Vec::last<i32> v))
+  (printf "\nLast element: %d\n" last)
+
+  // Then pop to remove it
+  (:=< v (Vec::pop<i32> v))
+  (printf "After pop: size=%d\n" (Vec::len<i32> v))
+  (printf "Remaining elements: %d, %d\n"
+    (Vec::get<i32> v 0)
+    (Vec::get<i32> v 1))
+
+  (printf "\n=== Test passed! ===\n")
+}

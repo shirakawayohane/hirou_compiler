@@ -1,0 +1,27 @@
+// Test namespace system
+// Functions can now be called with Vec::new syntax instead of vec_new
+
+fn test_vec_namespaced(): void {
+  // Test using fully qualified names
+  (:= v (Vec::new<i32>))
+  (printf "Vec from Vec::new: size=%d, is_empty=%d\n" (Vec::len<i32> v) (Vec::is_empty<i32> v))
+
+  // Test with array literal
+  (:= v2 : Vec<i32> [1, 2, 3])
+  (printf "Vec from array literal: size=%d\n" (Vec::len<i32> v2))
+  (printf "v2[0]=%d, v2[1]=%d, v2[2]=%d\n"
+    (Vec::get<i32> v2 0)
+    (Vec::get<i32> v2 1)
+    (Vec::get<i32> v2 2))
+  (printf "first=%d, last=%d\n" (Vec::first<i32> v2) (Vec::last<i32> v2))
+
+  // Test set
+  (Vec::set<i32> v2 1 999)
+  (printf "After set: v2[1]=%d\n" (Vec::get<i32> v2 1))
+}
+
+alloc fn main(): void {
+  (printf "=== Test Namespaced Vec Functions ===\n")
+  (test_vec_namespaced)
+  (printf "\n=== All namespace tests passed! ===\n")
+}

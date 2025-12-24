@@ -38,6 +38,8 @@ pub enum ResolvedType {
     U64,
     USize,
     U8,
+    F32,
+    F64,
     Bool,
     Ptr(Box<ResolvedType>),
     Void,
@@ -61,7 +63,12 @@ impl ResolvedType {
             ResolvedType::StructLike(_) => false,
             ResolvedType::Bool => false,
             ResolvedType::Generics(_) => false,
+            ResolvedType::F32 => false,
+            ResolvedType::F64 => false,
         }
+    }
+    pub fn is_float_type(&self) -> bool {
+        matches!(self, ResolvedType::F32 | ResolvedType::F64)
     }
     pub fn is_pointer_type(&self) -> bool {
         if let ResolvedType::Ptr(_) = self {
@@ -84,6 +91,12 @@ impl ResolvedType {
                 }
             }
         }
+
+        // Allow implicit integer type conversions
+        if self.is_integer_type() && other.is_integer_type() {
+            return true;
+        }
+
         // TODO: より高等な型チェック
         self == other
     }
@@ -101,6 +114,8 @@ impl ResolvedType {
                 }
             }
             ResolvedType::U8 => ConcreteType::U8,
+            ResolvedType::F32 => ConcreteType::F32,
+            ResolvedType::F64 => ConcreteType::F64,
             ResolvedType::Bool => ConcreteType::Bool,
             ResolvedType::Ptr(inner) => ConcreteType::Ptr(Box::new(
                 (*inner).unwrap_primitive_into_concrete_type(is_64_bit),
@@ -134,6 +149,8 @@ impl Display for ResolvedType {
                     ResolvedType::U64 => U64_TYPE_NAME,
                     ResolvedType::USize => USIZE_TYPE_NAME,
                     ResolvedType::U8 => U8_TYPE_NAME,
+                    ResolvedType::F32 => F32_TYPE_NAME,
+                    ResolvedType::F64 => F64_TYPE_NAME,
                     ResolvedType::Bool => BOOL_TYPE_NAME,
                     ResolvedType::Void => VOID_TYPE_NAME,
                     ResolvedType::Ptr(inner) => {
@@ -193,6 +210,11 @@ pub struct StructLiteral {
 }
 
 #[derive(Debug, Clone)]
+pub struct ArrayLiteral {
+    pub elements: Vec<ResolvedExpression>,
+}
+
+#[derive(Debug, Clone)]
 pub struct BinaryExpr {
     pub op: BinaryOp,
     pub lhs: Box<ResolvedExpression>,
@@ -213,6 +235,11 @@ pub struct MultiExpr {
 
 #[derive(Debug, Clone)]
 pub struct DerefExpr {
+    pub target: Box<ResolvedExpression>,
+}
+
+#[derive(Debug, Clone)]
+pub struct AddressOfExpr {
     pub target: Box<ResolvedExpression>,
 }
 
@@ -242,22 +269,31 @@ pub struct WhenExpr {
 }
 
 #[derive(Debug, Clone)]
+pub struct WhileExpr {
+    pub cond: Box<ResolvedExpression>,
+    pub body: Box<ResolvedExpression>,
+}
+
+#[derive(Debug, Clone)]
 pub enum ExpressionKind {
     SizeOf(ResolvedType),
     VariableRef(VariableRefExpr),
     NumberLiteral(NumberLiteral),
     StringLiteral(StringLiteral),
     StructLiteral(StructLiteral),
+    ArrayLiteral(ArrayLiteral),
     BoolLiteral(BoolLiteral),
     Binary(BinaryExpr),
     Unary(UnaryExpr),
     Multi(MultiExpr),
     CallExpr(CallExpr),
     Deref(DerefExpr),
+    AddressOf(AddressOfExpr),
     IndexAccess(IndexAccessExpr),
     FieldAccess(FieldAccessExpr),
     If(IfExpr),
     When(WhenExpr),
+    While(WhileExpr),
     VariableDecls(VariableDecls),
     Assignment(Assignment),
     Unknown,
@@ -280,6 +316,7 @@ pub struct Assignment {
 #[derive(Debug, Clone)]
 pub struct VariableDecl {
     pub name: String,
+    pub ty: ResolvedType,
     pub value: Box<ResolvedExpression>,
 }
 

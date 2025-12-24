@@ -19,6 +19,8 @@ fn concretize_type(ctx: &ConcretizerContext, ty: &ResolvedType) -> ConcreteType 
             }
         }
         ResolvedType::U8 => ConcreteType::U8,
+        ResolvedType::F32 => ConcreteType::F32,
+        ResolvedType::F64 => ConcreteType::F64,
         ResolvedType::Bool => ConcreteType::Bool,
         ResolvedType::Ptr(inner) => ConcreteType::Ptr(Box::new(concretize_type(ctx, inner))),
         ResolvedType::Void => ConcreteType::Void,
@@ -73,6 +75,14 @@ fn concretize_expression(
                 .collect();
             concrete_ast::ExpressionKind::StructLiteral(concrete_ast::StructLiteral { fields })
         }
+        resolved_ast::ExpressionKind::ArrayLiteral(array_lit) => {
+            let elements = array_lit
+                .elements
+                .iter()
+                .map(|expr| concretize_expression(ctx, expr))
+                .collect();
+            concrete_ast::ExpressionKind::ArrayLiteral(concrete_ast::ArrayLiteral { elements })
+        }
         resolved_ast::ExpressionKind::BoolLiteral(bool_lit) => {
             concrete_ast::ExpressionKind::BoolLiteral(concrete_ast::BoolLiteral {
                 value: bool_lit.value,
@@ -116,6 +126,11 @@ fn concretize_expression(
                 target: Box::new(concretize_expression(ctx, &deref_expr.target)),
             })
         }
+        resolved_ast::ExpressionKind::AddressOf(address_of_expr) => {
+            concrete_ast::ExpressionKind::AddressOf(concrete_ast::AddressOfExpr {
+                target: Box::new(concretize_expression(ctx, &address_of_expr.target)),
+            })
+        }
         resolved_ast::ExpressionKind::IndexAccess(idx_expr) => {
             concrete_ast::ExpressionKind::IndexAccess(concrete_ast::IndexAccessExpr {
                 target: Box::new(concretize_expression(ctx, &idx_expr.target)),
@@ -141,6 +156,12 @@ fn concretize_expression(
                 then: Box::new(concretize_expression(ctx, &when_expr.then)),
             })
         }
+        resolved_ast::ExpressionKind::While(while_expr) => {
+            concrete_ast::ExpressionKind::While(concrete_ast::WhileExpr {
+                cond: Box::new(concretize_expression(ctx, &while_expr.cond)),
+                body: Box::new(concretize_expression(ctx, &while_expr.body)),
+            })
+        }
         resolved_ast::ExpressionKind::VariableDecls(decls) => {
             concrete_ast::ExpressionKind::VariableDecls(concrete_ast::VariableDecls {
                 decls: decls
@@ -148,6 +169,7 @@ fn concretize_expression(
                     .iter()
                     .map(|d| concrete_ast::VariableDecl {
                         name: d.name.clone(),
+                        ty: concretize_type(ctx, &d.ty),
                         value: Box::new(concretize_expression(ctx, &d.value)),
                     })
                     .collect(),

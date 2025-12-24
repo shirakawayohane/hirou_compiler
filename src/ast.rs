@@ -121,8 +121,27 @@ pub enum MultiOp {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct NamespacePath {
+    pub segments: Vec<String>,
+}
+
+impl NamespacePath {
+    pub fn simple(name: String) -> Self {
+        Self { segments: vec![name] }
+    }
+
+    pub fn to_string(&self) -> String {
+        self.segments.join("::")
+    }
+
+    pub fn is_namespaced(&self) -> bool {
+        self.segments.len() > 1
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct CallExpr {
-    pub name: String,
+    pub name: NamespacePath,
     pub generic_args: Option<Vec<Located<UnresolvedType>>>,
     pub args: Vec<LocatedExpr>,
 }
@@ -159,6 +178,11 @@ pub struct StructLiteralExpr {
     pub fields: Vec<(String, LocatedExpr)>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct ArrayLiteralExpr {
+    pub elements: Vec<LocatedExpr>,
+}
+
 pub type LocatedExpr = Located<Box<Expression>>;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -186,6 +210,11 @@ pub struct DerefExpr {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct AddressOfExpr {
+    pub target: LocatedExpr,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct IndexAccessExpr {
     pub target: LocatedExpr,
     pub index: LocatedExpr,
@@ -208,6 +237,12 @@ pub struct IfExpr {
 pub struct WhenExpr {
     pub cond: LocatedExpr,
     pub then: LocatedExpr,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct WhileExpr {
+    pub cond: LocatedExpr,
+    pub body: LocatedExpr,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -238,15 +273,18 @@ pub enum Expression {
     StringLiteral(StringLiteralExpr),
     BoolLiteral(BoolLiteralExpr),
     StructLiteral(StructLiteralExpr),
+    ArrayLiteral(ArrayLiteralExpr),
     Binary(BinaryExpr),
     Unary(UnaryExpr),
     Multi(MultiExpr),
     Call(CallExpr),
     DerefExpr(DerefExpr),
+    AddressOf(AddressOfExpr),
     IndexAccess(IndexAccessExpr),
     FieldAccess(FieldAccessExpr),
     If(IfExpr),
     When(WhenExpr),
+    While(WhileExpr),
     Assignment(AssignExpr),
     VariableDecl(VariableDeclsExpr),
 }
@@ -407,11 +445,18 @@ pub struct TypeDef {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct UseStatement {
+    pub path: NamespacePath,
+    pub wildcard: bool, // true for `use Vec::*`, false for `use Vec::push`
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum TopLevel {
     Function(Function),
     Implemantation(Implementation),
     TypeDef(TypeDef),
     Interface(Interface),
+    Use(UseStatement),
 }
 
 #[derive(Debug)]

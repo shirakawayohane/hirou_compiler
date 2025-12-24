@@ -20,6 +20,8 @@ pub enum ConcreteType {
     U32,
     U64,
     U8,
+    F32,
+    F64,
     Bool,
     Ptr(Box<ConcreteType>),
     Void,
@@ -38,7 +40,12 @@ impl ConcreteType {
             ConcreteType::Void => false,
             ConcreteType::StructLike(_) => false,
             ConcreteType::Bool => false,
+            ConcreteType::F32 => false,
+            ConcreteType::F64 => false,
         }
+    }
+    pub fn is_float_type(&self) -> bool {
+        matches!(self, ConcreteType::F32 | ConcreteType::F64)
     }
     pub fn is_signed_integer_type(&self) -> bool {
         match self {
@@ -68,6 +75,8 @@ impl ConcreteType {
             ConcreteType::U32 => ResolvedType::U32,
             ConcreteType::U64 => ResolvedType::U64,
             ConcreteType::U8 => ResolvedType::U8,
+            ConcreteType::F32 => ResolvedType::F32,
+            ConcreteType::F64 => ResolvedType::F64,
             ConcreteType::Bool => ResolvedType::Bool,
             ConcreteType::Void => ResolvedType::Void,
             ConcreteType::Ptr(inner) => {
@@ -100,6 +109,8 @@ impl Display for ConcreteType {
                     ConcreteType::U32 => U32_TYPE_NAME,
                     ConcreteType::U64 => U64_TYPE_NAME,
                     ConcreteType::U8 => U8_TYPE_NAME,
+                    ConcreteType::F32 => F32_TYPE_NAME,
+                    ConcreteType::F64 => F64_TYPE_NAME,
                     ConcreteType::Bool => BOOL_TYPE_NAME,
                     ConcreteType::Void => VOID_TYPE_NAME,
                     ConcreteType::Ptr(inner) => {
@@ -151,6 +162,11 @@ pub struct StructLiteral {
 }
 
 #[derive(Debug, Clone)]
+pub struct ArrayLiteral {
+    pub elements: Vec<ConcreteExpression>,
+}
+
+#[derive(Debug, Clone)]
 pub struct BinaryExpr {
     pub op: BinaryOp,
     pub lhs: Box<ConcreteExpression>,
@@ -171,6 +187,11 @@ pub struct MultiExpr {
 
 #[derive(Debug, Clone)]
 pub struct DerefExpr {
+    pub target: Box<ConcreteExpression>,
+}
+
+#[derive(Debug, Clone)]
+pub struct AddressOfExpr {
     pub target: Box<ConcreteExpression>,
 }
 
@@ -200,22 +221,31 @@ pub struct WhenExpr {
 }
 
 #[derive(Debug, Clone)]
+pub struct WhileExpr {
+    pub cond: Box<ConcreteExpression>,
+    pub body: Box<ConcreteExpression>,
+}
+
+#[derive(Debug, Clone)]
 pub enum ExpressionKind {
     SizeOf(ConcreteType),
     VariableRef(VariableRefExpr),
     NumberLiteral(NumberLiteral),
     StringLiteral(StringLiteral),
     StructLiteral(StructLiteral),
+    ArrayLiteral(ArrayLiteral),
     BoolLiteral(BoolLiteral),
     Binary(BinaryExpr),
     Unary(UnaryExpr),
     Multi(MultiExpr),
     CallExpr(CallExpr),
     Deref(DerefExpr),
+    AddressOf(AddressOfExpr),
     IndexAccess(IndexAccessExpr),
     FieldAccess(FieldAccessExpr),
     If(IfExpr),
     When(WhenExpr),
+    While(WhileExpr),
     VariableDecls(VariableDecls),
     Assignment(Assignment),
     Return(Return),
@@ -239,6 +269,7 @@ pub struct Assignment {
 #[derive(Debug, Clone)]
 pub struct VariableDecl {
     pub name: String,
+    pub ty: ConcreteType,
     pub value: Box<ConcreteExpression>,
 }
 

@@ -20,7 +20,9 @@ pub(super) fn resolve_variable_decl(
                 variable_decl_expr.value.value.as_deref(),
                 resolved_annotation.as_ref(),
             )?;
-            if let Some(resolved_annotation) = resolved_annotation {
+
+            // Determine the actual type of the variable
+            let variable_type = if let Some(resolved_annotation) = &resolved_annotation {
                 if !resolved_annotation.can_insert(&resolved_expr.ty) {
                     context.errors.borrow_mut().push(CompileError::new(
                         variable_decl_expr.range,
@@ -30,13 +32,18 @@ pub(super) fn resolve_variable_decl(
                         },
                     ));
                 }
-            }
+                resolved_annotation.clone()
+            } else {
+                resolved_expr.ty.clone()
+            };
+
             context
                 .scopes
                 .borrow_mut()
-                .add(variable_decl_expr.name.clone(), resolved_expr.ty.clone());
+                .add(variable_decl_expr.name.clone(), variable_type.clone());
             decls.push(resolved_ast::VariableDecl {
                 name: variable_decl_expr.name.clone(),
+                ty: variable_type,
                 value: Box::new(resolved_expr),
             });
         }

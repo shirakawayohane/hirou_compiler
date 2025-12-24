@@ -46,6 +46,16 @@ pub(crate) fn get_cast_type(
             ConcreteType::U8 => (None, None),
             _ => panic!("Invalid type for binary expression"),
         },
+        ConcreteType::F32 => match rhs {
+            ConcreteType::F32 => (None, None),
+            ConcreteType::F64 => (Some(ConcreteType::F64), None),
+            _ => panic!("Invalid type for binary expression: cannot mix float with non-float"),
+        },
+        ConcreteType::F64 => match rhs {
+            ConcreteType::F32 => (None, Some(ConcreteType::F64)),
+            ConcreteType::F64 => (None, None),
+            _ => panic!("Invalid type for binary expression: cannot mix float with non-float"),
+        },
         ConcreteType::Bool => match rhs {
             ConcreteType::Bool => (None, None),
             _ => panic!("Invalid type for binary expression"),

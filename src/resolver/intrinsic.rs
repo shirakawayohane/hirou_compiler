@@ -61,6 +61,7 @@ pub(super) fn register_intrinsic_functions(function_by_name: &mut HashMap<String
             ast::TopLevel::TypeDef(_) => {}
             ast::TopLevel::Implemantation(_) => unreachable!(),
             ast::TopLevel::Interface(_) => unreachable!(),
+            ast::TopLevel::Use(_) => unreachable!(),
         }
     }
 }
@@ -84,6 +85,8 @@ pub(super) fn register_intrinsic_types(types: &mut TypeScopes) {
     types.add("u64".into(), ResolvedType::U64);
     types.add("usize".into(), ResolvedType::USize);
     types.add("u8".into(), ResolvedType::U8);
+    types.add("f32".into(), ResolvedType::F32);
+    types.add("f64".into(), ResolvedType::F64);
     types.add("bool".into(), ResolvedType::Bool);
     types.add("void".into(), ResolvedType::Void);
 }

@@ -1,5 +1,5 @@
 use crate::{
-    ast::*,
+    ast::{self, *},
     common::{AllocMode, StructKind},
     parser::ty::{parse_generic_argument_decls, parse_type},
 };
@@ -142,15 +142,15 @@ fn parse_function_decl(input: Span) -> ParseResult<FunctionDecl> {
             tuple((
                 opt(parse_alloc_mode),
                 fn_token,
-                parse_identifier,
+                parse_namespace_path,
                 opt(parse_generic_argument_decls),
                 // params
                 parse_arguments,
                 map(tuple((colon, parse_type)), |(_, ty)| ty),
             )),
-            |(alloc_mode, _, name, generic_args, params, ty)| FunctionDecl {
+            |(alloc_mode, _, name_path, generic_args, params, ty)| FunctionDecl {
                 alloc_mode,
-                name,
+                name: name_path.to_string(),
                 generic_args,
                 args: params,
                 return_type: ty,
@@ -322,10 +322,30 @@ fn test_parse_struct() {
     ))
 }
 
+fn parse_use_statement(input: Span) -> ParseResult<TopLevel> {
+    let (s, _) = peek(use_token)(input)?;
+    cut(located(context(
+        "use_statement",
+        map(
+            tuple((
+                use_token,
+                parse_namespace_path,
+                opt(tuple((double_colon, asterisk))),
+            )),
+            |(_, path, wildcard_opt)| {
+                TopLevel::Use(ast::UseStatement {
+                    path,
+                    wildcard: wildcard_opt.is_some(),
+                })
+            },
+        ),
+    )))(s)
+}
+
 pub(crate) fn parse_toplevel(input: Span) -> ParseResult<TopLevel> {
     context(
         "toplevel",
-        alt((parse_function, parse_struct, parse_interface, parse_impl)),
+        alt((parse_use_statement, parse_function, parse_struct, parse_interface, parse_impl)),
     )(input)
 }
 

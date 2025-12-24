@@ -13,7 +13,6 @@ impl LLVMCodeGenerator<'_> {
             let value = self.gen_expression(expression)?.unwrap();
             let ptr = self.llvm_builder.build_alloca(value.get_type(), "")?;
             if value.is_struct_value() {
-                dbg!("value is struct type");
                 self.llvm_builder.build_call(
                     self.llvm_module.get_function("memcpy").unwrap(),
                     &[value

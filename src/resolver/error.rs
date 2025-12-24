@@ -79,6 +79,8 @@ pub enum CompileErrorKind {
     ImplForPointerIsInvalid,
     #[error("Cannot implement interface for inference type")]
     ImplForInferenceIsInvalid,
+    #[error("Invalid number literal: `{value}`")]
+    InvalidNumberLiteral { value: String },
 }
 
 #[derive(Debug, Error, PartialEq)]
@@ -105,18 +107,34 @@ impl CompileError {
     ) -> std::io::Result<()> {
         let mut display_lines = Vec::new();
         let mut lines = source.lines();
-        let mut line = lines.next().unwrap();
-        // self.rangeから表示する行を切り取る
         let mut line_number = 1;
+
+        // Find the starting line
         while line_number < self.range.from.line {
-            line = lines.next().unwrap();
+            if lines.next().is_none() {
+                // Line not found in source - might be from stdlib or other internal source
+                writeln!(
+                    f,
+                    "error: {}\n  at line {}:{}\n",
+                    self.kind,
+                    self.range.from.line,
+                    self.range.from.col,
+                )?;
+                return Ok(());
+            }
             line_number += 1;
         }
+
+        // Collect lines to display
         while line_number <= self.range.to.line {
-            display_lines.push((line_number, line));
-            line = lines.next().unwrap();
-            line_number += 1;
+            if let Some(line) = lines.next() {
+                display_lines.push((line_number, line));
+                line_number += 1;
+            } else {
+                break;
+            }
         }
+
         writeln!(
             f,
             "error: {}

@@ -1,0 +1,13 @@
+fn sum_to_n(n: i32): i32 {
+  (:= i : i32 0
+      sum : i32 0)
+  (while (< i n)
+    (:=< i (if (= (:=< sum (+ sum i)) 0) (+ i 1) (+ i 1)))
+  )
+  sum
+}
+
+alloc fn main(): void {
+  (:= result : i32 (sum_to_n 10))
+  (printf "Sum of 0 to 9 = %d\n" result)
+}
