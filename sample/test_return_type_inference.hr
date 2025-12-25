@@ -1,0 +1,42 @@
+// Test generic return type inference from annotation context
+// This tests that Vec::new can be called without type arguments
+// when the return type can be inferred from the annotation
+
+fn test_vec_new_with_annotation(): void {
+  // Infer T=i32 from annotation
+  (:= v : Vec<i32> (Vec::new))
+  (printf "Created Vec<i32> with annotation: size=%d\n" (Vec::len v))
+
+  // Push values - type should be inferred from v
+  (:=< v (Vec::push v 10))
+  (:=< v (Vec::push v 20))
+  (:=< v (Vec::push v 30))
+
+  (printf "After pushes: len=%d\n" (Vec::len v))
+  (printf "v[0]=%d, v[1]=%d, v[2]=%d\n"
+    (Vec::get v 0)
+    (Vec::get v 1)
+    (Vec::get v 2))
+}
+
+fn test_vec_new_bool_with_annotation(): void {
+  // Infer T=bool from annotation
+  (:= v : Vec<bool> (Vec::new))
+  (printf "Created Vec<bool> with annotation: size=%d\n" (Vec::len v))
+
+  (:=< v (Vec::push v true))
+  (:=< v (Vec::push v false))
+  (:=< v (Vec::push v true))
+
+  (printf "After pushes: len=%d\n" (Vec::len v))
+}
+
+alloc fn main(): void {
+  (printf "=== Test Vec::new with annotation (i32) ===\n")
+  (test_vec_new_with_annotation)
+
+  (printf "\n=== Test Vec::new with annotation (bool) ===\n")
+  (test_vec_new_bool_with_annotation)
+
+  (printf "\n=== All return type inference tests passed! ===\n")
+}

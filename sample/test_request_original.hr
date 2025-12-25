@@ -1,0 +1,14 @@
+// Original test case from the request
+fn test_inference(): void {
+  (:= v : Vec<i32> [1, 2, 3])
+
+  // These should work without <i32>
+  (printf "len=%d\n" (Vec::len v))
+  (printf "v[0]=%d\n" (Vec::get v 0))
+  (Vec::set v 0 100)
+  (printf "first=%d\n" (Vec::first v))
+}
+
+alloc fn main(): void {
+  (test_inference)
+}

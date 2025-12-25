@@ -6,28 +6,28 @@ use Vec::*
 fn test_with_qualified_names(): void {
   // Using fully qualified names always works
   (:= v (Vec::new<i32>))
-  (printf "Vec from Vec::new: size=%d\n" (Vec::len<i32> v))
+  (printf "Vec from Vec::new: size=%d\n" (Vec::len v))
 
-  (:= v2 : Vec<i32> [10, 20, 30])
-  (printf "first=%d, last=%d\n" (Vec::first<i32> v2) (Vec::last<i32> v2))
+  (:= v2 [10, 20, 30])
+  (printf "first=%d, last=%d\n" (Vec::first v2) (Vec::last v2))
 }
 
 fn test_with_imported_names(): void {
   // After `use Vec::*`, we can use imported names directly
   (:= v (new<i32>))
-  (printf "Vec from new (imported): size=%d\n" (len<i32> v))
+  (printf "Vec from new (imported): size=%d\n" (len v))
 
   // We can also still use qualified names
   (:= v2 (Vec::new<i32>))
-  (printf "Vec from Vec::new (qualified): size=%d\n" (Vec::len<i32> v2))
+  (printf "Vec from Vec::new (qualified): size=%d\n" (Vec::len v2))
 
   // Test set and get with imported names
-  (set<i32> v 0 42)
-  (printf "After set: first=%d\n" (get<i32> v 0))
+  (set v 0 42)
+  (printf "After set: first=%d\n" (get v 0))
 
   // Test first and last
-  (:= v3 : Vec<i32> [100, 200, 300])
-  (printf "first=%d, last=%d\n" (first<i32> v3) (last<i32> v3))
+  (:= v3 [100, 200, 300])
+  (printf "first=%d, last=%d\n" (first v3) (last v3))
 }
 
 alloc fn main(): void {

@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use std::collections::HashMap;
 
 use crate::{
     ast::UnresolvedType,
@@ -89,17 +90,19 @@ fn infer_generic_args_recursively(
                     ResolvedType::StructLike(resolved_struct) => {
                         if resolved_struct.non_generic_name == return_ty_typeref.name {
                             let mut generic_arg_inferred = false;
-                            for (i, resolved_generic_ty) in
-                                resolved_struct.generic_args.iter().enumerate()
-                            {
-                                if infer_generic_args_recursively(
-                                    tmp_errors,
-                                    context,
-                                    callee,
-                                    &generic_args[i],
-                                    &resolved_generic_ty[i],
-                                )? {
-                                    generic_arg_inferred = true;
+                            if let Some(resolved_generic_args) = &resolved_struct.generic_args {
+                                for (i, resolved_generic_ty) in
+                                    resolved_generic_args.iter().enumerate()
+                                {
+                                    if infer_generic_args_recursively(
+                                        tmp_errors,
+                                        context,
+                                        callee,
+                                        &generic_args[i].value,
+                                        resolved_generic_ty,
+                                    )? {
+                                        generic_arg_inferred = true;
+                                    }
                                 }
                             }
                             if generic_arg_inferred {
@@ -138,10 +141,11 @@ fn infer_generic_args_recursively(
 // Helper function to recursively infer generic types from argument types
 fn infer_generic_type_from_match(
     context: &ResolverContext,
-    callee_generic_args: &[Located<ast::GenericArg>],
+    callee_generic_args: &[Located<ast::GenericArgument>],
     param_ty: &UnresolvedType,
     arg_ty: &ResolvedType,
     inferred_indices: &mut Vec<usize>,
+    inferred_types: &mut HashMap<String, ResolvedType>,
 ) -> Result<(), FaitalError> {
     match param_ty {
         UnresolvedType::TypeRef(typeref) => {
@@ -149,13 +153,19 @@ fn infer_generic_type_from_match(
             if typeref.generic_args.is_none() {
                 for (gen_idx, gen_arg) in callee_generic_args.iter().enumerate() {
                     if typeref.name == gen_arg.name {
-                        // Direct match: parameter is T, infer from argument type
-                        context.types.borrow_mut().add_to_root(
-                            gen_arg.name.clone(),
-                            arg_ty.clone(),
-                        );
-                        if !inferred_indices.contains(&gen_idx) {
-                            inferred_indices.push(gen_idx);
+                        // Check if this generic type has already been inferred in THIS call
+                        if let Some(existing_ty) = inferred_types.get(&gen_arg.name) {
+                            // Already inferred, verify it matches
+                            if existing_ty != arg_ty {
+                                // Type mismatch in inference - this is an error but we'll let
+                                // the later type checking catch it
+                            }
+                        } else {
+                            // Direct match: parameter is T, infer from argument type
+                            inferred_types.insert(gen_arg.name.clone(), arg_ty.clone());
+                            if !inferred_indices.contains(&gen_idx) {
+                                inferred_indices.push(gen_idx);
+                            }
                         }
                         return Ok(());
                     }
@@ -176,6 +186,7 @@ fn infer_generic_type_from_match(
                                         &param_gen_ty.value,
                                         arg_gen_ty,
                                         inferred_indices,
+                                        inferred_types,
                                     )?;
                                 }
                             }
@@ -193,6 +204,7 @@ fn infer_generic_type_from_match(
                     &inner_param_ty.value,
                     inner_arg_ty,
                     inferred_indices,
+                    inferred_types,
                 )?;
             }
         }
@@ -209,20 +221,21 @@ pub fn resolve_infer_generic_from_arguments(
     call_expr: &Located<&ast::CallExpr>,
     callee: &ast::Function,
     resolved_args: &[ResolvedExpression],
-) -> Result<Vec<usize>, FaitalError> {
+) -> Result<(Vec<usize>, HashMap<String, ResolvedType>), FaitalError> {
     // ジェネリック引数が既に指定されている場合、または宣言されていない場合は推論を行わない
     if call_expr.generic_args.is_some() {
-        return Ok(vec![]);
+        return Ok((vec![], HashMap::new()));
     }
     let Some(callee_generic_args) = &callee.decl.generic_args else {
-        return Ok(vec![]);
+        return Ok((vec![], HashMap::new()));
     };
     // 可変長引数を持つ関数は、推論を行わない
     if callee.decl.args.iter().any(|x| matches!(x, ast::Argument::VarArgs)) {
-        return Ok(vec![]);
+        return Ok((vec![], HashMap::new()));
     }
 
     let mut inferred_indices = Vec::new();
+    let mut inferred_types = HashMap::new();
 
     // 各引数からジェネリック型を推論
     for (i, callee_arg) in callee.decl.args.iter().enumerate() {
@@ -234,12 +247,13 @@ pub fn resolve_infer_generic_from_arguments(
                     &arg_ty.value,
                     &resolved_arg.ty,
                     &mut inferred_indices,
+                    &mut inferred_types,
                 )?;
             }
         }
     }
 
-    Ok(inferred_indices)
+    Ok((inferred_indices, inferred_types))
 }
 
 // 関数のジェネリック引数をアノテーションから推論する関数
@@ -346,7 +360,7 @@ fn resolve_function_call_expr(
                 pre_resolved_args.push(resolve_expression(context, arg.as_inner_deref(), None)?);
             }
 
-            let inferred_indices = resolve_infer_generic_from_arguments(
+            let (inferred_indices, inferred_types) = resolve_infer_generic_from_arguments(
                 context,
                 call_expr,
                 callee,
@@ -356,24 +370,15 @@ fn resolve_function_call_expr(
             // 推論されたジェネリクスの境界をチェック
             if !inferred_indices.is_empty() {
                 if let Some(callee_generic_args) = &callee.decl.generic_args {
-                    // 推論した型を保存（ネストした呼び出しで上書きされる可能性があるため）
-                    let saved_generic_types: Vec<_> = callee_generic_args
-                        .iter()
-                        .map(|g| {
-                            (
-                                g.name.clone(),
-                                context
-                                    .types
-                                    .borrow()
-                                    .get(&g.name)
-                                    .cloned()
-                                    .unwrap_or(ResolvedType::Unknown),
-                            )
-                        })
-                        .collect();
+                    // Add inferred types to root scope temporarily
+                    for (name, ty) in &inferred_types {
+                        context.types.borrow_mut().add_to_root(name.clone(), ty.clone());
+                    }
 
-                    let resolved_generic_args: Vec<_> =
-                        saved_generic_types.iter().map(|(_, ty)| ty.clone()).collect();
+                    let resolved_generic_args: Vec<_> = callee_generic_args
+                        .iter()
+                        .map(|g| inferred_types.get(&g.name).cloned().unwrap_or(ResolvedType::Unknown))
+                        .collect();
 
                     if let Err(e) = check_generic_bounds(
                         context,
@@ -390,11 +395,6 @@ fn resolve_function_call_expr(
                             resolve_function(context, callee)?;
                         });
                     });
-
-                    // ネストした呼び出しで上書きされた可能性があるので、元の型を復元
-                    for (name, ty) in saved_generic_types {
-                        context.types.borrow_mut().add_to_root(name, ty);
-                    }
                 }
             }
         }

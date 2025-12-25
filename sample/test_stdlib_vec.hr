@@ -3,23 +3,23 @@
 // Updated to use new namespace syntax: Vec::new, Vec::get, etc.
 
 fn test_vec_basic(): void {
-  (:= v : Vec<i32> [1, 2, 3])
-  (printf "Vec from array literal: size=%d, capacity=%d\n" (Vec::len<i32> v) (Vec::capacity<i32> v))
-  (printf "is_empty=%d (expected 0)\n" (Vec::is_empty<i32> v))
-  (printf "v[0]=%d, v[1]=%d, v[2]=%d\n" (Vec::get<i32> v 0) (Vec::get<i32> v 1) (Vec::get<i32> v 2))
-  (printf "first=%d, last=%d\n" (Vec::first<i32> v) (Vec::last<i32> v))
+  (:= v [1, 2, 3])
+  (printf "Vec from array literal: size=%d, capacity=%d\n" (Vec::len v) (Vec::capacity v))
+  (printf "is_empty=%d (expected 0)\n" (Vec::is_empty v))
+  (printf "v[0]=%d, v[1]=%d, v[2]=%d\n" (Vec::get v 0) (Vec::get v 1) (Vec::get v 2))
+  (printf "first=%d, last=%d\n" (Vec::first v) (Vec::last v))
 }
 
 fn test_vec_new(): void {
   (:= v (Vec::new<i32>))
-  (printf "Vec from Vec::new: size=%d, is_empty=%d\n" (Vec::len<i32> v) (Vec::is_empty<i32> v))
+  (printf "Vec from Vec::new: size=%d, is_empty=%d\n" (Vec::len v) (Vec::is_empty v))
 }
 
 fn test_vec_set(): void {
-  (:= v : Vec<i32> [10, 20, 30])
-  (printf "Before set: v[1]=%d\n" (Vec::get<i32> v 1))
-  (Vec::set<i32> v 1 999)
-  (printf "After set: v[1]=%d\n" (Vec::get<i32> v 1))
+  (:= v [10, 20, 30])
+  (printf "Before set: v[1]=%d\n" (Vec::get v 1))
+  (Vec::set v 1 999)
+  (printf "After set: v[1]=%d\n" (Vec::get v 1))
 }
 
 alloc fn main(): void {

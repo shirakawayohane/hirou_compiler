@@ -1,0 +1,107 @@
+// Comprehensive test for generic return type inference from annotation context
+// Tests various scenarios where type arguments can be inferred from annotations
+
+fn test_basic_inference(): void {
+  // Basic case: infer T=i32 from annotation
+  (:= v1 : Vec<i32> (Vec::new))
+  (printf "v1 (Vec<i32>): size=%d\n" (Vec::len v1))
+
+  // Infer T=bool from annotation
+  (:= v2 : Vec<bool> (Vec::new))
+  (printf "v2 (Vec<bool>): size=%d\n" (Vec::len v2))
+
+  // Infer T=u32 from annotation
+  (:= v3 : Vec<u32> (Vec::new))
+  (printf "v3 (Vec<u32>): size=%d\n" (Vec::len v3))
+}
+
+fn test_inference_with_operations(): void {
+  // Create Vec<i32> with inferred type
+  (:= v : Vec<i32> (Vec::new))
+
+  // Push operations - type inferred from v
+  (:=< v (Vec::push v 10))
+  (:=< v (Vec::push v 20))
+  (:=< v (Vec::push v 30))
+
+  (printf "After 3 pushes: len=%d\n" (Vec::len v))
+
+  // Access operations
+  (printf "First: %d\n" (Vec::first v))
+  (printf "Last: %d\n" (Vec::last v))
+  (printf "Get[1]: %d\n" (Vec::get v 1))
+
+  // Modify operation
+  (Vec::set v 0 100)
+  (printf "After set[0]=100: %d\n" (Vec::get v 0))
+
+  // Pop operation
+  (:=< v (Vec::pop v))
+  (printf "After pop: len=%d\n" (Vec::len v))
+}
+
+fn test_reassignment_inference(): void {
+  // Initial assignment with annotation
+  (:= v : Vec<i32> (Vec::new))
+  (printf "Initial: size=%d, capacity=%d\n" (Vec::len v) (Vec::capacity v))
+
+  // Reassignment - type already known from v
+  (:=< v (Vec::push v 1))
+  (:=< v (Vec::push v 2))
+  (:=< v (Vec::push v 3))
+
+  (printf "After pushes: size=%d, capacity=%d\n" (Vec::len v) (Vec::capacity v))
+  (printf "Values: %d, %d, %d\n" (Vec::get v 0) (Vec::get v 1) (Vec::get v 2))
+}
+
+fn test_multiple_vectors(): void {
+  // Multiple vectors of different types
+  (:= vi : Vec<i32> (Vec::new))
+  (:= vb : Vec<bool> (Vec::new))
+
+  // Operate on each
+  (:=< vi (Vec::push vi 42))
+  (:=< vi (Vec::push vi 99))
+
+  (:=< vb (Vec::push vb true))
+  (:=< vb (Vec::push vb false))
+
+  (printf "Vec<i32>: len=%d, [0]=%d, [1]=%d\n"
+    (Vec::len vi) (Vec::get vi 0) (Vec::get vi 1))
+  (printf "Vec<bool>: len=%d\n" (Vec::len vb))
+}
+
+fn test_chained_operations(): void {
+  // Test that inference works with chained operations
+  (:= v : Vec<i32> (Vec::new))
+
+  // Chain multiple operations
+  (:=< v (Vec::push v 10))
+  (:=< v (Vec::push v 20))
+  (:=< v (Vec::push v 30))
+  (:=< v (Vec::pop v))
+  (:=< v (Vec::push v 40))
+
+  (printf "After chained operations: len=%d\n" (Vec::len v))
+  (printf "Values: [0]=%d, [1]=%d, [2]=%d\n"
+    (Vec::get v 0) (Vec::get v 1) (Vec::get v 2))
+}
+
+alloc fn main(): void {
+  (printf "=== Test Basic Inference ===\n")
+  (test_basic_inference)
+
+  (printf "\n=== Test Inference with Operations ===\n")
+  (test_inference_with_operations)
+
+  (printf "\n=== Test Reassignment Inference ===\n")
+  (test_reassignment_inference)
+
+  (printf "\n=== Test Multiple Vectors ===\n")
+  (test_multiple_vectors)
+
+  (printf "\n=== Test Chained Operations ===\n")
+  (test_chained_operations)
+
+  (printf "\n=== All comprehensive inference tests passed! ===\n")
+}

@@ -1,0 +1,79 @@
+// Summary test demonstrating all array literal type inference capabilities
+// This test shows that array literals work WITHOUT explicit type annotations
+
+fn example_basic(): void {
+  // Previously required: (:= v : Vec<i32> [1, 2, 3])
+  // Now works without annotation:
+  (:= v [1, 2, 3])
+
+  (printf "Basic inference: len=%d, elements: %d, %d, %d\n"
+    (Vec::len v)
+    (Vec::get v 0)
+    (Vec::get v 1)
+    (Vec::get v 2))
+}
+
+fn example_bool(): void {
+  // Boolean arrays are also inferred
+  (:= flags [true, false, true])
+  (printf "Bool array: len=%d, first=%d, last=%d\n"
+    (Vec::len flags)
+    (Vec::get flags 0)
+    (Vec::get flags 2))
+}
+
+fn example_float(): void {
+  // Float arrays
+  (:= decimals [1.5, 2.5, 3.14])
+  (printf "Float array: len=%d\n" (Vec::len decimals))
+}
+
+fn example_single_element(): void {
+  // Even single-element arrays work
+  (:= singleton [42])
+  (printf "Single element: %d\n" (Vec::first singleton))
+}
+
+fn example_multiple_vars(): void {
+  // Multiple array declarations in one statement
+  (:= a [1, 2]
+      b [3, 4, 5]
+      c [6])
+
+  (printf "Multiple arrays: a_len=%d, b_len=%d, c_len=%d\n"
+    (Vec::len a) (Vec::len b) (Vec::len c))
+}
+
+fn example_with_methods(): void {
+  // Use Vec methods immediately
+  (:= nums [10, 20, 30, 40, 50])
+
+  (printf "first=%d, last=%d\n" (Vec::first nums) (Vec::last nums))
+
+  (Vec::set nums 2 999)
+  (printf "after set: nums[2]=%d\n" (Vec::get nums 2))
+}
+
+alloc fn main(): void {
+  (printf "=== Array Literal Type Inference Demo ===\n\n")
+
+  (printf "1. Basic integer arrays:\n")
+  (example_basic)
+
+  (printf "\n2. Boolean arrays:\n")
+  (example_bool)
+
+  (printf "\n3. Float arrays:\n")
+  (example_float)
+
+  (printf "\n4. Single element:\n")
+  (example_single_element)
+
+  (printf "\n5. Multiple declarations:\n")
+  (example_multiple_vars)
+
+  (printf "\n6. Using with Vec methods:\n")
+  (example_with_methods)
+
+  (printf "\n=== All features demonstrated successfully! ===\n")
+}

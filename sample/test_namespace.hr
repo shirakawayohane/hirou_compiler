@@ -4,20 +4,20 @@
 fn test_vec_namespaced(): void {
   // Test using fully qualified names
   (:= v (Vec::new<i32>))
-  (printf "Vec from Vec::new: size=%d, is_empty=%d\n" (Vec::len<i32> v) (Vec::is_empty<i32> v))
+  (printf "Vec from Vec::new: size=%d, is_empty=%d\n" (Vec::len v) (Vec::is_empty v))
 
   // Test with array literal
-  (:= v2 : Vec<i32> [1, 2, 3])
-  (printf "Vec from array literal: size=%d\n" (Vec::len<i32> v2))
+  (:= v2 [1, 2, 3])
+  (printf "Vec from array literal: size=%d\n" (Vec::len v2))
   (printf "v2[0]=%d, v2[1]=%d, v2[2]=%d\n"
-    (Vec::get<i32> v2 0)
-    (Vec::get<i32> v2 1)
-    (Vec::get<i32> v2 2))
-  (printf "first=%d, last=%d\n" (Vec::first<i32> v2) (Vec::last<i32> v2))
+    (Vec::get v2 0)
+    (Vec::get v2 1)
+    (Vec::get v2 2))
+  (printf "first=%d, last=%d\n" (Vec::first v2) (Vec::last v2))
 
   // Test set
-  (Vec::set<i32> v2 1 999)
-  (printf "After set: v2[1]=%d\n" (Vec::get<i32> v2 1))
+  (Vec::set v2 1 999)
+  (printf "After set: v2[1]=%d\n" (Vec::get v2 1))
 }
 
 alloc fn main(): void {

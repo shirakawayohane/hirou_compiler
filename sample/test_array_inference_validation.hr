@@ -1,0 +1,51 @@
+// Test array literal inference validation and edge cases
+
+fn test_type_consistency(): void {
+  // This should work - all elements are i32
+  (:= v1 [1, 2, 3])
+  (printf "v1: len=%d\n" (Vec::len v1))
+
+  // This should work - all elements are bool
+  (:= v2 [true, false])
+  (printf "v2: len=%d\n" (Vec::len v2))
+}
+
+fn test_float_inference(): void {
+  // Float literal inference
+  (:= v [1.5, 2.5, 3.5])
+  (printf "float vec: len=%d\n" (Vec::len v))
+}
+
+fn test_nested_operations(): void {
+  // Use inferred array in operations
+  (:= v [1, 2, 3])
+  (:= first (Vec::first v))
+  (:= last (Vec::last v))
+  (printf "first=%d, last=%d\n" first last)
+
+  // Modify and check
+  (Vec::set v 1 42)
+  (printf "after set: v[1]=%d\n" (Vec::get v 1))
+}
+
+fn test_function_argument(): i32 {
+  (:= v [100, 200, 300])
+  (Vec::first v)
+}
+
+alloc fn main(): void {
+  (printf "=== Type Consistency ===\n")
+  (test_type_consistency)
+
+  (printf "\n=== Float Inference ===\n")
+  (test_float_inference)
+
+  (printf "\n=== Nested Operations ===\n")
+  (test_nested_operations)
+
+  (printf "\n=== Function Return ===\n")
+  (:= result (test_function_argument))
+  (printf "function returned: %d\n" result)
+
+  (printf "\n=== All validation tests passed! ===\n")
+}

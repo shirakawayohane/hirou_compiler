@@ -1,0 +1,67 @@
+// Comprehensive test for array literal element type inference
+
+fn test_basic_inference(): void {
+  // Basic integer array
+  (:= v1 [1, 2, 3])
+  (printf "v1: len=%d, [0]=%d, [1]=%d, [2]=%d\n"
+    (Vec::len v1) (Vec::get v1 0) (Vec::get v1 1) (Vec::get v1 2))
+
+  // Boolean array
+  (:= v2 [true, false, true])
+  (printf "v2: len=%d, [0]=%d, [1]=%d, [2]=%d\n"
+    (Vec::len v2) (Vec::get v2 0) (Vec::get v2 1) (Vec::get v2 2))
+
+  // Single element
+  (:= v3 [42])
+  (printf "v3: len=%d, [0]=%d\n" (Vec::len v3) (Vec::get v3 0))
+}
+
+fn test_multiple_declarations(): void {
+  // Multiple variables in one declaration
+  (:= a [1, 2]
+      b [3, 4, 5]
+      c [10])
+  (printf "a: len=%d, [0]=%d\n" (Vec::len a) (Vec::get a 0))
+  (printf "b: len=%d, [1]=%d\n" (Vec::len b) (Vec::get b 1))
+  (printf "c: len=%d, [0]=%d\n" (Vec::len c) (Vec::get c 0))
+}
+
+fn test_mixed_annotations(): void {
+  // Mix of explicit and inferred types
+  (:= v1 : Vec<i32> [1, 2, 3]
+      v2 [4, 5, 6])
+  (printf "v1: len=%d, [0]=%d\n" (Vec::len v1) (Vec::get v1 0))
+  (printf "v2: len=%d, [0]=%d\n" (Vec::len v2) (Vec::get v2 0))
+}
+
+fn test_larger_arrays(): void {
+  // Larger arrays to verify all elements are processed
+  (:= v [10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
+  (printf "large array: len=%d, first=%d, last=%d\n"
+    (Vec::len v) (Vec::first v) (Vec::last v))
+}
+
+fn test_empty_array(): void {
+  // Empty array - should have size 0
+  (:= v : Vec<i32> [])
+  (printf "empty array: len=%d\n" (Vec::len v))
+}
+
+alloc fn main(): void {
+  (printf "=== Basic Inference ===\n")
+  (test_basic_inference)
+
+  (printf "\n=== Multiple Declarations ===\n")
+  (test_multiple_declarations)
+
+  (printf "\n=== Mixed Annotations ===\n")
+  (test_mixed_annotations)
+
+  (printf "\n=== Larger Arrays ===\n")
+  (test_larger_arrays)
+
+  (printf "\n=== Empty Array ===\n")
+  (test_empty_array)
+
+  (printf "\n=== All tests passed! ===\n")
+}

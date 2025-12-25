@@ -1,0 +1,58 @@
+// Test generic type inference with different element types
+// Ensures inference works correctly for i32, u32, etc.
+
+fn test_i32_inference(): void {
+  (printf "=== Test i32 Inference ===\n")
+  (:= v : Vec<i32> [1, 2, 3])
+
+  (printf "i32 vec length: %d\n" (Vec::len v))
+  (printf "i32 vec[0]: %d\n" (Vec::get v 0))
+  (Vec::set v 1 42)
+  (printf "After set: i32 vec[1]: %d\n" (Vec::get v 1))
+}
+
+fn test_u32_inference(): void {
+  (printf "\n=== Test u32 Inference ===\n")
+  (:= v : Vec<u32> [10, 20, 30])
+
+  (printf "u32 vec length: %d\n" (Vec::len v))
+  (printf "u32 vec[0]: %d\n" (Vec::get v 0))
+  (Vec::set v 2 99)
+  (printf "After set: u32 vec[2]: %d\n" (Vec::get v 2))
+}
+
+fn test_bool_inference(): void {
+  (printf "\n=== Test bool Inference ===\n")
+  (:= v (Vec::new<bool>))
+
+  (:=< v (Vec::push v true))
+  (:=< v (Vec::push v false))
+  (:=< v (Vec::push v true))
+
+  (printf "bool vec length: %d\n" (Vec::len v))
+  (printf "bool vec[0]: %d\n" (Vec::get v 0))
+  (printf "bool vec[1]: %d\n" (Vec::get v 1))
+  (printf "bool vec[2]: %d\n" (Vec::get v 2))
+}
+
+fn test_is_empty_inference(): void {
+  (printf "\n=== Test is_empty Inference ===\n")
+
+  (:= v1 (Vec::new<i32>))
+  (printf "Empty vec is_empty: %d\n" (Vec::is_empty v1))
+
+  (:=< v1 (Vec::push v1 1))
+  (printf "After push is_empty: %d\n" (Vec::is_empty v1))
+
+  (:=< v1 (Vec::pop v1))
+  (printf "After pop is_empty: %d\n" (Vec::is_empty v1))
+}
+
+alloc fn main(): void {
+  (test_i32_inference)
+  (test_u32_inference)
+  (test_bool_inference)
+  (test_is_empty_inference)
+
+  (printf "\n=== All multiple type inference tests passed! ===\n")
+}

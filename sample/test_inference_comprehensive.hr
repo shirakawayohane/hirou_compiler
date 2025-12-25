@@ -1,0 +1,112 @@
+// Comprehensive test for generic type inference
+// Tests various scenarios where type arguments should be inferred
+
+fn test_simple_type_inference(): void {
+  (printf "=== Test Simple Type Inference ===\n")
+
+  // Create Vec with explicit type
+  (:= v1 : Vec<i32> [1, 2, 3])
+
+  // These calls should infer T=i32 from v1's type
+  (printf "v1 length: %d\n" (Vec::len v1))
+  (printf "v1[0]: %d\n" (Vec::get v1 0))
+  (printf "v1 first: %d\n" (Vec::first v1))
+  (printf "v1 last: %d\n" (Vec::last v1))
+  (printf "v1 capacity: %d\n" (Vec::capacity v1))
+
+  // Test with different element type
+  (:= v2 : Vec<u32> [10, 20, 30])
+  (printf "v2 length: %d\n" (Vec::len v2))
+  (printf "v2[1]: %d\n" (Vec::get v2 1))
+}
+
+fn test_mutation_inference(): void {
+  (printf "\n=== Test Mutation Inference ===\n")
+
+  (:= v : Vec<i32> [100, 200, 300])
+
+  // Vec::set should infer T=i32
+  (Vec::set v 0 999)
+  (printf "After set: v[0]=%d\n" (Vec::get v 0))
+
+  // Vec::set at different indices
+  (Vec::set v 1 888)
+  (Vec::set v 2 777)
+  (printf "v[0]=%d, v[1]=%d, v[2]=%d\n"
+    (Vec::get v 0)
+    (Vec::get v 1)
+    (Vec::get v 2))
+}
+
+fn test_push_pop_inference(): void {
+  (printf "\n=== Test Push/Pop Inference ===\n")
+
+  (:= v (Vec::new<i32>))
+
+  // Vec::push should infer T=i32 from v
+  (:=< v (Vec::push v 1))
+  (:=< v (Vec::push v 2))
+  (:=< v (Vec::push v 3))
+  (:=< v (Vec::push v 4))
+  (:=< v (Vec::push v 5))
+
+  (printf "After pushes: len=%d\n" (Vec::len v))
+  (printf "Elements: %d %d %d %d %d\n"
+    (Vec::get v 0)
+    (Vec::get v 1)
+    (Vec::get v 2)
+    (Vec::get v 3)
+    (Vec::get v 4))
+
+  // Vec::pop should infer T=i32 from v
+  (:=< v (Vec::pop v))
+  (:=< v (Vec::pop v))
+
+  (printf "After pops: len=%d\n" (Vec::len v))
+  (printf "Remaining: %d %d %d\n"
+    (Vec::get v 0)
+    (Vec::get v 1)
+    (Vec::get v 2))
+}
+
+fn test_chained_operations(): void {
+  (printf "\n=== Test Chained Operations ===\n")
+
+  (:= v : Vec<i32> [10, 20, 30])
+
+  // Multiple operations without type annotations
+  (printf "Initial length: %d\n" (Vec::len v))
+
+  (:=< v (Vec::push v 40))
+  (printf "After push 40: len=%d, last=%d\n" (Vec::len v) (Vec::last v))
+
+  (Vec::set v 0 5)
+  (printf "After set v[0]=5: first=%d\n" (Vec::first v))
+
+  (:=< v (Vec::pop v))
+  (printf "After pop: len=%d, last=%d\n" (Vec::len v) (Vec::last v))
+}
+
+fn test_explicit_still_works(): void {
+  (printf "\n=== Test Explicit Types Still Work ===\n")
+
+  (:= v : Vec<i32> [1, 2, 3])
+
+  // Explicit type arguments should still work
+  (printf "With explicit <i32>: len=%d\n" (Vec::len<i32> v))
+  (printf "With explicit <i32>: v[0]=%d\n" (Vec::get<i32> v 0))
+
+  // Mix explicit and inferred
+  (Vec::set<i32> v 1 999)
+  (printf "After explicit set: v[1]=%d\n" (Vec::get v 1))
+}
+
+alloc fn main(): void {
+  (test_simple_type_inference)
+  (test_mutation_inference)
+  (test_push_pop_inference)
+  (test_chained_operations)
+  (test_explicit_still_works)
+
+  (printf "\n=== All comprehensive inference tests passed! ===\n")
+}

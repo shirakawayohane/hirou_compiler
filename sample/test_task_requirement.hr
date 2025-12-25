@@ -1,0 +1,12 @@
+// Test case from the original task requirement
+
+fn test(): void {
+  (:= v1 [1, 2, 3])           // Should infer Vec<i32>
+  (:= v2 [true, false])       // Should infer Vec<bool>
+  (printf "len=%d\n" (Vec::len v1))
+  (printf "v1[0]=%d\n" (Vec::get v1 0))
+}
+
+alloc fn main(): void {
+  (test)
+}

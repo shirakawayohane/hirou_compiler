@@ -1,0 +1,121 @@
+// Comprehensive test for generic return type inference from context
+// This demonstrates that generic functions can be called without explicit type arguments
+// when they can be inferred from the expected return type
+
+// Test 1: Basic return type inference
+fn test_basic_inference(): void {
+  // Vec::new<T>(): Vec<T> - infer T=i32 from annotation
+  (:= v : Vec<i32> (Vec::new))
+  (printf "Test 1 - Basic: size=%d\n" (Vec::len v))
+}
+
+// Test 2: Return type inference with operations
+fn test_with_operations(): void {
+  // Infer T=i32 from expected type
+  (:= v : Vec<i32> (Vec::new))
+
+  // Push should also infer from v's type (argument inference)
+  (:=< v (Vec::push v 10))
+  (:=< v (Vec::push v 20))
+  (:=< v (Vec::push v 30))
+
+  (printf "Test 2 - Operations: size=%d\n" (Vec::len v))
+  (printf "  v[0]=%d, v[1]=%d, v[2]=%d\n"
+    (Vec::get v 0)
+    (Vec::get v 1)
+    (Vec::get v 2))
+}
+
+// Test 3: Multiple vectors with different types
+fn test_multiple_types(): void {
+  (:= v_i32 : Vec<i32> (Vec::new))
+  (:= v_bool : Vec<bool> (Vec::new))
+
+  (:=< v_i32 (Vec::push v_i32 42))
+  (:=< v_bool (Vec::push v_bool true))
+  (:=< v_bool (Vec::push v_bool false))
+
+  (printf "Test 3 - Multiple types:\n")
+  (printf "  i32 vec size=%d, first=%d\n" (Vec::len v_i32) (Vec::get v_i32 0))
+  (printf "  bool vec size=%d, first=%d, second=%d\n"
+    (Vec::len v_bool)
+    (Vec::get v_bool 0)
+    (Vec::get v_bool 1))
+}
+
+// Test 4: Return type inference with array literal initialization
+fn test_array_literal_and_new(): void {
+  // Array literal inference (existing feature)
+  (:= v1 : Vec<i32> [1, 2, 3])
+
+  // Return type inference from Vec::new
+  (:= v2 : Vec<i32> (Vec::new))
+  (:=< v2 (Vec::push v2 10))
+
+  (printf "Test 4 - Array literal and new:\n")
+  (printf "  v1 (from literal) size=%d, first=%d\n" (Vec::len v1) (Vec::get v1 0))
+  (printf "  v2 (from new) size=%d, first=%d\n" (Vec::len v2) (Vec::get v2 0))
+}
+
+// Test 5: Chained operations
+fn test_chained(): void {
+  (:= v : Vec<i32> (Vec::new))
+  (:=< v (Vec::push v 100))
+  (:=< v (Vec::push v 200))
+  (:=< v (Vec::push v 300))
+  (:=< v (Vec::pop v))
+
+  (printf "Test 5 - Chained: size=%d, last=%d\n"
+    (Vec::len v)
+    (Vec::last v))
+}
+
+// Test 6: Verify all Vec operations work with inferred type
+fn test_all_operations(): void {
+  (:= v : Vec<i32> (Vec::new))
+
+  // Push some values
+  (:=< v (Vec::push v 5))
+  (:=< v (Vec::push v 10))
+  (:=< v (Vec::push v 15))
+
+  (printf "Test 6 - All operations:\n")
+  (printf "  len=%d\n" (Vec::len v))
+  (printf "  capacity=%d\n" (Vec::capacity v))
+  (printf "  is_empty=%d\n" (Vec::is_empty v))
+  (printf "  first=%d\n" (Vec::first v))
+  (printf "  last=%d\n" (Vec::last v))
+  (printf "  get(1)=%d\n" (Vec::get v 1))
+
+  // Modify a value
+  (Vec::set v 1 99)
+  (printf "  After set(1, 99): get(1)=%d\n" (Vec::get v 1))
+
+  // Pop
+  (:=< v (Vec::pop v))
+  (printf "  After pop: len=%d\n" (Vec::len v))
+}
+
+alloc fn main(): void {
+  (printf "=== Generic Return Type Inference Tests ===\n\n")
+
+  (test_basic_inference)
+  (printf "\n")
+
+  (test_with_operations)
+  (printf "\n")
+
+  (test_multiple_types)
+  (printf "\n")
+
+  (test_array_literal_and_new)
+  (printf "\n")
+
+  (test_chained)
+  (printf "\n")
+
+  (test_all_operations)
+  (printf "\n")
+
+  (printf "=== All return type inference tests passed! ===\n")
+}

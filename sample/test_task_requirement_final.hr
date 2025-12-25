@@ -1,0 +1,14 @@
+fn test(): void {
+  // Infer T from expected type annotation
+  (:= v : Vec<i32> (Vec::new))
+  (printf "size=%d\n" (Vec::len v))
+  
+  // Should also work with push
+  (:=< v (Vec::push v 10))
+  (printf "after push: size=%d\n" (Vec::len v))
+}
+
+alloc fn main(): void {
+  (test)
+  (printf "Success!\n")
+}

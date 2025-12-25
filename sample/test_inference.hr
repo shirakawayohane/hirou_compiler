@@ -16,7 +16,8 @@ fn test_inference(): void {
 }
 
 fn test_inference_with_push(): void {
-  (:= v (Vec::new<i32>))
+  // NEW: Vec::new can now infer T=i32 from the annotation!
+  (:= v : Vec<i32> (Vec::new))
 
   // Push without explicit type argument - type should be inferred from v
   (:=< v (Vec::push v 10))

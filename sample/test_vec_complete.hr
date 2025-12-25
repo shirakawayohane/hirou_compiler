@@ -9,61 +9,61 @@ fn test_create_and_basic_ops(): void {
   // Test Vec::new
   (:= v1 (new<i32>))
   (printf "new<i32>: size=%d, capacity=%d, is_empty=%d\n"
-    (len<i32> v1) (capacity<i32> v1) (is_empty<i32> v1))
+    (len v1) (capacity v1) (is_empty v1))
 
   // Test array literal
-  (:= v2 : Vec<i32> [10, 20, 30, 40, 50])
+  (:= v2 [10, 20, 30, 40, 50])
   (printf "array literal: size=%d, capacity=%d\n"
-    (len<i32> v2) (capacity<i32> v2))
+    (len v2) (capacity v2))
 }
 
 fn test_access_operations(): void {
   (printf "\n=== 2. Access Operations ===\n")
 
-  (:= v : Vec<i32> [100, 200, 300])
+  (:= v [100, 200, 300])
   (printf "v = [100, 200, 300]\n")
   (printf "get(0)=%d, get(1)=%d, get(2)=%d\n"
-    (get<i32> v 0) (get<i32> v 1) (get<i32> v 2))
-  (printf "first=%d, last=%d\n" (first<i32> v) (last<i32> v))
+    (get v 0) (get v 1) (get v 2))
+  (printf "first=%d, last=%d\n" (first v) (last v))
 }
 
 fn test_set_operation(): void {
   (printf "\n=== 3. Set Operation ===\n")
 
-  (:= v : Vec<i32> [1, 2, 3])
-  (printf "Before: v[1]=%d\n" (get<i32> v 1))
-  (set<i32> v 1 999)
-  (printf "After set(1, 999): v[1]=%d\n" (get<i32> v 1))
+  (:= v [1, 2, 3])
+  (printf "Before: v[1]=%d\n" (get v 1))
+  (set v 1 999)
+  (printf "After set(1, 999): v[1]=%d\n" (get v 1))
 }
 
 fn test_push_operation(): void {
   (printf "\n=== 4. Push Operation ===\n")
 
   (:= v (new<i32>))
-  (printf "Empty vec: size=%d\n" (len<i32> v))
+  (printf "Empty vec: size=%d\n" (len v))
 
-  (:=< v (push<i32> v 10))
-  (printf "After push(10): size=%d, v[0]=%d\n" (len<i32> v) (get<i32> v 0))
+  (:=< v (push v 10))
+  (printf "After push(10): size=%d, v[0]=%d\n" (len v) (get v 0))
 
-  (:=< v (push<i32> v 20))
-  (:=< v (push<i32> v 30))
+  (:=< v (push v 20))
+  (:=< v (push v 30))
   (printf "After push(20,30): size=%d, v=[%d,%d,%d]\n"
-    (len<i32> v) (get<i32> v 0) (get<i32> v 1) (get<i32> v 2))
+    (len v) (get v 0) (get v 1) (get v 2))
 }
 
 fn test_pop_operation(): void {
   (printf "\n=== 5. Pop Operation ===\n")
 
-  (:= v : Vec<i32> [100, 200, 300])
-  (printf "Initial: size=%d, last=%d\n" (len<i32> v) (last<i32> v))
+  (:= v [100, 200, 300])
+  (printf "Initial: size=%d, last=%d\n" (len v) (last v))
 
-  (:= popped1 (last<i32> v))
-  (:=< v (pop<i32> v))
-  (printf "Popped %d: size=%d\n" popped1 (len<i32> v))
+  (:= popped1 (last v))
+  (:=< v (pop v))
+  (printf "Popped %d: size=%d\n" popped1 (len v))
 
-  (:= popped2 (last<i32> v))
-  (:=< v (pop<i32> v))
-  (printf "Popped %d: size=%d\n" popped2 (len<i32> v))
+  (:= popped2 (last v))
+  (:=< v (pop v))
+  (printf "Popped %d: size=%d\n" popped2 (len v))
 }
 
 fn test_push_pop_combined(): void {
@@ -72,24 +72,24 @@ fn test_push_pop_combined(): void {
   (:= v (new<i32>))
 
   // Push 5 elements
-  (:=< v (push<i32> v 1))
-  (:=< v (push<i32> v 2))
-  (:=< v (push<i32> v 3))
-  (:=< v (push<i32> v 4))
-  (:=< v (push<i32> v 5))
-  (printf "After 5 pushes: size=%d, capacity=%d\n" (len<i32> v) (capacity<i32> v))
+  (:=< v (push v 1))
+  (:=< v (push v 2))
+  (:=< v (push v 3))
+  (:=< v (push v 4))
+  (:=< v (push v 5))
+  (printf "After 5 pushes: size=%d, capacity=%d\n" (len v) (capacity v))
 
   // Pop 2 elements
-  (:=< v (pop<i32> v))
-  (:=< v (pop<i32> v))
-  (printf "After 2 pops: size=%d\n" (len<i32> v))
+  (:=< v (pop v))
+  (:=< v (pop v))
+  (printf "After 2 pops: size=%d\n" (len v))
 
   // Push 2 more
-  (:=< v (push<i32> v 6))
-  (:=< v (push<i32> v 7))
-  (printf "After 2 more pushes: size=%d\n" (len<i32> v))
+  (:=< v (push v 6))
+  (:=< v (push v 7))
+  (printf "After 2 more pushes: size=%d\n" (len v))
   (printf "Final: v=[%d,%d,%d,%d,%d]\n"
-    (get<i32> v 0) (get<i32> v 1) (get<i32> v 2) (get<i32> v 3) (get<i32> v 4))
+    (get v 0) (get v 1) (get v 2) (get v 3) (get v 4))
 }
 
 fn test_qualified_vs_imported(): void {
@@ -99,11 +99,11 @@ fn test_qualified_vs_imported(): void {
   (:= v1 (Vec::new<i32>))
   (:= v2 (new<i32>))
 
-  (:=< v1 (Vec::push<i32> v1 42))
-  (:=< v2 (push<i32> v2 42))
+  (:=< v1 (Vec::push v1 42))
+  (:=< v2 (push v2 42))
 
-  (printf "Vec::new + Vec::push: size=%d, v[0]=%d\n" (Vec::len<i32> v1) (Vec::get<i32> v1 0))
-  (printf "new + push (imported): size=%d, v[0]=%d\n" (len<i32> v2) (get<i32> v2 0))
+  (printf "Vec::new + Vec::push: size=%d, v[0]=%d\n" (Vec::len v1) (Vec::get v1 0))
+  (printf "new + push (imported): size=%d, v[0]=%d\n" (len v2) (get v2 0))
 }
 
 alloc fn main(): void {

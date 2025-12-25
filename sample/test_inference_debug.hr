@@ -1,0 +1,16 @@
+// Debug test for type inference
+
+fn test_bool_only(): void {
+  (printf "=== Test bool Inference ===\n")
+  (:= v (Vec::new<bool>))
+
+  (:=< v (Vec::push v true))
+  (:=< v (Vec::push v false))
+
+  (printf "bool vec length: %d\n" (Vec::len v))
+}
+
+alloc fn main(): void {
+  (test_bool_only)
+  (printf "\n=== Done ===\n")
+}

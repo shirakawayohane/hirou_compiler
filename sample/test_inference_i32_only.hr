@@ -1,0 +1,11 @@
+// Test generic type inference with i32 only
+
+fn test_simple(): void {
+  (:= v : Vec<i32> [1, 2, 3])
+  (printf "len=%d\n" (Vec::len v))
+  (printf "first=%d\n" (Vec::first v))
+}
+
+alloc fn main(): void {
+  (test_simple)
+}
